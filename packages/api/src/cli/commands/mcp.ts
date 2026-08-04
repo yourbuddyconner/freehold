@@ -14,6 +14,22 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
+/**
+ * Check if `dir` or any of its parents up to `stopAt` contain a .git directory.
+ * Used to warn when writing .mcp.json inside a git repo (token exposure risk).
+ */
+function isInsideGitRepo(dir: string): boolean {
+  let current = dir;
+  // Walk up to filesystem root
+  for (let i = 0; i < 32; i++) {
+    if (existsSync(resolve(current, ".git"))) return true;
+    const parent = resolve(current, "..");
+    if (parent === current) break;
+    current = parent;
+  }
+  return false;
+}
+
 export interface McpOpts {
   subcommand: string;
   target: string;
@@ -83,6 +99,14 @@ export async function runMcp(opts: McpOpts & { baseUrl?: string; token?: string 
   }
 
   const targetPath = resolve(process.cwd(), ".mcp.json");
+
+  // Warn if writing inside a git repo — the bearer token in .mcp.json must not be committed.
+  if (isInsideGitRepo(process.cwd())) {
+    console.warn("WARNING: .mcp.json will be written inside a git repository.");
+    console.warn("The file contains your Freehold bearer token. Add it to .gitignore:");
+    console.warn("  echo '.mcp.json' >> .gitignore");
+  }
+
   mergeIntoMcpJson(targetPath, "freehold", entry);
   console.log(`Wrote MCP server "freehold" → ${targetPath}`);
   console.log(`Endpoint: ${entry.url}`);

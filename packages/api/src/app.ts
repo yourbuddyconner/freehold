@@ -2,6 +2,7 @@ import path from "node:path";
 import type { FreeholdConfig } from "@freehold/core";
 import type { Embedder } from "@freehold/core";
 import type { Freehold } from "@freehold/core";
+import type { Context } from "hono";
 import { Hono } from "hono";
 import { bearerAuth } from "./auth.js";
 import { handleMcpRequest } from "./mcp.js";
@@ -64,7 +65,20 @@ export function createApp(
   // filesystem is not hit on every request.
   let cachedHtml: string | null = null;
 
-  async function serveIndex(c: Parameters<Parameters<typeof app.get>[1]>[0]): Promise<Response> {
+  async function serveIndex(c: Context<AppEnv>): Promise<Response> {
+    // Security: only serve the token-bearing HTML to localhost clients.
+    // Reject requests with a Host header pointing to a non-local origin.
+    const host = c.req.header("host") ?? "localhost";
+    const hostName = host.split(":")[0].toLowerCase();
+    const isLocal =
+      hostName === "localhost" ||
+      hostName === "127.0.0.1" ||
+      hostName === "::1" ||
+      hostName === "0.0.0.0";
+    if (!isLocal) {
+      return new Response("Forbidden: console only accessible from localhost", { status: 403 });
+    }
+
     try {
       if (cachedHtml === null) {
         const { readFile } = await import("node:fs/promises");
