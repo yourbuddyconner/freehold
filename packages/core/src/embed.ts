@@ -9,9 +9,20 @@
  * The onnxruntime-node native binary is suppressed via the root pnpm override:
  *   "onnxruntime-node": "npm:onnxruntime-web@^1.24.3"
  * This ensures only the WASM backend lands in the install tree.
+ *
+ * Node ESM compatibility:
+ *   @huggingface/transformers bundles onnxruntime-web internally and — unless wasmPaths
+ *   is pre-set — falls back to CDN URLs, then creates blob: URLs so the WASM factory can
+ *   be imported.  Node's ESM loader rejects blob: URL imports.  The workaround (Attempt 1):
+ *   set env.useWasmCache=false and env.backends.onnx.wasm.wasmPaths to file:// URLs
+ *   pointing at the ort-web dist that ships alongside the transformers package in pnpm,
+ *   so ORT loads the factory directly via a file: import (Node accepts those) and the
+ *   blob creation path is never reached.
  */
 
 import { createHash } from "node:crypto";
+import { createRequire } from "node:module";
+import path from "node:path";
 import type { FreeholdConfig } from "./types.js";
 
 export interface Embedder {
@@ -66,6 +77,47 @@ type FeaturePipeline = (
 let _pipeline: FeaturePipeline | null = null;
 
 /**
+ * Attempt 1: resolve the ort-web dist directory co-located with @huggingface/transformers
+ * in the pnpm store, then return file:// URLs for the .mjs and .wasm factory files.
+ *
+ * @huggingface/transformers bundles onnxruntime-web internally but the bundled JS code
+ * still needs the external .mjs WASM factory and .wasm binary from the matching ort-web
+ * package.  In the pnpm store, that package lives as a peer of transformers and is
+ * accessible via a createRequire rooted at the transformers dist directory.
+ *
+ * Uses CJS require resolution (createRequire) rather than import.meta.resolve because
+ * vitest's transform pipeline may not forward import.meta.resolve to Node's native
+ * resolver.  createRequire anchored to this file's own URL is always reliable.
+ */
+function resolveOrtWasmPaths(): { mjs: string; wasm: string } | null {
+  try {
+    // createRequire(import.meta.url) gives us a require() that resolves packages
+    // visible from this source file — the same set that contains @huggingface/transformers.
+    const selfReq = createRequire(import.meta.url);
+
+    // Step 1: find the transformers package directory.
+    // We use the main CJS entry which is always resolvable via require().
+    // pnpm symlinks the package into packages/core/node_modules, so resolution
+    // follows the symlink into the pnpm store.
+    const tfEntry = selfReq.resolve("@huggingface/transformers");
+    // tfEntry is …/transformers/dist/transformers.cjs (or similar); go up to dist/
+    const tfDistDir = path.dirname(path.resolve(tfEntry));
+    const tfDistReq = createRequire(`${tfDistDir}/`);
+
+    // Step 2: from the transformers dist directory, resolve onnxruntime-web.
+    // In pnpm, the ort-web version that transformers was built against lives as a
+    // direct dep in the store and is visible from the transformers package directory.
+    const ortWebEntry = tfDistReq.resolve("onnxruntime-web");
+    const distDir = path.dirname(path.resolve(ortWebEntry));
+    const mjs = `file://${distDir}/ort-wasm-simd-threaded.mjs`;
+    const wasm = `file://${distDir}/ort-wasm-simd-threaded.wasm`;
+    return { mjs, wasm };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Real semantic embedder using @huggingface/transformers.
  *
  * Model: Xenova/bge-small-en-v1.5 (384-dim, mean-pooled, L2-normalized).
@@ -82,11 +134,27 @@ export const transformersEmbedder: Embedder = {
       // attempting to load onnxruntime-node (blocked by the pnpm override).
       const { pipeline, env } = await import("@huggingface/transformers");
 
-      // Force WASM backend — prevents any fallback to the native ORT binding.
-      // env.backends.onnx.wasm is the canonical API for backend selection.
-      if (env.backends.onnx.wasm) {
+      // --- Attempt 1: file:// wasmPaths to bypass blob: URL creation -----------
+      //
+      // @huggingface/transformers bundles ort-web but falls back to CDN URLs when
+      // wasmPaths is unset, then converts the downloaded factory to a blob: URL so
+      // it can be dynamically import()-ed.  Node's ESM loader rejects blob: imports.
+      //
+      // Fix: pre-set wasmPaths to file:// URLs pointing at the ort-web dist that
+      // pnpm installed alongside transformers.  This satisfies the "wasmPaths is set"
+      // check so transformers skips the CDN path, and useWasmCache=false skips the
+      // blob creation step.  ORT then does import("file:///…") which Node accepts.
+      const ortPaths = resolveOrtWasmPaths();
+      if (ortPaths && env.backends.onnx.wasm) {
+        env.backends.onnx.wasm.wasmPaths = ortPaths;
+        env.backends.onnx.wasm.numThreads = 1;
+      } else if (env.backends.onnx.wasm) {
         env.backends.onnx.wasm.numThreads = 1;
       }
+      // Disable WASM cache: this prevents loadWasmFactory() from creating a blob: URL
+      // from the factory file content.  ORT will load the factory via direct import().
+      env.useWasmCache = false;
+      // -------------------------------------------------------------------------
 
       _pipeline = (await pipeline("feature-extraction", "Xenova/bge-small-en-v1.5", {
         dtype: "fp32",
