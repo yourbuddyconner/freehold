@@ -97,7 +97,10 @@ function registerTools(
     "create_entity",
     {
       description:
-        "Create a typed entity node with optional classification and edge in one atomic changeset.",
+        "Create a typed entity node with optional classification and edge. " +
+        "The entity creation is one atomic changeset. If a relate parameter is provided, " +
+        "the edge is created in a SEPARATE changeset after the entity is admitted — " +
+        "full atomicity across both is post-v0. If the entity is held, the edge is not created.",
       inputSchema: {
         type: z.string().describe("Entity type ref, e.g. memory/Preference@1"),
         attributes: z.record(z.unknown()).describe("Key/value attributes for the entity"),
@@ -199,16 +202,26 @@ function registerTools(
   server.registerTool(
     "relate",
     {
-      description: "Create a typed directed edge between two entities.",
+      description:
+        "Create a typed directed edge between two entities. " +
+        "By default edges are classified workspace/scratch@1 and admitted immediately (scratch=true). " +
+        "Pass scratch=false to route the edge through governance — the edge will be held for owner review.",
       inputSchema: {
         from: z.string().describe("Source node bare UUID"),
         to: z.string().describe("Target node bare UUID"),
         edge_type: z.string().describe("Edge type ref, e.g. memory/relates_to@1"),
         attributes: z.record(z.unknown()).optional().describe("Optional edge attributes"),
+        scratch: z
+          .boolean()
+          .optional()
+          .describe(
+            "If true (default), the edge is admitted immediately as scratch. " +
+              "If false, the edge proposal is held for owner approval."
+          ),
         agent: z.string().optional().describe("Agent principal name"),
       },
     },
-    async ({ from, to, edge_type, attributes, agent }) => {
+    async ({ from, to, edge_type, attributes, scratch, agent }) => {
       const by = resolveAgent(agent, config);
       const result = await relate(
         fh.graph,
@@ -216,7 +229,8 @@ function registerTools(
         from,
         to,
         edge_type,
-        attributes as Record<string, unknown> | undefined
+        attributes as Record<string, unknown> | undefined,
+        { scratch: scratch ?? true }
       );
       return {
         content: [
@@ -266,7 +280,10 @@ function registerTools(
   server.registerTool(
     "attach_document",
     {
-      description: "Anchor source material by content, linking it to an entity.",
+      description:
+        "Store source material by content hash. The document is created as a scratch node; " +
+        "an entity link is encoded in the commit intent but not as a queryable edge for v0 " +
+        "(full entity-link traversal is post-v0).",
       inputSchema: {
         entity_id: z.string().describe("Entity bare UUID to attach the document to"),
         content: z.string().describe("Document text content"),

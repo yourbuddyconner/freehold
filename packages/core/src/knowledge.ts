@@ -24,7 +24,8 @@ function parseAdmission(raw: AllodAdmission): Admission {
   if ("Admitted" in raw) {
     return { status: "admitted", hash: raw.Admitted.hash };
   }
-  return { status: "held", hash: raw.Held.hash };
+  // Thread through checklist (proposal + rule) so HTTP + MCP callers can surface the held state
+  return { status: "held", hash: raw.Held.hash, proposal: raw.Held.checklist, rule: undefined };
 }
 
 // ---- Op builders (mirrors the Rust helpers) ----
