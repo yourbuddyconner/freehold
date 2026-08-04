@@ -1,7 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider, createMemoryHistory, createRouter } from "@tanstack/react-router";
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
-import type React from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as hooks from "~/lib/hooks";
 import { routeTree } from "~/routes/../routeTree.gen";
@@ -26,36 +25,6 @@ vi.mock("~/lib/api", () => ({
     proposals: vi.fn(),
     schema: vi.fn(),
   },
-}));
-
-// React Flow needs real DOM measurement; stub it with clickable node buttons.
-interface FlowStubProps {
-  nodes: Array<{ id: string; data: Record<string, unknown> }>;
-  edges: Array<{ id: string; label?: string }>;
-  onNodeClick?: (e: unknown, node: { id: string }) => void;
-  children?: React.ReactNode;
-}
-vi.mock("@xyflow/react", () => ({
-  ReactFlow: ({ nodes, edges, onNodeClick, children }: FlowStubProps) => (
-    <div data-testid="flow-stub">
-      {nodes.map((n) => (
-        <button type="button" key={n.id} onClick={(e) => onNodeClick?.(e, n)}>
-          {String((n.data as { shortName?: string }).shortName ?? n.id)}
-        </button>
-      ))}
-      <ul>
-        {edges.map((e) => (
-          <li key={e.id} data-testid={`flow-edge-${e.id}`}>
-            {e.label ?? e.id}
-          </li>
-        ))}
-      </ul>
-      {children}
-    </div>
-  ),
-  Background: () => null,
-  Handle: () => null,
-  Position: { Top: "top", Bottom: "bottom" },
 }));
 
 const schemaFixture = {
@@ -148,53 +117,64 @@ async function renderSchema(
   });
 }
 
-describe("Schema ontology map", () => {
+describe("Schema reference", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it("renders every entity type as a node", async () => {
+  it("indexes types by package with subtypes filed under their parent", async () => {
     await renderSchema({ schema: schemaFixture });
-    const map = within(screen.getByTestId("ontology-map"));
-    expect(map.getByRole("button", { name: "Person" })).toBeInTheDocument();
-    expect(map.getByRole("button", { name: "Colleague" })).toBeInTheDocument();
-    expect(map.getByRole("button", { name: "Preference" })).toBeInTheDocument();
+    const index = screen.getByTestId("type-index");
+    expect(within(index).getByText(/^core/)).toBeInTheDocument();
+    expect(within(index).getByText(/^memory/)).toBeInTheDocument();
+    // Colleague files under core (its parent's package), not its own group
+    const coreGroup = within(index).getByText(/^core/).parentElement as HTMLElement;
+    expect(within(coreGroup).getByTestId("index-claude-workspace/Colleague")).toBeInTheDocument();
   });
 
-  it("draws the inheritance edge and the labeled relation edge", async () => {
+  it("auto-selects the first type so the sheet is never empty", async () => {
     await renderSchema({ schema: schemaFixture });
-    expect(screen.getByTestId("flow-edge-x:claude-workspace/Colleague")).toBeInTheDocument();
-    expect(screen.getByTestId("flow-edge-r:claude-workspace/mentioned_in")).toHaveTextContent(
-      "mentioned_in"
-    );
+    expect(screen.getByTestId("type-detail")).toBeInTheDocument();
   });
 
-  it("clicking a type opens its detail panel with attributes and relations", async () => {
+  it("shows the spec sheet with own and inherited attributes", async () => {
     await renderSchema({ schema: schemaFixture });
     await act(async () => {
-      fireEvent.click(
-        within(screen.getByTestId("ontology-map")).getByRole("button", { name: "Colleague" })
-      );
+      fireEvent.click(screen.getByTestId("index-claude-workspace/Colleague"));
     });
     const detail = screen.getByTestId("type-detail");
     expect(detail).toHaveTextContent("claude-workspace/Colleague");
     expect(detail).toHaveTextContent("slack_id");
+    // Inherited section resolves the parent's attributes
+    const inherited = screen.getByTestId("inherited-core/Person");
+    expect(inherited).toHaveTextContent("name");
+    // Relations on the sheet
     expect(detail).toHaveTextContent("mentioned_in");
   });
 
-  it("detail panel lists subtypes for a parent type", async () => {
+  it("parent sheet lists subtypes as clickable chips", async () => {
     await renderSchema({ schema: schemaFixture });
     await act(async () => {
-      fireEvent.click(
-        within(screen.getByTestId("ontology-map")).getByRole("button", { name: "Person" })
-      );
+      fireEvent.click(screen.getByTestId("index-core/Person"));
+    });
+    const detail = screen.getByTestId("type-detail");
+    expect(detail).toHaveTextContent("Extended by");
+    await act(async () => {
+      fireEvent.click(within(detail).getByRole("button", { name: "Colleague" }));
     });
     expect(screen.getByTestId("type-detail")).toHaveTextContent("claude-workspace/Colleague");
   });
 
-  it("shows the taxonomy tree below the map", async () => {
+  it("lists all relations with domain and range", async () => {
     await renderSchema({ schema: schemaFixture });
-    expect(screen.getByText("Taxonomy")).toBeInTheDocument();
+    const relations = screen.getByTestId("relations-index");
+    expect(relations).toHaveTextContent("mentioned_in");
+    expect(relations).toHaveTextContent("Colleague");
+    expect(relations).toHaveTextContent("Preference");
+  });
+
+  it("shows the taxonomy tree", async () => {
+    await renderSchema({ schema: schemaFixture });
     expect(screen.getByText("work")).toBeInTheDocument();
     expect(screen.getByText("meeting")).toBeInTheDocument();
   });

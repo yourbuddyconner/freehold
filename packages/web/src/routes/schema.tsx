@@ -1,11 +1,7 @@
-import { Background, Handle, Position, ReactFlow } from "@xyflow/react";
-import "@xyflow/react/dist/style.css";
 import { createRoute } from "@tanstack/react-router";
-import { type CSSProperties, useMemo, useState } from "react";
+import { useState } from "react";
 import { TermOutline } from "~/components/TermOutline";
-import { TypeCard } from "~/components/TypeCard";
 import { usePending, useSchema } from "~/lib/hooks";
-import { SCHEMA_NODE_H, layoutSchema } from "~/lib/schemaLayout";
 import { Route as RootRoute } from "./__root";
 
 export const Route = createRoute({
@@ -14,71 +10,9 @@ export const Route = createRoute({
   component: SchemaPage,
 });
 
-/** Package tint palette — same register as the memory graph. */
-const PALETTE = ["#d9f103", "#7dd3fc", "#f9a8d4", "#a7f3d0", "#fcd34d", "#c4b5fd"];
-
-function packageColor(pkg: string): string {
-  let h = 5381;
-  for (let i = 0; i < pkg.length; i++) {
-    h = (h * 33) ^ pkg.charCodeAt(i);
-  }
-  return PALETTE[(h >>> 0) % PALETTE.length];
-}
-
-function centerHandle(): CSSProperties {
-  return {
-    opacity: 0,
-    left: "50%",
-    top: "50%",
-    transform: "translate(-50%, -50%)",
-    width: 1,
-    height: 1,
-    minWidth: 0,
-    minHeight: 0,
-    border: 0,
-    pointerEvents: "none",
-  };
-}
-
-interface TypeNodeData {
-  shortName: string;
-  package: string;
-  attrCount: number;
-  pending: boolean;
-  width: number;
-  selected: boolean;
-  [key: string]: unknown;
-}
-
-function TypeNode({ data }: { data: TypeNodeData }) {
-  return (
-    <div
-      className="flex flex-col items-center justify-center"
-      style={{
-        width: data.width,
-        height: SCHEMA_NODE_H,
-        background: packageColor(data.package),
-        border: data.pending
-          ? "1.5px dashed var(--color-status-pending)"
-          : data.selected
-            ? "2px solid var(--fg)"
-            : "1px solid var(--border)",
-        color: "#0e0e0c",
-        cursor: "pointer",
-        opacity: data.pending ? 0.8 : 1,
-      }}
-    >
-      <Handle type="target" position={Position.Top} style={centerHandle()} />
-      <Handle type="source" position={Position.Bottom} style={centerHandle()} />
-      <span className="text-[13px] font-semibold leading-none">{data.shortName}</span>
-      <span className="mt-1 font-mono text-[9px] uppercase tracking-[0.06em] opacity-70">
-        {data.package} · {data.attrCount} attr{data.attrCount === 1 ? "" : "s"}
-      </span>
-    </div>
-  );
-}
-
-const nodeTypes = { schemaType: TypeNode };
+// ---------------------------------------------------------------------------
+// Data shapes
+// ---------------------------------------------------------------------------
 
 interface EntityTypeRaw {
   name: string;
@@ -87,83 +21,118 @@ interface EntityTypeRaw {
   extends?: string;
 }
 
-function normalizeAttributes(raw: Record<string, unknown> | undefined) {
-  if (!raw) return [];
-  return Object.entries(raw).map(([name, val]) => {
-    if (typeof val === "object" && val !== null) {
-      const obj = val as Record<string, unknown>;
-      return {
-        name,
-        type: typeof obj.type === "string" ? obj.type : JSON.stringify(val),
-        required: obj.required === true,
-      };
-    }
-    return { name, type: typeof val === "string" ? val : JSON.stringify(val), required: false };
-  });
+interface EdgeTypeRaw {
+  name: string;
+  domain?: string;
+  range?: string;
 }
+
+interface AttrView {
+  name: string;
+  type: string;
+  required: boolean;
+}
+
+function shortName(ref: string): string {
+  return ref.split("/").pop() ?? ref;
+}
+
+function pkgOf(t: EntityTypeRaw): string {
+  return t.package ?? t.name.split("/")[0];
+}
+
+function normalizeAttributes(raw: Record<string, unknown> | undefined): AttrView[] {
+  if (!raw) return [];
+  return Object.entries(raw)
+    .map(([name, val]) => {
+      if (typeof val === "object" && val !== null) {
+        const obj = val as Record<string, unknown>;
+        return {
+          name,
+          type: typeof obj.type === "string" ? obj.type : JSON.stringify(val),
+          required: obj.required === true,
+        };
+      }
+      return { name, type: typeof val === "string" ? val : JSON.stringify(val), required: false };
+    })
+    .sort((a, b) => Number(b.required) - Number(a.required) || a.name.localeCompare(b.name));
+}
+
+/** Walk the extends chain, nearest parent first. */
+function ancestorsOf(t: EntityTypeRaw, byName: Map<string, EntityTypeRaw>): EntityTypeRaw[] {
+  const chain: EntityTypeRaw[] = [];
+  let cur = t.extends ? byName.get(t.extends) : undefined;
+  const guard = new Set<string>([t.name]);
+  while (cur && !guard.has(cur.name)) {
+    chain.push(cur);
+    guard.add(cur.name);
+    cur = cur.extends ? byName.get(cur.extends) : undefined;
+  }
+  return chain;
+}
+
+// ---------------------------------------------------------------------------
+// Left index: packages → types, subtypes indented under their parent
+// ---------------------------------------------------------------------------
+
+interface IndexRow {
+  type: EntityTypeRaw;
+  depth: number;
+}
+
+/** Package → ordered rows with subtypes directly under their parents. */
+function buildIndex(types: EntityTypeRaw[]): Map<string, IndexRow[]> {
+  const byName = new Map(types.map((t) => [t.name, t]));
+  const children = new Map<string, EntityTypeRaw[]>();
+  const roots: EntityTypeRaw[] = [];
+  for (const t of [...types].sort((a, b) => a.name.localeCompare(b.name))) {
+    if (t.extends && byName.has(t.extends)) {
+      const list = children.get(t.extends) ?? [];
+      list.push(t);
+      children.set(t.extends, list);
+    } else {
+      roots.push(t);
+    }
+  }
+
+  // Group by the ROOT's package; a subtype files under its parent even when
+  // it lives in another package (its own package shows in the row).
+  const index = new Map<string, IndexRow[]>();
+  function push(pkg: string, t: EntityTypeRaw, depth: number) {
+    const rows = index.get(pkg) ?? [];
+    rows.push({ type: t, depth });
+    index.set(pkg, rows);
+    for (const kid of children.get(t.name) ?? []) {
+      push(pkg, kid, depth + 1);
+    }
+  }
+  for (const r of roots) {
+    push(pkgOf(r), r, 0);
+  }
+  return new Map([...index.entries()].sort((a, b) => a[0].localeCompare(b[0])));
+}
+
+// ---------------------------------------------------------------------------
+// Page
+// ---------------------------------------------------------------------------
 
 function SchemaPage() {
   const { data: schema, isLoading } = useSchema();
   const { data: pendingData } = usePending();
-  const [selected, setSelected] = useState<string | undefined>();
+  const [selectedName, setSelectedName] = useState<string | undefined>();
 
   const entityTypes: EntityTypeRaw[] = schema?.entityTypes ?? [];
-  const edgeTypes = schema?.edgeTypes ?? [];
+  const edgeTypes: EdgeTypeRaw[] = schema?.edgeTypes ?? [];
   const terms = schema?.terms ?? [];
 
   const pendingProposals = (pendingData?.proposals ?? []).filter((p) => p.isSchemaProposal);
   const pendingTypeNames = new Set(pendingProposals.flatMap((p) => p.diff.map((d) => d.key)));
 
-  const layout = useMemo(
-    () => layoutSchema(entityTypes, edgeTypes, pendingTypeNames),
-    [entityTypes, edgeTypes, pendingTypeNames]
-  );
-
-  const flowNodes = useMemo(
-    () =>
-      layout.nodes.map((n) => ({
-        id: n.id,
-        type: "schemaType" as const,
-        position: { x: n.x, y: n.y },
-        data: {
-          shortName: n.shortName,
-          package: n.package,
-          attrCount: n.attrCount,
-          pending: n.pending,
-          width: n.width,
-          selected: selected === n.id,
-        },
-      })),
-    [layout, selected]
-  );
-
-  const flowEdges = useMemo(
-    () =>
-      layout.edges.map((e) => ({
-        id: e.id,
-        source: e.from,
-        target: e.to,
-        type: "straight" as const,
-        label: e.label,
-        labelStyle: {
-          fontSize: 9,
-          fill: "var(--fg-muted)",
-          fontFamily: "'IBM Plex Mono', monospace",
-        },
-        labelBgStyle: { fill: "var(--bg)", fillOpacity: 0.85 },
-        style:
-          e.kind === "extends"
-            ? { stroke: "var(--fg-muted)", strokeWidth: 1.25 }
-            : { stroke: "var(--fg-muted)", strokeDasharray: "4 3", strokeWidth: 1 },
-      })),
-    [layout]
-  );
-
-  const selectedType = entityTypes.find((t) => t.name === selected);
-  const selectedRelations = selected
-    ? edgeTypes.filter((e) => e.domain === selected || e.range === selected)
-    : [];
-  const subtypes = selected ? entityTypes.filter((t) => t.extends === selected) : [];
+  const byName = new Map(entityTypes.map((t) => [t.name, t]));
+  const index = buildIndex(entityTypes);
+  const firstType = [...index.values()][0]?.[0]?.type.name;
+  const selected = selectedName ?? firstType;
+  const selectedType = selected ? byName.get(selected) : undefined;
 
   return (
     <div className="space-y-4">
@@ -178,7 +147,7 @@ function SchemaPage() {
           aria-hidden
         />
         <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-(--fg-muted)">
-          ONTOLOGY
+          SCHEMA REFERENCE
         </span>
       </div>
       <h2 className="text-2xl font-semibold tracking-tight">Schema</h2>
@@ -198,36 +167,107 @@ function SchemaPage() {
       )}
 
       {!isLoading && entityTypes.length > 0 && (
-        <div className="flex gap-6 items-start">
-          {/* Ontology map */}
-          <div className="flex-1 min-w-0 space-y-2">
-            <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-(--fg-muted)">
-              Solid lines are inheritance; dashed lines are relations. Click a type for detail.
-            </p>
-            <div
-              className="border border-(--border) bg-(--bg)"
-              style={{ height: "calc(100vh - 280px)", minHeight: 420 }}
-              data-testid="ontology-map"
+        <>
+          <div className="flex gap-8 items-start">
+            {/* Type index */}
+            <nav
+              aria-label="Type index"
+              className="w-60 shrink-0 space-y-4"
+              data-testid="type-index"
             >
-              <ReactFlow
-                nodes={flowNodes}
-                edges={flowEdges}
-                nodeTypes={nodeTypes}
-                fitView
-                fitViewOptions={{ padding: 0.12, maxZoom: 1.1 }}
-                nodesDraggable={false}
-                nodesConnectable={false}
-                proOptions={{ hideAttribution: true }}
-                onNodeClick={(_e, node) => setSelected(selected === node.id ? undefined : node.id)}
-                onPaneClick={() => setSelected(undefined)}
-              >
-                <Background gap={24} size={1} />
-              </ReactFlow>
-            </div>
+              {[...index.entries()].map(([pkg, rows]) => (
+                <div key={pkg}>
+                  <p className="border-b border-(--border) pb-1 mb-1 font-mono text-[10px] uppercase tracking-[0.08em] text-(--fg-muted)">
+                    {pkg} <span className="opacity-60">· {rows.length}</span>
+                  </p>
+                  <ul>
+                    {rows.map(({ type, depth }) => {
+                      const active = selected === type.name;
+                      return (
+                        <li key={type.name}>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedName(type.name)}
+                            data-testid={`index-${type.name}`}
+                            className={`flex w-full items-center gap-1.5 px-2 py-1 text-left text-[13px] ${
+                              active
+                                ? "nav-active-marker bg-(--bg-subtle)"
+                                : "text-(--fg-muted) hover:text-(--fg) hover:bg-(--bg-subtle)"
+                            }`}
+                            style={{ paddingLeft: 8 + depth * 14 }}
+                          >
+                            {depth > 0 && (
+                              <span aria-hidden className="font-mono text-[10px] text-(--fg-muted)">
+                                └
+                              </span>
+                            )}
+                            <span className="truncate">{shortName(type.name)}</span>
+                            {pendingTypeNames.has(type.name) && (
+                              <span
+                                title="Pending"
+                                className="ml-auto inline-block h-1.5 w-1.5 shrink-0 bg-[var(--color-status-pending)]"
+                              />
+                            )}
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              ))}
+            </nav>
 
-            {/* Taxonomy below the map */}
-            <section className="pt-4 max-w-xl">
-              <h3 className="text-sm font-semibold text-(--fg) mb-2">Taxonomy</h3>
+            {/* Spec sheet */}
+            {selectedType && (
+              <TypeSpecSheet
+                type={selectedType}
+                byName={byName}
+                allTypes={entityTypes}
+                edgeTypes={edgeTypes}
+                pending={pendingTypeNames.has(selectedType.name)}
+                onSelect={setSelectedName}
+              />
+            )}
+          </div>
+
+          {/* Relations + taxonomy reference */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 pt-6 border-t border-(--border)">
+            <section data-testid="relations-index">
+              <h3 className="font-mono text-[11px] uppercase tracking-[0.08em] text-(--fg-muted) mb-2">
+                Relations · {edgeTypes.length}
+              </h3>
+              {edgeTypes.length === 0 ? (
+                <p className="text-xs text-(--fg-muted)">No edge types defined yet.</p>
+              ) : (
+                <table className="w-full text-xs border-collapse">
+                  <tbody>
+                    {edgeTypes.map((e) => (
+                      <tr key={e.name} className="border-b border-(--border)">
+                        <td className="py-1.5 pr-3 font-mono text-(--fg)">{shortName(e.name)}</td>
+                        <td className="py-1.5 text-(--fg-muted)">
+                          {e.domain ? (
+                            <TypeLink name={e.domain} byName={byName} onSelect={setSelectedName} />
+                          ) : (
+                            "any"
+                          )}
+                          <span className="px-1.5 font-mono">→</span>
+                          {e.range ? (
+                            <TypeLink name={e.range} byName={byName} onSelect={setSelectedName} />
+                          ) : (
+                            "any"
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </section>
+
+            <section>
+              <h3 className="font-mono text-[11px] uppercase tracking-[0.08em] text-(--fg-muted) mb-2">
+                Taxonomy · {terms.length}
+              </h3>
               <p className="text-xs text-(--fg-muted) mb-3">
                 Terms label memories inside these types; classification is governed like any other
                 write.
@@ -235,59 +275,198 @@ function SchemaPage() {
               <TermOutline terms={terms} pendingTerms={[...pendingTypeNames]} />
             </section>
           </div>
-
-          {/* Detail panel */}
-          {selectedType && (
-            <aside className="w-96 shrink-0 space-y-3" data-testid="type-detail">
-              <TypeCard
-                name={selectedType.name}
-                pkg={selectedType.package}
-                extends={selectedType.extends}
-                attributes={normalizeAttributes(selectedType.attributes)}
-                pending={pendingTypeNames.has(selectedType.name)}
-              />
-              {subtypes.length > 0 && (
-                <div className="border border-(--border) bg-(--bg-subtle) p-3">
-                  <p className="font-mono text-[10px] uppercase tracking-[0.08em] text-(--fg-muted) mb-1.5">
-                    Extended by
-                  </p>
-                  <ul className="space-y-1">
-                    {subtypes.map((s) => (
-                      <li key={s.name}>
-                        <button
-                          type="button"
-                          onClick={() => setSelected(s.name)}
-                          className="text-xs text-(--fg) hover:underline"
-                        >
-                          {s.name}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              {selectedRelations.length > 0 && (
-                <div className="border border-(--border) bg-(--bg-subtle) p-3">
-                  <p className="font-mono text-[10px] uppercase tracking-[0.08em] text-(--fg-muted) mb-1.5">
-                    Relations
-                  </p>
-                  <ul className="space-y-1">
-                    {selectedRelations.map((r) => (
-                      <li key={r.name} className="text-xs text-(--fg)">
-                        <span className="font-mono">{r.name.split("/").pop()}</span>
-                        <span className="text-(--fg-muted)">
-                          {" "}
-                          — {r.domain?.split("/").pop()} → {r.range?.split("/").pop()}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </aside>
-          )}
-        </div>
+        </>
       )}
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Spec sheet
+// ---------------------------------------------------------------------------
+
+function TypeLink({
+  name,
+  byName,
+  onSelect,
+}: {
+  name: string;
+  byName: Map<string, EntityTypeRaw>;
+  onSelect: (name: string) => void;
+}) {
+  if (!byName.has(name)) return <span className="font-mono">{shortName(name)}</span>;
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(name)}
+      className="font-mono text-(--fg) underline underline-offset-2 decoration-(--border) hover:decoration-[var(--color-accent)]"
+    >
+      {shortName(name)}
+    </button>
+  );
+}
+
+function AttrTable({ attrs, muted = false }: { attrs: AttrView[]; muted?: boolean }) {
+  return (
+    <table className="w-full text-sm border-collapse">
+      <thead>
+        <tr className="border-b border-(--border)">
+          <th className="py-1 pr-4 text-left font-mono text-[10px] uppercase tracking-[0.08em] text-(--fg-muted) font-normal w-2/5">
+            Attribute
+          </th>
+          <th className="py-1 pr-4 text-left font-mono text-[10px] uppercase tracking-[0.08em] text-(--fg-muted) font-normal">
+            Type
+          </th>
+          <th className="py-1 text-left font-mono text-[10px] uppercase tracking-[0.08em] text-(--fg-muted) font-normal w-20">
+            Required
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        {attrs.map((a) => (
+          <tr key={a.name} className="border-b border-(--border)">
+            <td
+              className={`py-1.5 pr-4 font-mono text-[13px] ${muted ? "text-(--fg-muted)" : "text-(--fg)"}`}
+            >
+              {a.name}
+            </td>
+            <td className="py-1.5 pr-4 font-mono text-[12px] text-(--fg-muted)">{a.type}</td>
+            <td className="py-1.5">
+              {a.required ? (
+                <span className="inline-block border border-[var(--color-accent)] bg-[var(--color-accent)] px-1 font-mono text-[9px] uppercase tracking-wide text-[var(--color-accent-fg)]">
+                  req
+                </span>
+              ) : (
+                <span className="font-mono text-[11px] text-(--fg-muted)">—</span>
+              )}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+interface TypeSpecSheetProps {
+  type: EntityTypeRaw;
+  byName: Map<string, EntityTypeRaw>;
+  allTypes: EntityTypeRaw[];
+  edgeTypes: EdgeTypeRaw[];
+  pending: boolean;
+  onSelect: (name: string) => void;
+}
+
+function TypeSpecSheet({
+  type,
+  byName,
+  allTypes,
+  edgeTypes,
+  pending,
+  onSelect,
+}: TypeSpecSheetProps) {
+  const ancestors = ancestorsOf(type, byName);
+  // The schema flattens inherited attributes into each type; show only the
+  // type's own additions here — the inherited sections carry the rest.
+  const inheritedNames = new Set(ancestors.flatMap((a) => Object.keys(a.attributes ?? {})));
+  const own = normalizeAttributes(type.attributes).filter((a) => !inheritedNames.has(a.name));
+  const subtypes = allTypes.filter((t) => t.extends === type.name);
+  const relations = edgeTypes.filter((e) => e.domain === type.name || e.range === type.name);
+
+  return (
+    <article
+      className={`flex-1 min-w-0 max-w-2xl space-y-6 reg-marks relative ${pending ? "pending-border p-5" : ""}`}
+      data-testid="type-detail"
+    >
+      <header>
+        <p className="font-mono text-[10px] uppercase tracking-[0.08em] text-(--fg-muted)">
+          {pkgOf(type)}
+          {pending && (
+            <span className="ml-2 text-[var(--color-status-pending)]">· pending proposal</span>
+          )}
+        </p>
+        <h3 className="mt-0.5 text-3xl font-semibold tracking-tight">{shortName(type.name)}</h3>
+        <p className="mt-1 font-mono text-[12px] text-(--fg-muted)">
+          {type.name}
+          {ancestors.map((a) => (
+            <span key={a.name}>
+              {" "}
+              <span aria-hidden>←</span>{" "}
+              <TypeLink name={a.name} byName={byName} onSelect={onSelect} />
+            </span>
+          ))}
+        </p>
+      </header>
+
+      <section>
+        <h4 className="font-mono text-[11px] uppercase tracking-[0.08em] text-(--fg-muted) mb-2">
+          Attributes · {own.length}
+        </h4>
+        {own.length > 0 ? (
+          <AttrTable attrs={own} />
+        ) : (
+          <p className="text-xs text-(--fg-muted)">No attributes of its own.</p>
+        )}
+      </section>
+
+      {ancestors.map((a) => {
+        const inherited = normalizeAttributes(a.attributes);
+        if (inherited.length === 0) return null;
+        return (
+          <section key={a.name} data-testid={`inherited-${a.name}`}>
+            <h4 className="font-mono text-[11px] uppercase tracking-[0.08em] text-(--fg-muted) mb-2">
+              Inherited from <TypeLink name={a.name} byName={byName} onSelect={onSelect} /> ·{" "}
+              {inherited.length}
+            </h4>
+            <AttrTable attrs={inherited} muted />
+          </section>
+        );
+      })}
+
+      {subtypes.length > 0 && (
+        <section>
+          <h4 className="font-mono text-[11px] uppercase tracking-[0.08em] text-(--fg-muted) mb-2">
+            Extended by · {subtypes.length}
+          </h4>
+          <div className="flex flex-wrap gap-1.5">
+            {subtypes.map((s) => (
+              <button
+                key={s.name}
+                type="button"
+                onClick={() => onSelect(s.name)}
+                className="border border-(--border) bg-(--bg-subtle) px-2 py-0.5 font-mono text-[11px] text-(--fg) hover:border-[var(--color-accent)]"
+              >
+                {shortName(s.name)}
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {relations.length > 0 && (
+        <section>
+          <h4 className="font-mono text-[11px] uppercase tracking-[0.08em] text-(--fg-muted) mb-2">
+            Relations · {relations.length}
+          </h4>
+          <ul className="space-y-1">
+            {relations.map((r) => {
+              const outgoing = r.domain === type.name;
+              const peer = outgoing ? r.range : r.domain;
+              return (
+                <li key={r.name} className="flex items-baseline gap-2 text-sm">
+                  <span className="font-mono text-[12px] text-(--fg)">{shortName(r.name)}</span>
+                  <span className="text-xs text-(--fg-muted)">
+                    {outgoing ? "→" : "←"}{" "}
+                    {peer ? <TypeLink name={peer} byName={byName} onSelect={onSelect} /> : "any"}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
+
+      <span className="reg-mark-bl" aria-hidden />
+      <span className="reg-mark-br" aria-hidden />
+    </article>
   );
 }

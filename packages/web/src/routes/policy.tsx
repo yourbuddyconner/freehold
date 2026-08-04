@@ -103,35 +103,64 @@ export interface RequirementView {
 /** The rule's requirement as an outcome chip + sentence. */
 export function describeRequirement(req: Record<string, unknown> | undefined): RequirementView {
   if (!req) {
-    return { chip: "Saves", chipTone: "saves", sentence: "it saves with no further checks." };
+    return {
+      chip: "Saves instantly",
+      chipTone: "saves",
+      sentence: "it saves with no further checks.",
+    };
   }
   if ("reviewers" in req) {
     const r = req.reviewers as { quorum?: number; role?: string };
-    const who = r.role === "owner" ? "your" : `a ${r.role}'s`;
+    const who = r.role === "owner" ? "you approve" : `a ${r.role} approves`;
     const quorum = r.quorum && r.quorum > 1 ? ` (${r.quorum} approvals)` : "";
     return {
-      chip: "Your review",
+      chip: "Goes to Inbox",
       chipTone: "review",
-      sentence: `it waits in the Inbox for ${who} approval${quorum}.`,
+      sentence: `it lands in the Inbox and stays pending until ${who} it${quorum}.`,
     };
   }
   if ("attestation_required" in req) {
     const a = req.attestation_required as { attester_class?: string };
     return {
-      chip: "Signed envelope",
+      chip: "Needs proof",
       chipTone: "attestation",
-      sentence: `it must carry a signed envelope from the ${a.attester_class ?? "attester"} before it saves.`,
+      sentence: `it must carry a signed envelope from the ${a.attester_class ?? "attester"} proving what produced it, or it stays pending.`,
     };
   }
   if ("schema_valid" in req) {
     return {
-      chip: "Saves",
+      chip: "Saves instantly",
       chipTone: "saves",
-      sentence: "it saves immediately after passing schema validation.",
+      sentence: "it saves on the spot — the only check is that it fits the schema.",
     };
   }
   return { chip: "Custom", chipTone: "review", sentence: JSON.stringify(req) };
 }
+
+/** Section framing per outcome group, in the order shown on the page. */
+export const OUTCOME_SECTIONS: Array<{
+  tone: RequirementView["chipTone"];
+  title: string;
+  blurb: string;
+}> = [
+  {
+    tone: "saves",
+    title: "Saves without you",
+    blurb:
+      "Writes matching these rules save on their own — you never see them unless you go looking.",
+  },
+  {
+    tone: "review",
+    title: "Waits in your Inbox",
+    blurb: "Writes matching these rules stay pending until you approve or reject them.",
+  },
+  {
+    tone: "attestation",
+    title: "Needs cryptographic proof",
+    blurb:
+      "Writes matching these rules must arrive with a signed envelope naming what produced them.",
+  },
+];
 
 const CHIP_STYLES: Record<RequirementView["chipTone"], string> = {
   saves:
@@ -148,10 +177,9 @@ const CHIP_STYLES: Record<RequirementView["chipTone"], string> = {
 interface RuleCardProps {
   rule: PolicyRule;
   definition: PolicyDefinition;
-  index: number;
 }
 
-function PolicyRuleCard({ rule, definition, index }: RuleCardProps) {
+function PolicyRuleCard({ rule, definition }: RuleCardProps) {
   const qc = useQueryClient();
   const [showDefinition, setShowDefinition] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -209,10 +237,7 @@ function PolicyRuleCard({ rule, definition, index }: RuleCardProps) {
       data-testid={`rule-${rule.name}`}
     >
       <div className="flex items-start justify-between gap-3">
-        <div className="flex items-baseline gap-2.5 min-w-0">
-          <span className="font-mono text-[10px] text-(--fg-muted)">{index + 1}</span>
-          <h3 className="font-mono text-[12px] text-(--fg) truncate">{rule.name}</h3>
-        </div>
+        <h3 className="font-mono text-[12px] text-(--fg) truncate">{rule.name}</h3>
         <span
           className={`shrink-0 inline-flex items-center border px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide ${CHIP_STYLES[req.chipTone]}`}
         >
@@ -351,22 +376,9 @@ function PolicyPage() {
               How a write is decided
             </p>
             <p className="text-sm text-(--fg) leading-relaxed">
-              Every write is checked against the rules below. Each rule that matches adds its
-              requirement; the write saves once every requirement is met.
-              {definition?.default_posture === "restricted" ? (
-                <>
-                  {" "}
-                  A write that matches no rule falls to the default posture,{" "}
-                  <span className="font-mono text-[12px]">restricted</span> — it waits for your
-                  review.
-                </>
-              ) : definition?.default_posture ? (
-                <>
-                  {" "}
-                  The default posture for unmatched writes is{" "}
-                  <span className="font-mono text-[12px]">{definition.default_posture}</span>.
-                </>
-              ) : null}
+              Every write is checked against every rule. Each match adds a requirement, and the
+              write saves once all of them are met. The groups below show where each rule sends a
+              matching write.
             </p>
             {definition?.roles && Object.keys(definition.roles).length > 0 && (
               <p className="text-xs text-(--fg-muted)">
@@ -386,13 +398,52 @@ function PolicyPage() {
             approve it in the Inbox.
           </p>
 
-          <ul className="space-y-3">
-            {rules.map((rule, i) => (
-              <li key={rule.name}>
-                <PolicyRuleCard rule={rule} definition={definition ?? {}} index={i} />
-              </li>
-            ))}
-          </ul>
+          {OUTCOME_SECTIONS.map((section) => {
+            const sectionRules = rules.filter(
+              (r) => describeRequirement(r.require).chipTone === section.tone
+            );
+            if (sectionRules.length === 0) return null;
+            return (
+              <section key={section.tone} data-testid={`outcome-${section.tone}`}>
+                <h3 className="font-mono text-[11px] uppercase tracking-[0.08em] text-(--fg) mb-0.5">
+                  {section.title} <span className="text-(--fg-muted)">· {sectionRules.length}</span>
+                </h3>
+                <p className="text-xs text-(--fg-muted) mb-2">{section.blurb}</p>
+                <ul className="space-y-3">
+                  {sectionRules.map((rule) => (
+                    <li key={rule.name}>
+                      <PolicyRuleCard rule={rule} definition={definition ?? {}} />
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            );
+          })}
+
+          {/* The catch-all: what happens when nothing matches */}
+          {definition?.default_posture && (
+            <section data-testid="outcome-default">
+              <h3 className="font-mono text-[11px] uppercase tracking-[0.08em] text-(--fg) mb-0.5">
+                Everything else
+              </h3>
+              <div className="border border-dashed border-(--border) bg-(--bg-subtle) p-4">
+                <p className="text-sm text-(--fg) leading-relaxed">
+                  {definition.default_posture === "restricted" ? (
+                    <>
+                      A write that matches none of the rules above goes to your Inbox and waits —
+                      the default posture is{" "}
+                      <span className="font-mono text-[12px]">restricted</span>.
+                    </>
+                  ) : (
+                    <>
+                      A write that matches none of the rules above follows the default posture:{" "}
+                      <span className="font-mono text-[12px]">{definition.default_posture}</span>.
+                    </>
+                  )}
+                </p>
+              </div>
+            </section>
+          )}
         </div>
       )}
     </div>

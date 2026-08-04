@@ -126,12 +126,25 @@ describe("Policy", () => {
     } as never);
   });
 
-  it("shows the decision summary with the default posture and roles", async () => {
+  it("shows the decision summary, roles, and the everything-else posture", async () => {
     await renderPolicy();
     const summary = screen.getByTestId("policy-summary");
-    expect(summary).toHaveTextContent(/matches no rule falls to the default posture/i);
-    expect(summary).toHaveTextContent("restricted");
+    expect(summary).toHaveTextContent(/every write is checked against every rule/i);
     expect(summary).toHaveTextContent("owner = owner");
+    const fallback = screen.getByTestId("outcome-default");
+    expect(fallback).toHaveTextContent(/goes to your Inbox and waits/i);
+    expect(fallback).toHaveTextContent("restricted");
+  });
+
+  it("groups rules under outcome sections", async () => {
+    await renderPolicy();
+    expect(screen.getByTestId("outcome-saves")).toHaveTextContent("Saves without you");
+    expect(screen.getByTestId("outcome-saves")).toHaveTextContent("scratch-is-free");
+    expect(screen.getByTestId("outcome-review")).toHaveTextContent("Waits in your Inbox");
+    expect(screen.getByTestId("outcome-review")).toHaveTextContent("agent-writes-are-proposals");
+    expect(screen.getByTestId("outcome-attestation")).toHaveTextContent(
+      "Needs cryptographic proof"
+    );
   });
 
   it("renders each rule in plain language with its outcome chip", async () => {
@@ -140,13 +153,13 @@ describe("Policy", () => {
     expect(scratch).toHaveTextContent(
       /When an agent wrote it and it is classified in the workspace\/scratch region/
     );
-    expect(scratch).toHaveTextContent(/saves immediately after passing schema validation/i);
-    expect(scratch).toHaveTextContent("Saves");
+    expect(scratch).toHaveTextContent(/saves on the spot/i);
+    expect(scratch).toHaveTextContent("Saves instantly");
 
     const proposals = screen.getByTestId("rule-agent-writes-are-proposals");
     expect(proposals).toHaveTextContent(/outside the workspace\/scratch region/);
-    expect(proposals).toHaveTextContent(/waits in the Inbox for your approval/i);
-    expect(proposals).toHaveTextContent("Your review");
+    expect(proposals).toHaveTextContent(/stays pending until you approve it/i);
+    expect(proposals).toHaveTextContent("Goes to Inbox");
 
     const envelope = screen.getByTestId("rule-model-assisted-needs-signed-envelope");
     expect(envelope).toHaveTextContent(/signed envelope from the indexer/i);
