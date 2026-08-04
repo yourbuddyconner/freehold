@@ -177,7 +177,7 @@ export async function createEntity(
     );
   }
 
-  const raw = await graph.commit(agent, `Create ${typeRef}`, ops, []);
+  const raw = await graph.commit(agent, `Create ${typeRef}`, ops, [], true);
   const admission = parseAdmission(raw as AllodAdmission);
   return {
     status: admission.status,
@@ -211,7 +211,7 @@ export async function updateEntity(
     throw new Error(`node_rev: node not found: ${nodeId}`);
   }
   const ops = [updateNodeOp(nodeId, typeRef, rev, attributes)];
-  const raw = await graph.commit(agent, `Update node:${nodeId}`, ops, []);
+  const raw = await graph.commit(agent, `Update node:${nodeId}`, ops, [], true);
   const admission = parseAdmission(raw as AllodAdmission);
   return { status: admission.status, changeset: admission.hash };
 }
@@ -253,7 +253,7 @@ export async function relate(
       )
     );
   }
-  const raw = await graph.commit(agent, `Relate ${edgeType}`, ops, []);
+  const raw = await graph.commit(agent, `Relate ${edgeType}`, ops, [], true);
   const admission = parseAdmission(raw as AllodAdmission);
   return { status: admission.status, edgeId, changeset: admission.hash };
 }
@@ -327,7 +327,7 @@ export async function attachDocument(
     ),
   ];
 
-  const raw = await graph.commit(agent, `Attach document to node:${entityId}`, ops, []);
+  const raw = await graph.commit(agent, `Attach document to node:${entityId}`, ops, [], true);
   const admission = parseAdmission(raw as AllodAdmission);
   return { status: admission.status, docNodeId: docId, changeset: admission.hash };
 }

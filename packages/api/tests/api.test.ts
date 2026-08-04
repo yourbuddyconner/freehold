@@ -142,7 +142,7 @@ describe("Founding loop", () => {
     const { status, body } = await req("POST", `/api/v1/proposals/${proposalHash}/approve`);
     expect(status).toBe(200);
     const b = body as { status: string };
-    expect(b.status === "admitted" || b.status === "still-unmet").toBe(true);
+    expect(b.status).toBe("admitted");
   });
 
   test("GET /api/v1/recall — returns results array", async () => {
