@@ -33,7 +33,7 @@ export function DiffView({ diff, className }: DiffViewProps) {
         {open ? "Hide diff" : "Show diff"}
       </button>
       {open && (
-        <div className="mt-2 rounded border border-[--border] bg-[--bg-subtle] p-3 space-y-2 font-mono text-[11px]">
+        <div className="mt-2 border border-[--border] bg-[--bg-subtle] p-3 space-y-2 font-mono text-[11px]">
           {diff.map((entry) => {
             const isAdded = entry.after !== undefined && entry.before === undefined;
 
@@ -46,14 +46,7 @@ export function DiffView({ diff, className }: DiffViewProps) {
                   </div>
                 )}
                 {entry.after !== undefined && (
-                  <div
-                    className={cn(
-                      "pl-2",
-                      isAdded
-                        ? "text-green-700 dark:text-green-400"
-                        : "text-amber-700 dark:text-amber-400"
-                    )}
-                  >
+                  <div className={cn("pl-2", isAdded ? "diff-added" : "diff-changed")}>
                     {stringify(entry.after)}
                   </div>
                 )}

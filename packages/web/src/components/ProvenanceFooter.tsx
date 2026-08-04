@@ -48,12 +48,12 @@ export function ProvenanceFooter({
       )}
     >
       {/* Author chip */}
-      <span className="inline-flex items-center gap-1 rounded bg-neutral-100 dark:bg-neutral-800 px-1.5 py-0.5 font-medium">
+      <span className="inline-flex items-center gap-1 border border-[--border] px-1.5 py-0.5 font-mono text-[10px]">
         <span data-testid="provenance-author">{author}</span>
       </span>
 
       {/* Method chip */}
-      <span className="inline-flex items-center gap-1 rounded bg-neutral-100 dark:bg-neutral-800 px-1.5 py-0.5">
+      <span className="inline-flex items-center gap-1 border border-[--border] px-1.5 py-0.5 font-mono text-[10px]">
         <span data-testid="provenance-method">{method}</span>
       </span>
 
@@ -62,7 +62,7 @@ export function ProvenanceFooter({
         {approvalStatus ? (
           <StatusChip status={approvalStatus} href={evidenceHref} label={approvalLabel} />
         ) : (
-          <span className="inline-flex items-center rounded bg-neutral-100 dark:bg-neutral-800 px-1.5 py-0.5 font-medium">
+          <span className="inline-flex items-center border border-[--border] px-1.5 py-0.5 font-mono text-[10px]">
             {approvalLabel}
           </span>
         )}
@@ -75,7 +75,7 @@ export function ProvenanceFooter({
           onClick={handleCopy}
           data-testid="provenance-hash"
           title={hash}
-          className="font-mono rounded bg-neutral-100 dark:bg-neutral-800 px-1.5 py-0.5 hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors cursor-pointer"
+          className="font-mono bg-neutral-100 dark:bg-neutral-800 px-1.5 py-0.5 hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors cursor-pointer"
         >
           {copied ? "Copied!" : truncated}
         </button>

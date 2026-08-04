@@ -20,12 +20,7 @@ interface RuleCardProps {
 
 export function RuleCard({ rule, onEdit, className }: RuleCardProps) {
   return (
-    <article
-      className={cn(
-        "rounded-lg border border-[--border] bg-[--bg-subtle] p-4 space-y-3",
-        className
-      )}
-    >
+    <article className={cn("border border-[--border] bg-[--bg-subtle] p-4 space-y-3", className)}>
       {/* Title row */}
       <div className="flex items-start justify-between gap-2">
         <div>
@@ -38,17 +33,17 @@ export function RuleCard({ rule, onEdit, className }: RuleCardProps) {
           <button
             type="button"
             onClick={onEdit}
-            className="shrink-0 rounded border border-[--border] px-2.5 py-1 text-xs font-medium text-[--fg-muted] hover:text-[--fg] hover:bg-[--border] transition-colors"
+            className="shrink-0 border border-[--border] font-mono text-[12px] uppercase px-2.5 py-1 text-[--fg-muted] hover:text-[--fg] transition-colors"
             data-testid={`edit-rule-${rule.id}`}
           >
-            Edit
+            › Edit
           </button>
         )}
       </div>
 
       {/* Selector / require mono block */}
       {(rule.selector || rule.require) && (
-        <div className="rounded border border-[--border] bg-white dark:bg-neutral-900 p-3 font-mono text-[11px] space-y-1">
+        <div className="border border-[--border] bg-white dark:bg-neutral-900 p-3 font-mono text-[11px] space-y-1">
           {rule.selector && (
             <div>
               <span className="text-[--fg-muted]">selector: </span>

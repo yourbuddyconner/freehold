@@ -26,7 +26,7 @@ export function PrincipalCard({ principal, onRevoke, className }: PrincipalCardP
   return (
     <article
       className={cn(
-        "rounded-lg border p-4 space-y-2",
+        "border p-4 space-y-2",
         isRevoked
           ? "border-[--border] opacity-60 bg-[--bg-subtle]"
           : "border-[--border] bg-[--bg-subtle]",
@@ -40,12 +40,12 @@ export function PrincipalCard({ principal, onRevoke, className }: PrincipalCardP
               {principal.name ?? principal.id}
             </span>
             {principal.kind && (
-              <span className="rounded border border-[--border] px-1.5 py-0.5 text-[10px] font-medium text-[--fg-muted]">
+              <span className="border border-[--border] px-1.5 py-0.5 text-[10px] font-mono uppercase text-[--fg-muted]">
                 {KIND_LABELS[principal.kind] ?? principal.kind}
               </span>
             )}
             {isRevoked && (
-              <span className="rounded border border-red-300 bg-red-50 dark:bg-red-950/30 px-1.5 py-0.5 text-[10px] font-medium text-red-600 dark:text-red-400">
+              <span className="border border-[var(--color-status-rejected)] px-1.5 py-0.5 text-[10px] font-mono uppercase text-[var(--color-status-rejected)]">
                 Revoked
               </span>
             )}
@@ -64,7 +64,7 @@ export function PrincipalCard({ principal, onRevoke, className }: PrincipalCardP
           <button
             type="button"
             onClick={onRevoke}
-            className="shrink-0 rounded border border-red-300 px-2.5 py-1 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+            className="shrink-0 border border-[var(--color-status-rejected)] font-mono text-[12px] uppercase px-2.5 py-1 text-[var(--color-status-rejected)] hover:bg-[#fef2f0] transition-colors"
             data-testid={`revoke-${principal.id}`}
           >
             Revoke

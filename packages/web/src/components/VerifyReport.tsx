@@ -13,22 +13,21 @@ function LevelRow({ label, description, state, degradedItems = [] }: LevelRowPro
   return (
     <div
       className={cn(
-        "rounded-lg border p-4 space-y-2",
-        state === "ok" && "border-green-300 bg-green-50 dark:border-green-800 dark:bg-green-950/30",
-        state === "degraded" &&
-          "border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30",
+        "border p-4 space-y-2",
+        state === "ok" && "border-[var(--color-status-approved)] bg-[#f0fdf4] dark:bg-[#052e16]",
+        state === "degraded" && "border-[var(--color-status-held)] bg-[#fffbeb] dark:bg-[#1c1408]",
         (state === "pending" || state === "loading") && "border-[--border] bg-[--bg-subtle]"
       )}
     >
       <div className="flex items-center gap-3">
         {state === "ok" && (
           <CheckCircle
-            className="h-5 w-5 shrink-0 text-green-600 dark:text-green-400"
+            className="h-5 w-5 shrink-0 text-[var(--color-status-approved)]"
             aria-hidden
           />
         )}
         {state === "degraded" && (
-          <XCircle className="h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
+          <XCircle className="h-5 w-5 shrink-0 text-[var(--color-status-held)]" aria-hidden />
         )}
         {(state === "pending" || state === "loading") && (
           <Circle
@@ -43,8 +42,8 @@ function LevelRow({ label, description, state, degradedItems = [] }: LevelRowPro
           <p
             className={cn(
               "text-sm font-medium",
-              state === "ok" && "text-green-800 dark:text-green-200",
-              state === "degraded" && "text-amber-800 dark:text-amber-200",
+              state === "ok" && "text-[var(--color-status-approved)]",
+              state === "degraded" && "text-[var(--color-status-held)]",
               (state === "pending" || state === "loading") && "text-[--fg-muted]"
             )}
             data-testid={`level-${label.toLowerCase()}`}
@@ -62,7 +61,7 @@ function LevelRow({ label, description, state, degradedItems = [] }: LevelRowPro
             <li key={item.id} className="text-xs text-[--fg-muted] flex gap-2">
               <a
                 href={`/memory/${item.id}`}
-                className="font-mono text-amber-700 dark:text-amber-300 hover:underline shrink-0"
+                className="font-mono text-[var(--color-status-held)] hover:underline shrink-0"
               >
                 {item.id.slice(0, 12)}…
               </a>
@@ -97,10 +96,10 @@ export function VerifyReport({ report, className }: VerifyReportProps) {
       {/* Summary */}
       <div
         className={cn(
-          "rounded border px-4 py-3 text-sm font-medium",
+          "border px-4 py-3 text-sm font-medium",
           overallOk
-            ? "border-green-300 bg-green-50 text-green-800 dark:border-green-800 dark:bg-green-950/30 dark:text-green-200"
-            : "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200"
+            ? "border-[var(--color-status-approved)] bg-[#f0fdf4] text-[var(--color-status-approved)] dark:bg-[#052e16]"
+            : "border-[var(--color-status-held)] bg-[#fffbeb] text-[var(--color-status-held)] dark:bg-[#1c1408]"
         )}
         data-testid="verify-summary"
       >

@@ -49,10 +49,10 @@ export function MemoryCard({ result }: MemoryCardProps) {
   const methodLabel = method ?? "unrecorded";
 
   return (
-    <article className="rounded-lg border border-[--border] bg-[--bg-subtle] p-4 space-y-3">
+    <article className="reg-marks relative border border-[--border] bg-[--bg-subtle] p-4 space-y-3">
       {/* Type chip */}
       <div className="flex items-center justify-between">
-        <span className="inline-flex items-center rounded border border-[--border] px-1.5 py-0.5 text-[11px] font-medium font-mono text-[--fg-muted]">
+        <span className="inline-flex items-center border border-[--border] px-1.5 py-0.5 text-[11px] font-medium font-mono text-[--fg-muted]">
           {type}
         </span>
         <Link
@@ -65,9 +65,7 @@ export function MemoryCard({ result }: MemoryCardProps) {
       </div>
 
       {/* Content */}
-      {text && (
-        <p className="text-sm text-[--fg] font-serif leading-relaxed line-clamp-4">{text}</p>
-      )}
+      {text && <p className="text-sm text-[--fg] leading-relaxed line-clamp-4">{text}</p>}
 
       {/* Provenance — shows REAL method from the indexed object, or "unrecorded" when absent */}
       <ProvenanceFooter
@@ -77,6 +75,8 @@ export function MemoryCard({ result }: MemoryCardProps) {
         approvalStatus={approvalToStatus(approval)}
         changesetHash={changeset}
       />
+      <span className="reg-mark-bl" aria-hidden />
+      <span className="reg-mark-br" aria-hidden />
     </article>
   );
 }

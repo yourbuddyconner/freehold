@@ -38,8 +38,8 @@ export function TypeCard({
   return (
     <article
       className={cn(
-        "rounded-lg border p-4 space-y-3 bg-[--bg-subtle]",
-        pending ? "border-amber-400 bg-amber-50 dark:bg-amber-900/30" : "border-[--border]",
+        "reg-marks relative border p-4 space-y-3 bg-[--bg-subtle]",
+        pending ? "held-border bg-[#fffbeb] dark:bg-[#1c1408]" : "border-[--border]",
         className
       )}
     >
@@ -61,14 +61,12 @@ export function TypeCard({
           <div className="flex items-center gap-2 text-[11px] text-[--fg-muted]">
             {pkg && <span className="font-mono">{pkg}</span>}
             {version && (
-              <span className="rounded border border-[--border] px-1 py-0.5 font-mono">
-                v{version}
-              </span>
+              <span className="border border-[--border] px-1 py-0.5 font-mono">v{version}</span>
             )}
           </div>
         </div>
         {pending && (
-          <span className="shrink-0 rounded border border-amber-400 bg-amber-100 dark:bg-amber-900 px-1.5 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-300">
+          <span className="shrink-0 border border-amber-400 bg-amber-100 dark:bg-amber-900 px-1.5 py-0.5 text-[10px] font-mono uppercase text-amber-700 dark:text-amber-300">
             Pending
           </span>
         )}
@@ -79,9 +77,15 @@ export function TypeCard({
         <table className="w-full text-xs border-collapse">
           <thead>
             <tr className="border-b border-[--border]">
-              <th className="text-left py-1 pr-3 text-[--fg-muted] font-medium">Attribute</th>
-              <th className="text-left py-1 pr-3 text-[--fg-muted] font-medium">Type</th>
-              <th className="text-left py-1 text-[--fg-muted] font-medium">Required</th>
+              <th className="text-left py-1 pr-3 text-[--fg-muted] font-mono text-[10px] uppercase tracking-[0.08em] font-normal">
+                Attribute
+              </th>
+              <th className="text-left py-1 pr-3 text-[--fg-muted] font-mono text-[10px] uppercase tracking-[0.08em] font-normal">
+                Type
+              </th>
+              <th className="text-left py-1 text-[--fg-muted] font-mono text-[10px] uppercase tracking-[0.08em] font-normal">
+                Required
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -95,7 +99,7 @@ export function TypeCard({
           </tbody>
         </table>
       ) : (
-        <p className="text-xs text-[--fg-muted] italic">No attributes defined</p>
+        <p className="text-xs text-[--fg-muted]">No attributes defined</p>
       )}
 
       {/* Agent provenance */}
@@ -108,6 +112,8 @@ export function TypeCard({
           changesetHash={provenance.changeset}
         />
       )}
+      <span className="reg-mark-bl" aria-hidden />
+      <span className="reg-mark-br" aria-hidden />
     </article>
   );
 }

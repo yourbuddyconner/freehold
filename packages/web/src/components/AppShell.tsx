@@ -33,16 +33,16 @@ export function AppShell() {
         className="w-52 shrink-0 border-r border-[--border] bg-[--bg-subtle] flex flex-col py-4 gap-1"
       >
         <div className="px-4 pb-4">
-          <h1 className="font-serif text-lg font-semibold tracking-tight">Freehold</h1>
+          <h1 className="text-lg font-semibold tracking-tight font-sans">Freehold</h1>
         </div>
         {NAV.map(({ to, label, icon: Icon, badge }) => (
           <Link
             key={to}
             to={to}
             className={cn(
-              "flex items-center gap-2.5 mx-2 px-3 py-2 rounded text-sm transition-colors",
-              "text-[--fg-muted] hover:text-[--fg] hover:bg-[--border]",
-              "[&.active]:text-[--fg] [&.active]:bg-[--border] [&.active]:font-medium"
+              "flex items-center gap-2.5 mx-2 px-3 py-2 text-sm transition-colors",
+              "text-[--fg-muted] hover:text-[--fg]",
+              "[&.active]:text-[--fg] [&.active]:font-medium [&.active]:border-l-[3px] [&.active]:border-l-[var(--color-accent)] [&.active]:pl-[9px]"
             )}
             activeProps={{ className: "active" }}
           >
@@ -51,7 +51,7 @@ export function AppShell() {
             {badge && pendingCount > 0 && (
               <span
                 aria-label={`${pendingCount} pending`}
-                className="ml-auto inline-flex h-4 w-4 items-center justify-center rounded-full bg-amber-500 text-[10px] font-bold text-white"
+                className="ml-auto inline-flex h-4 min-w-4 items-center justify-center bg-[var(--color-accent)] text-[var(--color-accent-fg)] text-[10px] font-bold font-mono px-0.5"
               >
                 {pendingCount > 99 ? "99+" : pendingCount}
               </span>

@@ -37,7 +37,7 @@ function AgentMark({ agent }: { agent: string }) {
   return (
     <span
       aria-hidden
-      className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-neutral-200 dark:bg-neutral-700 text-[11px] font-bold text-[--fg] font-mono"
+      className="inline-flex h-7 w-7 shrink-0 items-center justify-center bg-[--bg-subtle] border border-[--border] text-[11px] font-bold text-[--fg] font-mono"
     >
       {initials}
     </span>
@@ -86,7 +86,7 @@ function SchemaTypeDefinition({ meta }: { meta: SchemaProposalMeta }) {
   }
 
   return (
-    <div className="rounded border border-[--border] bg-[--bg-subtle] p-3 space-y-2 font-mono text-[11px]">
+    <div className="border border-[--border] bg-[--bg-subtle] p-3 space-y-2 font-mono text-[11px]">
       <div className="text-[--fg-muted]">Type definition:</div>
       <div className="pl-2 space-y-1.5">
         <div className="text-[--fg]">
@@ -112,7 +112,7 @@ function SchemaTypeDefinition({ meta }: { meta: SchemaProposalMeta }) {
             </tbody>
           </table>
         ) : (
-          <div className="text-[--fg-muted] pl-2 italic">No attributes defined</div>
+          <div className="text-[--fg-muted] pl-2">No attributes defined</div>
         )}
       </div>
     </div>
@@ -132,8 +132,8 @@ export function ProposalCard({
   return (
     <article
       className={cn(
-        "rounded-lg border p-4 space-y-3 bg-[--bg-subtle]",
-        isSchemaProposal ? "border-amber-400 bg-amber-50 dark:bg-amber-900/30" : "border-[--border]"
+        "reg-marks relative border p-4 space-y-3 bg-[--bg-subtle]",
+        isSchemaProposal ? "held-border bg-[#fffbeb] dark:bg-[#1c1408]" : "border-[--border]"
       )}
     >
       {/* Header */}
@@ -147,7 +147,7 @@ export function ProposalCard({
             {isSchemaProposal && (
               <span
                 data-testid="schema-badge"
-                className="inline-flex items-center rounded border border-amber-400 bg-amber-100 dark:bg-amber-900 px-1.5 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-300"
+                className="inline-flex items-center border border-amber-400 bg-amber-100 dark:bg-amber-900 px-1.5 py-0.5 text-[10px] font-mono uppercase text-amber-700 dark:text-amber-300"
               >
                 Schema proposal
               </span>
@@ -157,7 +157,7 @@ export function ProposalCard({
       </div>
 
       {/* Summary */}
-      <p className="text-sm text-[--fg] font-serif leading-relaxed">{summary}</p>
+      <p className="text-sm text-[--fg] leading-relaxed">{summary}</p>
 
       {/* Rules */}
       {rules.length > 0 && (
@@ -165,7 +165,7 @@ export function ProposalCard({
           {rules.map((rule) => (
             <span
               key={rule}
-              className="inline-flex items-center rounded border border-[--border] bg-[--bg-subtle] px-1.5 py-0.5 text-[11px] text-[--fg-muted]"
+              className="inline-flex items-center border border-[--border] bg-[--bg-subtle] px-1.5 py-0.5 text-[11px] text-[--fg-muted]"
             >
               {rule}
             </span>
@@ -187,14 +187,14 @@ export function ProposalCard({
             <button
               type="button"
               disabled={isApproving || isRejecting}
-              className="rounded bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50 transition-colors"
+              className="bg-[--fg] text-white font-mono text-[12px] uppercase tracking-wide px-3 py-1.5 disabled:opacity-50 transition-opacity"
             >
               {isApproving ? "Approving…" : "Approve"}
             </button>
           </Dialog.Trigger>
           <Dialog.Portal>
             <Dialog.Overlay className="fixed inset-0 bg-black/40 z-40" />
-            <Dialog.Content className="fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 w-full max-w-sm rounded-lg bg-white dark:bg-neutral-900 border border-[--border] p-6 shadow-xl space-y-4">
+            <Dialog.Content className="fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 w-full max-w-sm bg-white dark:bg-neutral-900 border border-[--border] p-6 shadow-none space-y-4">
               <Dialog.Title className="text-base font-semibold text-[--fg]">
                 Approve proposal
               </Dialog.Title>
@@ -205,7 +205,7 @@ export function ProposalCard({
                 <Dialog.Close asChild>
                   <button
                     type="button"
-                    className="rounded border border-[--border] px-3 py-1.5 text-xs font-medium text-[--fg] hover:bg-[--bg-subtle] transition-colors"
+                    className="border border-[--border] text-[--fg-muted] font-mono text-[12px] uppercase px-3 py-1.5 hover:text-[--fg] transition-colors"
                   >
                     Cancel
                   </button>
@@ -214,7 +214,7 @@ export function ProposalCard({
                   <button
                     type="button"
                     onClick={onApprove}
-                    className="rounded bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700 transition-colors"
+                    className="bg-[--fg] text-white font-mono text-[12px] uppercase tracking-wide px-3 py-1.5 transition-opacity"
                   >
                     Approve
                   </button>
@@ -229,13 +229,15 @@ export function ProposalCard({
           type="button"
           onClick={onReject}
           disabled={isApproving || isRejecting}
-          className="rounded border border-[--border] px-3 py-1.5 text-xs font-medium text-[--fg-muted] hover:text-[--fg] hover:bg-[--bg-subtle] disabled:opacity-50 transition-colors"
+          className="border border-[--border] font-mono text-[12px] uppercase tracking-wide px-3 py-1.5 text-[--fg-muted] hover:text-[--fg] disabled:opacity-50 transition-colors"
         >
           {isRejecting ? "Rejecting…" : "Reject"}
         </button>
       </div>
       {/* Suppress unused hash warning — hash is the React key used by parent */}
       <span className="sr-only">{hash}</span>
+      <span className="reg-mark-bl" aria-hidden />
+      <span className="reg-mark-br" aria-hidden />
     </article>
   );
 }

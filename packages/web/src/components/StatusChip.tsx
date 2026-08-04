@@ -29,7 +29,7 @@ interface StatusChipProps {
 
 export function StatusChip({ status, href, label, className }: StatusChipProps) {
   const classes = cn(
-    "inline-flex items-center rounded border px-1.5 py-0.5 text-[11px] font-medium tracking-wide no-underline transition-opacity hover:opacity-80",
+    "inline-flex items-center border px-1.5 py-0.5 text-[10px] font-mono uppercase tracking-wide no-underline transition-opacity hover:opacity-80",
     STATUS_CLASSES[status],
     className
   );
