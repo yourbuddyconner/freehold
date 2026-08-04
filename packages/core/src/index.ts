@@ -64,7 +64,7 @@ export { getEntity, traverse, entitiesOfType } from "./retrieval.js";
 export type { RawLogEntry, LoggableGraph } from "./retrieval.js";
 
 // Schema operations
-export { describeSchema, proposeOntologyChange, installOntology } from "./schema.js";
+export { describeSchema, proposeOntologyChange, installOntology, getPolicy } from "./schema.js";
 export type { OntologyProposalResult } from "./schema.js";
 
 // Embedding

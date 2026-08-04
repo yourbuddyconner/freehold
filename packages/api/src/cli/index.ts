@@ -158,7 +158,7 @@ async function main() {
       const subcommand = rest[0] ?? "setup";
       const target = rest[1] ?? "claude-code";
       const printOnly = rest.includes("--print");
-      await runMcp({ subcommand, target, printOnly, json: jsonMode });
+      await runMcp({ subcommand, target, printOnly, json: jsonMode, baseUrl, token });
       break;
     }
 

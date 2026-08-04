@@ -3,6 +3,7 @@ import type { Embedder } from "@freehold/core";
 import type { Freehold } from "@freehold/core";
 import { Hono } from "hono";
 import { bearerAuth } from "./auth.js";
+import { handleMcpRequest } from "./mcp.js";
 import { getOpenApiDoc } from "./openapi.js";
 import { governanceRouter } from "./routes/governance.js";
 import { healthRouter } from "./routes/health.js";
@@ -44,12 +45,14 @@ export function createApp(
 
   app.route("/api/v1", api);
 
-  // MCP mount — F6 will replace this stub
-  app.all("/mcp/*", (c) => {
-    return c.json(
-      { error: { code: "not_implemented", message: "MCP endpoint arrives in F6" } },
-      501
-    );
+  // MCP endpoint — bearer auth then streamable HTTP (stateless, per-request server)
+  app.all("/mcp", async (c) => {
+    const header = c.req.header("Authorization") ?? "";
+    const bearer = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
+    if (bearer !== config.token) {
+      return c.json({ error: { code: "auth", message: "Missing or invalid bearer token" } }, 401);
+    }
+    return handleMcpRequest(freehold, embedder, config, c.req.raw);
   });
 
   // Console static serving — F7 will replace this stub

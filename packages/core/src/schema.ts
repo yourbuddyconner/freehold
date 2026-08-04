@@ -167,6 +167,38 @@ export async function proposeOntologyChange(
   return parseInstallAdmission(raw);
 }
 
+// ---- Policy accessor ----
+
+interface RawPolicyObject {
+  content: {
+    type?: string;
+    attributes?: { definition?: string; name?: string };
+  };
+  rev: string;
+  deleted: boolean;
+}
+
+/**
+ * Return the raw YAML definition of the graph's active policy (the live
+ * `meta/Policy@1` node, created during graph init with the memory-baseline
+ * policy).  Returns `null` when no policy node is found.
+ */
+export function getPolicy(graph: AllodGraph): { name: string; definition: string } | null {
+  try {
+    const obj = (
+      graph as unknown as { object_get(kind: string, id: string): RawPolicyObject | null }
+    ).object_get("node", "meta-policy-1");
+    if (!obj || obj.deleted) return null;
+    const attrs = obj.content.attributes ?? {};
+    return {
+      name: attrs.name ?? "memory-baseline",
+      definition: attrs.definition ?? "",
+    };
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Install an ontology package as the graph owner (owner-signed path).
  *

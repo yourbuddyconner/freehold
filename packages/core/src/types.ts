@@ -95,4 +95,6 @@ export interface FreeholdConfig {
   graph: string;
   embedder: "transformers" | "hash";
   port: number;
+  /** Default agent principal name used by MCP tools when no `agent` param is provided. */
+  defaultAgent?: string;
 }
