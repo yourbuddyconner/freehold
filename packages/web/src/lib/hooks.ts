@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "./api";
 
 /** Pending proposals (the Inbox). */
@@ -31,6 +31,40 @@ export function useRecentMemories(
     queryKey: ["recent-memories", filters],
     queryFn: () => apiClient.recentMemories(filters),
     enabled,
+  });
+}
+
+/** Full workspace index — every non-meta node, for the tree. */
+export function useMemoryIndex(enabled = true) {
+  return useQuery({
+    queryKey: ["memory-index"],
+    queryFn: () => apiClient.memoryIndex(),
+    enabled,
+  });
+}
+
+/** Graph export for the canvas. */
+export function useMemoryGraph(enabled = true) {
+  return useQuery({
+    queryKey: ["memory-graph"],
+    queryFn: () => apiClient.graph(),
+    enabled,
+  });
+}
+
+/** Owner update of a node's attributes; invalidates the entity and listings. */
+export function useUpdateMemory(id: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { agent: string; type: string; attributes: Record<string, unknown> }) =>
+      // biome-ignore lint/style/noNonNullAssertion: callers only mutate with a loaded entity
+      apiClient.updateEntity(id!, body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["entity", id] });
+      queryClient.invalidateQueries({ queryKey: ["memory-index"] });
+      queryClient.invalidateQueries({ queryKey: ["memory-graph"] });
+      queryClient.invalidateQueries({ queryKey: ["recent-memories"] });
+    },
   });
 }
 
