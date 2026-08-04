@@ -259,28 +259,34 @@ lucide-react icons. Light/dark/system theming via `data-theme` on
 with its tests). The console consumes `packages/client` only — the same
 public-API conformance rule the CLI follows.
 
-### Identity (Freehold's own, not a valet clone)
+### Identity (revised 2026-08-04: survey-plat, after Infisical)
 
-The aesthetic is **the title deed**: memory as owned property, recorded
-in a ledger you can hold. Concretely:
+The console's visual language follows infisical.com's technical-schematic
+style, reinterpreted for Freehold's domain: **the surveyor's plat** — the
+official drawing that defines a freehold parcel. Concretely:
 
-- **Type.** Newsreader (serif) for memory content and display headings —
-  the recorded-document voice. A neutral sans (system stack) for UI
-  chrome. Mono for hashes, key fingerprints, type names, and rule
-  selectors, always truncated with copy-on-click.
-- **Surfaces.** Paper-like cards on a quiet background, ruled hairline
-  separators, generous whitespace. Density belongs to tables (Verify
-  timeline, edge-type table), not to memory content.
-- **Status is ink, not decoration.** One consistent status palette
-  everywhere: verified/approved in green ink, held in amber, degraded in
-  slate with a reason, rejected in red. A status chip is always a link
-  to its evidence (the decision record, the failing check, the rule).
-- **Provenance is a first-class component.** Every memory, everywhere it
-  appears, renders with a `ProvenanceFooter`: author chip (which agent,
-  which human), method chip (`manual` / `model-assisted` + tool),
-  approval badge, changeset hash. No memory is ever shown context-free.
-  Schema types carry it too: an agent-proposed entity type shows who
-  proposed it and who approved it.
+- **Surfaces.** Warm near-white background, near-black ink, hairline
+  rules. Full-height vertical rules frame the content column the way a
+  plat sheet is ruled. Sharp corners everywhere: no border radius.
+- **Type.** A grotesque sans (Archivo) for headings with tight tracking
+  and for body text; IBM Plex Mono for eyebrow labels (UPPERCASE, letter-
+  spaced, prefixed with a short accent bar), hashes, selectors, and table
+  headers. The serif is retired.
+- **Accent.** Chartreuse (#D9F103 family) as the single loud accent —
+  active-nav marker, badge fills with black text, texture highlights.
+  Links and approved states in green; held in amber with dashed borders
+  (a parcel under survey); rejected in red; unrecorded in gray. Status
+  chips are sharp, mono, uppercase.
+- **The signature element: registration marks.** Proposal cards and other
+  featured panels carry selection-marquee corner handles (four small
+  squares), the mark of a parcel being measured before it is recorded.
+- **Buttons.** Solid black primary, sharp corners; outlined secondary
+  with a chevron prefix.
+- **Motion.** Restrained: one staggered reveal on page load; corner
+  handles and rules respond to hover. Nothing decorative in tables.
+
+The ProvenanceFooter contract, status semantics, and evidence-link rules
+from the original identity are unchanged; only the visual language moved.
 
 ### Layout and screens
 
