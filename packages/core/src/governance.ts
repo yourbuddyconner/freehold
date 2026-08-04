@@ -230,6 +230,43 @@ export function pending(graph: AllodGraph): ProposalView[] {
 export interface ApproveResult {
   status: "admitted" | "rejected" | "still-unmet";
   hash: string;
+  degraded?: string[];
+  unmet?: string[];
+}
+
+/**
+ * Parse a DecisionOutcome from allod.decide() into a normalized result.
+ *
+ * allod serializes outcomes in three shapes:
+ *   - Bare string "Rejected" → {status:"rejected"}
+ *   - Object {Admitted:{degraded:[...]}} → {status:"admitted", degraded}
+ *   - Object {StillUnmet:{unmet:[...]}} → {status:"still-unmet", unmet}
+ */
+function parseDecisionOutcome(raw: unknown): { status: "admitted" | "rejected" | "still-unmet"; degraded?: string[]; unmet?: string[] } {
+  // Handle bare string "Rejected"
+  if (raw === "Rejected") {
+    return { status: "rejected" };
+  }
+
+  if (raw && typeof raw === "object") {
+    // {Admitted:{degraded:[...]}}
+    if ("Admitted" in raw) {
+      const admitted = (raw as { Admitted?: { degraded?: string[] } }).Admitted;
+      return { status: "admitted", degraded: admitted?.degraded };
+    }
+    // {Rejected:{...}} — empty object for reject variant
+    if ("Rejected" in raw) {
+      return { status: "rejected" };
+    }
+    // {StillUnmet:{unmet:[...]}}
+    if ("StillUnmet" in raw) {
+      const stillUnmet = (raw as { StillUnmet?: { unmet?: string[] } }).StillUnmet;
+      return { status: "still-unmet", unmet: stillUnmet?.unmet };
+    }
+  }
+
+  // Fallback (shouldn't happen with valid allod outcomes)
+  return { status: "admitted" };
 }
 
 /**
@@ -237,12 +274,8 @@ export interface ApproveResult {
  */
 export async function approve(graph: AllodGraph, by: string, hash: string): Promise<ApproveResult> {
   const raw = await graph.decide(hash, by, "approve");
-  if (raw && typeof raw === "object") {
-    if ("Admitted" in raw) return { status: "admitted", hash };
-    if ("Rejected" in raw) return { status: "rejected", hash };
-    if ("StillUnmet" in raw) return { status: "still-unmet", hash };
-  }
-  return { status: "admitted", hash };
+  const parsed = parseDecisionOutcome(raw);
+  return { hash, ...parsed };
 }
 
 export interface RejectResult {
@@ -254,8 +287,9 @@ export interface RejectResult {
  * Reject a held proposal by hash.
  */
 export async function reject(graph: AllodGraph, by: string, hash: string): Promise<RejectResult> {
-  await graph.decide(hash, by, "reject");
-  return { status: "rejected", hash };
+  const raw = await graph.decide(hash, by, "reject");
+  const parsed = parseDecisionOutcome(raw);
+  return { hash, status: parsed.status as "rejected" };
 }
 
 /**

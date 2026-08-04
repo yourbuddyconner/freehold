@@ -145,6 +145,29 @@ describe("Founding loop", () => {
     expect(b.status).toBe("admitted");
   });
 
+  test("POST /api/v1/proposals/:hash/reject — reject a held proposal and return {status:'rejected'}", async () => {
+    // Create a new held proposal to reject
+    const agentForReject = `reject-test-agent-${Date.now()}`;
+    await req("POST", "/api/v1/agents", { name: agentForReject });
+
+    const { status: entityStatus, body: entityBody } = await req("POST", "/api/v1/entities", {
+      agent: agentForReject,
+      type: "memory/Preference@1",
+      attributes: { statement: "test rejection", strength: "soft" },
+    });
+    expect(entityStatus).toBe(200);
+    const entityB = entityBody as { status: string; changeset: string };
+    expect(entityB.status).toBe("held");
+    const rejectHash = entityB.changeset;
+
+    // Reject the proposal
+    const { status: rejectStatus, body: rejectBody } = await req("POST", `/api/v1/proposals/${rejectHash}/reject`);
+    expect(rejectStatus).toBe(200);
+    const rejectB = rejectBody as { status: string; hash: string };
+    expect(rejectB.status).toBe("rejected");
+    expect(rejectB.hash).toBe(rejectHash);
+  });
+
   test("GET /api/v1/recall — returns results array", async () => {
     const { status, body } = await req("GET", "/api/v1/recall?q=morning+meetings");
     expect(status).toBe(200);
