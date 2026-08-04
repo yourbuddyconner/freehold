@@ -21,11 +21,10 @@ they can read and write, and gives you control over what they write:
   `classify`, `attach_document`, `recall`, `get_entity`, `traverse`,
   `pending_approvals`, `describe_schema`, and
   `propose_ontology_change`. Agents never get approval or policy tools.
-- **You approve what matters.** Quick notes save instantly, so an
-  agent can think at full speed. Important writes — a preference
-  about you, anything outside the scratch area — become **pending**
-  proposals until you approve them. Approval signs a decision record
-  with your key. A pending write is the system working, not an error.
+- **You approve what matters.** Quick notes save instantly. Important
+  writes — a preference about you, anything outside the scratch area —
+  become **pending** proposals until you approve them. Approval signs a
+  decision record with your key.
 - **Memory is typed knowledge, not a pile of notes.** Entities have
   types, relationships are typed edges, and the schema itself lives in
   the graph. An agent can read the schema with `describe_schema` and,
@@ -99,7 +98,7 @@ unreachable.
 
 Design documents live in [docs/specs/](docs/specs/) and implementation
 plans in [docs/plans/](docs/plans/). The product decisions — one binary,
-pending-as-success, the disposable index, local-first auth, no native
+approval-gated writes, the disposable index, local-first auth, no native
 modules — are recorded there with their reasoning.
 
 ## Status

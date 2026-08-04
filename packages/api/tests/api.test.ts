@@ -228,7 +228,7 @@ describe("Core flow", () => {
   });
 });
 
-describe("pending shape is 200, not an error", () => {
+describe("pending responses return 200", () => {
   test("POST /api/v1/entities returns 200 whether saved or pending", async () => {
     const agentName2 = `held-test-agent-${Date.now()}`;
     await req("POST", "/api/v1/agents", { name: agentName2 });
