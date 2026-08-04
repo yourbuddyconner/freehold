@@ -24,6 +24,7 @@ import { afterAll, beforeAll, describe, expect, test } from "vitest";
 const API_PKG = resolve(__dirname, "..");
 const TSX = resolve(API_PKG, "node_modules/.bin/tsx");
 const CLI_ENTRY = resolve(API_PKG, "src/cli/index.ts");
+const BINARY = process.env.FREEHOLD_BINARY ?? null;
 
 function makeTempHome(): { home: string; token: string; port: number } {
   const home = mkdtempSync(join(tmpdir(), "freehold-kill-test-"));
@@ -49,7 +50,10 @@ async function waitForDaemon(port: number, maxWait = 20_000): Promise<void> {
 }
 
 function spawnDaemon(home: string): ReturnType<typeof spawn> {
-  const proc = spawn(TSX, [CLI_ENTRY, "serve"], {
+  const [cmd, args] = BINARY
+    ? [BINARY, ["serve"]]
+    : [TSX, [CLI_ENTRY, "serve"]];
+  const proc = spawn(cmd, args, {
     env: { ...process.env, FREEHOLD_HOME: home },
     stdio: "pipe",
   });

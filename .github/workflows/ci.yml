@@ -201,5 +201,7 @@ jobs:
           kill $BINARY_PID 2>/dev/null || true
           rm -rf "$FREEHOLD_HOME"
 
-      - name: Kill test (SIGKILL recovery)
+      - name: Kill test (SIGKILL recovery against compiled binary)
+        env:
+          FREEHOLD_BINARY: ${{ github.workspace }}/packages/api/dist/freehold
         run: pnpm --filter @freehold/api test -- tests/kill.test.ts
