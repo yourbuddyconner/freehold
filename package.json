@@ -17,5 +17,10 @@
     "@types/node": "^22.0.0",
     "typescript": "^5.3.3",
     "vitest": "^3.2.4"
+  },
+  "pnpm": {
+    "overrides": {
+      "onnxruntime-node": "npm:onnxruntime-web@^1.24.3"
+    }
   }
 }

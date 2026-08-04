@@ -14,6 +14,7 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { fmtVec } from "./db.js";
 import type { Embedder } from "./embed.js";
 import type { Freehold } from "./graphs.js";
 
@@ -45,13 +46,6 @@ function extractSearchText(content: Record<string, unknown>): string {
 }
 
 /**
- * Format a number[] vector as the '[x,y,z,...]' string PGlite's vector type expects.
- */
-function fmtVec(vec: number[]): string {
-  return `[${vec.join(",")}]`;
-}
-
-/**
  * Parse node UUIDs from a YAML changeset file using line-by-line scanning.
  * Returns { id, type }[] for each create/update node operation.
  *
@@ -78,7 +72,10 @@ function parseNodeOpsLineByLine(yaml: string): Array<{ id: string; type: string 
     if (inNodeBlock) {
       if (trimmed.startsWith("id: ")) {
         const val = trimmed.slice("id: ".length).trim();
-        // UUID pattern — schema/classification nodes have non-UUID ids; skip them
+        // UUID pattern check: schema/classification nodes have non-UUID ids like
+        // "memory/Note@1"; setting inNodeBlock=false skips the rest of that block.
+        // The next "kind: node" line will correctly open a fresh block, so nodes
+        // that appear later in the same file are still processed.
         if (/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(val)) {
           currentId = val;
         } else {
@@ -94,7 +91,7 @@ function parseNodeOpsLineByLine(yaml: string): Array<{ id: string; type: string 
         continue;
       }
 
-      // Any unrelated kind: line resets the block
+      // Any unrelated kind: line resets the block (e.g. kind: edge, kind: schema)
       if (trimmed.startsWith("kind: ") && trimmed !== "kind: node") {
         inNodeBlock = false;
         currentId = "";
@@ -236,7 +233,12 @@ export async function syncIndex(freehold: Freehold, embedder: Embedder): Promise
     }
   }
 
-  // Step 8: update indexed_head
+  // Step 8: update indexed_head.
+  // NOTE: indexed_head stores the log *length* (not a hash), so it is a position
+  // cursor, not a content fingerprint. If the allod log were ever compacted or
+  // re-written (not possible in the current allod version), a stale length could
+  // cause syncIndex to skip entries. For a future hardening pass, also persist
+  // the hash of the last processed entry and validate on resume.
   await pg.query(
     "INSERT INTO meta (key, value) VALUES ('indexed_head', $1) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value",
     [log.length.toString()]

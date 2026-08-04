@@ -5,6 +5,7 @@
  * full-text search, fused via Reciprocal Rank Fusion (RRF, k=60).
  */
 
+import { fmtVec } from "./db.js";
 import type { Embedder } from "./embed.js";
 import type { Freehold } from "./graphs.js";
 
@@ -36,20 +37,18 @@ interface ObjectRow {
 const RRF_K = 60;
 
 /**
- * Format a number[] vector as the '[x,y,z,...]' string PGlite's vector type expects.
- */
-function fmtVec(vec: number[]): string {
-  return `[${vec.join(",")}]`;
-}
-
-/**
  * Hybrid semantic recall over the PGlite index.
  *
  * 1. Embed the query with the provided embedder.
- * 2. Run vector search (cosine distance) and FTS in parallel.
- * 3. Optionally filter by type / author / approval.
- * 4. Fuse rankings with RRF (k=60).
- * 5. Return the top `limit` results with provenance metadata.
+ * 2. Run vector search (cosine distance, top-60) and FTS (top-60) independently.
+ * 3. Fuse rankings with RRF (k=60): score = 1/(RRF_K + vec_rank) + 1/(RRF_K + fts_rank).
+ *    Results absent from one list get rank=RRF_K (same numeric value as k), giving a
+ *    minimum contribution of 1/(60+60) = 1/120.
+ * 4. Fetch up to 120 top-scored candidates from the objects table, then apply optional
+ *    filters (type / author / approval). Note: when filters are active the returned
+ *    slice may contain fewer than `limit` entries — the pre-filter candidate window is
+ *    fixed at 120 and is not extended to compensate for filter shrinkage.
+ * 5. Return the top `limit` results with full provenance metadata.
  */
 export async function recall(
   freehold: Freehold,
@@ -88,8 +87,11 @@ export async function recall(
   // Step 4: apply filters — fetch candidate rows to filter on metadata
   if (allIds.size === 0) return [];
 
-  // Build a filtered candidate list using RRF scores, then fetch rows
-  const notFound = 60; // rank for "not in that list" = position 61 (0-based 60)
+  // Build a filtered candidate list using RRF scores, then fetch rows.
+  // notFound=60 means "absent from this list gets the worst position still within the
+  // top-60 window" → contribution 1/(RRF_K + 60) = 1/120. Same value as RRF_K by design:
+  // any absent result scores no better than the last result in either ranked list.
+  const notFound = 60;
 
   // Score each candidate with RRF
   const scored: Array<{ id: string; score: number }> = [];

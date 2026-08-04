@@ -3,12 +3,12 @@
  *
  * Provides two embedders:
  *   - hashEmbedder: deterministic 384-dim vectors derived from sha256 (no deps, great for tests)
- *   - transformersEmbedder: lazy-loaded via @huggingface/transformers (Xenova/bge-small-en-v1.5)
+ *   - transformersEmbedder: real semantic embedder using @huggingface/transformers
+ *     (Xenova/bge-small-en-v1.5, 384-dim, mean-pooled + L2-normalized)
  *
- * NOTE: @huggingface/transformers is NOT installed as a dependency because it
- * transitively pulls in onnxruntime-node (a native binary). If you need the
- * transformers embedder, install @huggingface/transformers manually and make
- * sure it resolves to the WASM backend (onnxruntime-web), not the native one.
+ * The onnxruntime-node native binary is suppressed via the root pnpm override:
+ *   "onnxruntime-node": "npm:onnxruntime-web@^1.24.3"
+ * This ensures only the WASM backend lands in the install tree.
  */
 
 import { createHash } from "node:crypto";
@@ -55,47 +55,51 @@ export const hashEmbedder: Embedder = {
   },
 };
 
-// ---- Transformers embedder (lazy, optional dep) ----
+// ---- Transformers embedder (lazy, WASM backend) ----
 
-type PipelineFn = (text: string, opts: Record<string, unknown>) => Promise<{ data: Float32Array }>;
+// Narrow type for the feature-extraction pipeline output we use.
+type FeaturePipeline = (
+  text: string,
+  opts: { pooling: string; normalize: boolean }
+) => Promise<{ data: Float32Array }>;
 
-let _pipeline: PipelineFn | null = null;
+let _pipeline: FeaturePipeline | null = null;
 
 /**
- * Lazy-loaded embedder using @huggingface/transformers.
+ * Real semantic embedder using @huggingface/transformers.
  *
- * Requires `@huggingface/transformers` to be installed (it is NOT a declared
- * dependency of this package because it pulls in native binaries). Install it
- * manually if you need this embedder:
+ * Model: Xenova/bge-small-en-v1.5 (384-dim, mean-pooled, L2-normalized).
+ * Backend: WASM only — onnxruntime-node is redirected to onnxruntime-web via
+ * the root pnpm override so no native .node binding is ever loaded.
  *
- *   pnpm add @huggingface/transformers
- *
- * Uses model: Xenova/bge-small-en-v1.5, task: feature-extraction.
+ * Lazy: the pipeline is created on first use and cached for subsequent calls.
  */
 export const transformersEmbedder: Embedder = {
   async embed(texts: string[]): Promise<number[][]> {
     if (!_pipeline) {
-      // Dynamic import so the module only loads when actually used.
-      // @huggingface/transformers is an optional runtime dependency — not declared
-      // in package.json because it transitively pulls in onnxruntime-node.
-      // Install it manually if you need this embedder.
-      // Indirect import via Function() prevents static analysis from resolving the optional dep.
-      const mod = (await Function("m", "return import(m)")("@huggingface/transformers")) as {
-        pipeline: (
-          task: string,
-          model: string,
-          opts?: Record<string, unknown>
-        ) => Promise<PipelineFn>;
-      };
-      _pipeline = await mod.pipeline("feature-extraction", "Xenova/bge-small-en-v1.5", {
+      // Static-analysis-friendly dynamic import — TypeScript and bundlers can
+      // resolve this to the installed @huggingface/transformers package without
+      // attempting to load onnxruntime-node (blocked by the pnpm override).
+      const { pipeline, env } = await import("@huggingface/transformers");
+
+      // Force WASM backend — prevents any fallback to the native ORT binding.
+      // env.backends.onnx.wasm is the canonical API for backend selection.
+      if (env.backends.onnx.wasm) {
+        env.backends.onnx.wasm.numThreads = 1;
+      }
+
+      _pipeline = (await pipeline("feature-extraction", "Xenova/bge-small-en-v1.5", {
         dtype: "fp32",
-      });
+      })) as unknown as FeaturePipeline;
     }
 
     const results: number[][] = [];
     for (const text of texts) {
-      const output = await (_pipeline as PipelineFn)(text, { pooling: "mean", normalize: true });
-      // output.data is a Float32Array
+      const output = await (_pipeline as FeaturePipeline)(text, {
+        pooling: "mean",
+        normalize: true,
+      });
+      // output.data is a Float32Array of length 384
       results.push(Array.from(output.data));
     }
     return results;

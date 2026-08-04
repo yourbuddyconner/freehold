@@ -32,6 +32,9 @@ CREATE INDEX IF NOT EXISTS objects_fts ON objects USING gin(to_tsvector('english
 
 CREATE TABLE IF NOT EXISTS embeddings (
   object_id text PRIMARY KEY REFERENCES objects(id) ON DELETE CASCADE,
+  -- Column named "vec" rather than "vector" because "vector" is the pgvector type
+  -- name; using it as a column identifier causes parse errors in some SQL dialects.
+  -- All queries in indexer.ts and recall.ts reference this column as "vec".
   vec vector(384) NOT NULL
 );
 
@@ -40,6 +43,14 @@ CREATE TABLE IF NOT EXISTS meta (
   value text NOT NULL
 );
 `;
+
+/**
+ * Format a number[] vector as the '[x,y,z,...]' literal PGlite's vector type expects.
+ * Shared by indexer.ts and recall.ts to avoid duplication.
+ */
+export function fmtVec(vec: number[]): string {
+  return `[${vec.join(",")}]`;
+}
 
 export async function openDb(pgDir: string): Promise<DbHandle> {
   const pg = new PGlite(pgDir, { extensions: { vector } });

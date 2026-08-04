@@ -11,7 +11,7 @@ import type { PGlite } from "@electric-sql/pglite";
 import { describe, expect, test } from "vitest";
 import { createGraph } from "../src/allod.js";
 import { openDb } from "../src/db.js";
-import { hashEmbedder } from "../src/embed.js";
+import { hashEmbedder, transformersEmbedder } from "../src/embed.js";
 import { approve } from "../src/governance.js";
 import type { Freehold } from "../src/graphs.js";
 import { reindex, syncIndex } from "../src/indexer.js";
@@ -218,4 +218,30 @@ describe("reindex golden", () => {
     // Step 4: compare
     expect(snap2).toEqual(snap1);
   });
+});
+
+// ---- Test 5: Real transformers embedder smoke test (gated) ----
+//
+// Run with: FREEHOLD_E2E_REAL_EMBEDDER=1 pnpm -r test
+//
+// Skipped in normal CI to avoid the ~30 MB one-time model download.
+// When the env var is set, the test proves that transformersEmbedder returns a
+// real 384-dim unit-norm vector from the Xenova/bge-small-en-v1.5 model via the
+// WASM backend (onnxruntime-web, forced by the root pnpm override on onnxruntime-node).
+
+describe("transformersEmbedder (real model, FREEHOLD_E2E_REAL_EMBEDDER=1)", () => {
+  test.skipIf(!process.env.FREEHOLD_E2E_REAL_EMBEDDER)(
+    "produces a 384-dim unit-norm embedding for 'hello'",
+    async () => {
+      const vecs = await transformersEmbedder.embed(["hello"]);
+      expect(vecs).toHaveLength(1);
+      const vec = vecs[0];
+      expect(vec).toHaveLength(384);
+      const mag = Math.sqrt(vec.reduce((s, x) => s + x * x, 0));
+      // Normalized output: magnitude should be 1.0 within fp32 tolerance
+      expect(mag).toBeCloseTo(1.0, 4);
+    },
+    // Allow up to 3 min for the first-run model download (~30 MB)
+    180_000
+  );
 });
