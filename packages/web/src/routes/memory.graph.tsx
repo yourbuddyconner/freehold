@@ -12,7 +12,7 @@ import {
   StickyNote,
   User,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { type CSSProperties, useMemo, useState } from "react";
 import { StatusChip } from "~/components/StatusChip";
 import { layoutGraph } from "~/lib/graphLayout";
 import { useMemoryGraph } from "~/lib/hooks";
@@ -58,6 +58,22 @@ interface MemoryNodeData {
   [key: string]: unknown;
 }
 
+/** Invisible 1px handle centered on the icon, not the node box. */
+function handleStyle(iconSize: number): CSSProperties {
+  return {
+    opacity: 0,
+    left: "50%",
+    top: iconSize / 2,
+    transform: "translate(-50%, -50%)",
+    width: 1,
+    height: 1,
+    minWidth: 0,
+    minHeight: 0,
+    border: 0,
+    pointerEvents: "none",
+  };
+}
+
 /** Icon node with its title beneath and a detail card on hover. */
 function MemoryNode({ data }: { data: MemoryNodeData }) {
   const [hovered, setHovered] = useState(false);
@@ -72,8 +88,10 @@ function MemoryNode({ data }: { data: MemoryNodeData }) {
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      <Handle type="target" position={Position.Top} style={{ opacity: 0 }} />
-      <Handle type="source" position={Position.Bottom} style={{ opacity: 0 }} />
+      {/* Both handles sit at the icon's center so straight edges radiate
+          from the vertex; the opaque icon hides the line endpoints. */}
+      <Handle type="target" position={Position.Top} style={handleStyle(data.size)} />
+      <Handle type="source" position={Position.Bottom} style={handleStyle(data.size)} />
       <span
         className="relative flex items-center justify-center"
         style={{
