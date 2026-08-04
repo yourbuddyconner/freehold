@@ -8,160 +8,212 @@
 // You should NOT make any changes in this file as it will be overwritten.
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
-import { Route as rootRouteImport } from "./routes/__root";
-import { Route as InboxRouteImport } from "./routes/inbox";
-import { Route as IndexRouteImport } from "./routes/index";
-import { Route as MemoryRouteImport } from "./routes/memory";
-import { Route as PolicyRouteImport } from "./routes/policy";
-import { Route as SchemaRouteImport } from "./routes/schema";
-import { Route as SettingsRouteImport } from "./routes/settings";
-import { Route as VerifyRouteImport } from "./routes/verify";
+import { Route as rootRouteImport } from './routes/__root'
+import { Route as IndexRouteImport } from './routes/index'
+import { Route as InboxRouteImport } from './routes/inbox'
+import { Route as MemoryRouteImport } from './routes/memory'
+import { Route as PolicyRouteImport } from './routes/policy'
+import { Route as SchemaRouteImport } from './routes/schema'
+import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as VerifyRouteImport } from './routes/verify'
+import { Route as MemoryIdRouteImport } from './routes/memory.$id'
 
 const IndexRoute = IndexRouteImport.update({
-  id: "/",
-  path: "/",
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 const InboxRoute = InboxRouteImport.update({
-  id: "/inbox",
-  path: "/inbox",
+  id: '/inbox',
+  path: '/inbox',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 const MemoryRoute = MemoryRouteImport.update({
-  id: "/memory",
-  path: "/memory",
+  id: '/memory',
+  path: '/memory',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 const PolicyRoute = PolicyRouteImport.update({
-  id: "/policy",
-  path: "/policy",
+  id: '/policy',
+  path: '/policy',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 const SchemaRoute = SchemaRouteImport.update({
-  id: "/schema",
-  path: "/schema",
+  id: '/schema',
+  path: '/schema',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 const SettingsRoute = SettingsRouteImport.update({
-  id: "/settings",
-  path: "/settings",
+  id: '/settings',
+  path: '/settings',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 const VerifyRoute = VerifyRouteImport.update({
-  id: "/verify",
-  path: "/verify",
+  id: '/verify',
+  path: '/verify',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
+const MemoryIdRoute = MemoryIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => MemoryRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
-  "/": typeof IndexRoute;
-  "/inbox": typeof InboxRoute;
-  "/memory": typeof MemoryRoute;
-  "/policy": typeof PolicyRoute;
-  "/schema": typeof SchemaRoute;
-  "/settings": typeof SettingsRoute;
-  "/verify": typeof VerifyRoute;
+  '/': typeof IndexRoute
+  '/inbox': typeof InboxRoute
+  '/memory': typeof MemoryRouteWithChildren
+  '/policy': typeof PolicyRoute
+  '/schema': typeof SchemaRoute
+  '/settings': typeof SettingsRoute
+  '/verify': typeof VerifyRoute
+  '/memory/$id': typeof MemoryIdRoute
 }
 export interface FileRoutesByTo {
-  "/": typeof IndexRoute;
-  "/inbox": typeof InboxRoute;
-  "/memory": typeof MemoryRoute;
-  "/policy": typeof PolicyRoute;
-  "/schema": typeof SchemaRoute;
-  "/settings": typeof SettingsRoute;
-  "/verify": typeof VerifyRoute;
+  '/': typeof IndexRoute
+  '/inbox': typeof InboxRoute
+  '/memory': typeof MemoryRouteWithChildren
+  '/policy': typeof PolicyRoute
+  '/schema': typeof SchemaRoute
+  '/settings': typeof SettingsRoute
+  '/verify': typeof VerifyRoute
+  '/memory/$id': typeof MemoryIdRoute
 }
 export interface FileRoutesById {
-  __root__: typeof rootRouteImport;
-  "/": typeof IndexRoute;
-  "/inbox": typeof InboxRoute;
-  "/memory": typeof MemoryRoute;
-  "/policy": typeof PolicyRoute;
-  "/schema": typeof SchemaRoute;
-  "/settings": typeof SettingsRoute;
-  "/verify": typeof VerifyRoute;
+  __root__: typeof rootRouteImport
+  '/': typeof IndexRoute
+  '/inbox': typeof InboxRoute
+  '/memory': typeof MemoryRouteWithChildren
+  '/policy': typeof PolicyRoute
+  '/schema': typeof SchemaRoute
+  '/settings': typeof SettingsRoute
+  '/verify': typeof VerifyRoute
+  '/memory/$id': typeof MemoryIdRoute
 }
 export interface FileRouteTypes {
-  fileRoutesByFullPath: FileRoutesByFullPath;
-  fullPaths: "/" | "/inbox" | "/memory" | "/policy" | "/schema" | "/settings" | "/verify";
-  fileRoutesByTo: FileRoutesByTo;
-  to: "/" | "/inbox" | "/memory" | "/policy" | "/schema" | "/settings" | "/verify";
-  id: "__root__" | "/" | "/inbox" | "/memory" | "/policy" | "/schema" | "/settings" | "/verify";
-  fileRoutesById: FileRoutesById;
+  fileRoutesByFullPath: FileRoutesByFullPath
+  fullPaths:
+    | '/'
+    | '/inbox'
+    | '/memory'
+    | '/policy'
+    | '/schema'
+    | '/settings'
+    | '/verify'
+    | '/memory/$id'
+  fileRoutesByTo: FileRoutesByTo
+  to:
+    | '/'
+    | '/inbox'
+    | '/memory'
+    | '/policy'
+    | '/schema'
+    | '/settings'
+    | '/verify'
+    | '/memory/$id'
+  id:
+    | '__root__'
+    | '/'
+    | '/inbox'
+    | '/memory'
+    | '/policy'
+    | '/schema'
+    | '/settings'
+    | '/verify'
+    | '/memory/$id'
+  fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
-  IndexRoute: typeof IndexRoute;
-  InboxRoute: typeof InboxRoute;
-  MemoryRoute: typeof MemoryRoute;
-  PolicyRoute: typeof PolicyRoute;
-  SchemaRoute: typeof SchemaRoute;
-  SettingsRoute: typeof SettingsRoute;
-  VerifyRoute: typeof VerifyRoute;
+  IndexRoute: typeof IndexRoute
+  InboxRoute: typeof InboxRoute
+  MemoryRoute: typeof MemoryRouteWithChildren
+  PolicyRoute: typeof PolicyRoute
+  SchemaRoute: typeof SchemaRoute
+  SettingsRoute: typeof SettingsRoute
+  VerifyRoute: typeof VerifyRoute
 }
 
-declare module "@tanstack/react-router" {
+declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    "/": {
-      id: "/";
-      path: "/";
-      fullPath: "/";
-      preLoaderRoute: typeof IndexRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
-    "/inbox": {
-      id: "/inbox";
-      path: "/inbox";
-      fullPath: "/inbox";
-      preLoaderRoute: typeof InboxRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
-    "/memory": {
-      id: "/memory";
-      path: "/memory";
-      fullPath: "/memory";
-      preLoaderRoute: typeof MemoryRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
-    "/policy": {
-      id: "/policy";
-      path: "/policy";
-      fullPath: "/policy";
-      preLoaderRoute: typeof PolicyRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
-    "/schema": {
-      id: "/schema";
-      path: "/schema";
-      fullPath: "/schema";
-      preLoaderRoute: typeof SchemaRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
-    "/settings": {
-      id: "/settings";
-      path: "/settings";
-      fullPath: "/settings";
-      preLoaderRoute: typeof SettingsRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
-    "/verify": {
-      id: "/verify";
-      path: "/verify";
-      fullPath: "/verify";
-      preLoaderRoute: typeof VerifyRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/inbox': {
+      id: '/inbox'
+      path: '/inbox'
+      fullPath: '/inbox'
+      preLoaderRoute: typeof InboxRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/memory': {
+      id: '/memory'
+      path: '/memory'
+      fullPath: '/memory'
+      preLoaderRoute: typeof MemoryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/policy': {
+      id: '/policy'
+      path: '/policy'
+      fullPath: '/policy'
+      preLoaderRoute: typeof PolicyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/schema': {
+      id: '/schema'
+      path: '/schema'
+      fullPath: '/schema'
+      preLoaderRoute: typeof SchemaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/verify': {
+      id: '/verify'
+      path: '/verify'
+      fullPath: '/verify'
+      preLoaderRoute: typeof VerifyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/memory/$id': {
+      id: '/memory/$id'
+      path: '/$id'
+      fullPath: '/memory/$id'
+      preLoaderRoute: typeof MemoryIdRouteImport
+      parentRoute: typeof MemoryRoute
+    }
   }
 }
+
+interface MemoryRouteChildren {
+  MemoryIdRoute: typeof MemoryIdRoute
+}
+
+const MemoryRouteChildren: MemoryRouteChildren = {
+  MemoryIdRoute: MemoryIdRoute,
+}
+
+const MemoryRouteWithChildren =
+  MemoryRoute._addFileChildren(MemoryRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   InboxRoute: InboxRoute,
-  MemoryRoute: MemoryRoute,
+  MemoryRoute: MemoryRouteWithChildren,
   PolicyRoute: PolicyRoute,
   SchemaRoute: SchemaRoute,
   SettingsRoute: SettingsRoute,
   VerifyRoute: VerifyRoute,
-};
+}
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
-  ._addFileTypes<FileRouteTypes>();
+  ._addFileTypes<FileRouteTypes>()

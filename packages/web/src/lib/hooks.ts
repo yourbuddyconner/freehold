@@ -9,12 +9,26 @@ export function usePending() {
   });
 }
 
-/** Recall search. */
-export function useRecall(query: string, enabled = true) {
+/** Recall search with optional filters. */
+export function useRecall(
+  query: string,
+  filters: { type?: string; author?: string; status?: string } = {},
+  enabled = true
+) {
   return useQuery({
-    queryKey: ["recall", query],
-    queryFn: () => apiClient.recall(query),
+    queryKey: ["recall", query, filters],
+    queryFn: () => apiClient.recall(query, filters),
     enabled: enabled && query.length > 0,
+  });
+}
+
+/** Single entity detail. */
+export function useEntity(id: string | undefined) {
+  return useQuery({
+    queryKey: ["entity", id],
+    // biome-ignore lint/style/noNonNullAssertion: enabled guard above ensures id is defined
+    queryFn: () => apiClient.getEntity(id!),
+    enabled: !!id,
   });
 }
 

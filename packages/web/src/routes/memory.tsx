@@ -1,4 +1,8 @@
 import { createRoute } from "@tanstack/react-router";
+import { useState } from "react";
+import { MemoryCard } from "~/components/MemoryCard";
+import { TaxonomyTree } from "~/components/TaxonomyTree";
+import { useRecall, useSchema } from "~/lib/hooks";
 import { Route as RootRoute } from "./__root";
 
 export const Route = createRoute({
@@ -7,16 +11,126 @@ export const Route = createRoute({
   component: MemoryPage,
 });
 
+const TYPE_FILTERS = ["entity", "document", "event"] as const;
+const STATUS_FILTERS = ["approved", "held", "rejected"] as const;
+
 function MemoryPage() {
+  const [query, setQuery] = useState("");
+  const [typeFilter, setTypeFilter] = useState<string | undefined>();
+  const [statusFilter, setStatusFilter] = useState<string | undefined>();
+
+  const filters = {
+    type: typeFilter,
+    status: statusFilter,
+  };
+
+  const { data, isLoading } = useRecall(query, filters, query.length > 0);
+  const { data: schemaData } = useSchema();
+  const results = data?.results ?? [];
+  const terms = schemaData?.terms ?? [];
+
+  function toggleFilter<T extends string>(
+    current: T | undefined,
+    value: T,
+    set: (v: T | undefined) => void
+  ) {
+    set(current === value ? undefined : value);
+  }
+
   return (
     <div>
       <h2 className="font-serif text-2xl font-semibold mb-4">Memory</h2>
-      {/* TODO(F8): Search bar, filter chips, taxonomy tree, memory cards with ProvenanceFooter */}
-      <p className="text-[--fg-muted] text-sm">
-        Memory browser coming in F8. Connect an agent via{" "}
-        <code className="font-mono text-xs">freehold mcp setup claude-code</code> to start building
-        memories.
-      </p>
+
+      {/* Search */}
+      <div className="mb-4 max-w-xl">
+        <input
+          type="search"
+          aria-label="Search memories"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search memories…"
+          className="w-full rounded border border-[--border] bg-[--bg-subtle] px-3 py-2 text-sm text-[--fg] placeholder:text-[--fg-muted] focus:outline-none focus:ring-1 focus:ring-[--border]"
+        />
+      </div>
+
+      {/* Filter chips */}
+      <div className="flex flex-wrap gap-2 mb-6">
+        <span className="text-xs text-[--fg-muted] self-center">Type:</span>
+        {TYPE_FILTERS.map((f) => (
+          <button
+            key={f}
+            type="button"
+            onClick={() => toggleFilter(typeFilter, f, setTypeFilter)}
+            className={`rounded border px-2 py-0.5 text-xs font-medium transition-colors ${
+              typeFilter === f
+                ? "border-[--fg] bg-[--fg] text-white dark:text-black"
+                : "border-[--border] text-[--fg-muted] hover:text-[--fg]"
+            }`}
+          >
+            {f}
+          </button>
+        ))}
+        <span className="text-xs text-[--fg-muted] self-center ml-2">Status:</span>
+        {STATUS_FILTERS.map((f) => (
+          <button
+            key={f}
+            type="button"
+            onClick={() => toggleFilter(statusFilter, f, setStatusFilter)}
+            className={`rounded border px-2 py-0.5 text-xs font-medium transition-colors ${
+              statusFilter === f
+                ? "border-[--fg] bg-[--fg] text-white dark:text-black"
+                : "border-[--border] text-[--fg-muted] hover:text-[--fg]"
+            }`}
+          >
+            {f}
+          </button>
+        ))}
+      </div>
+
+      <div className="flex gap-6">
+        {/* Taxonomy sidebar */}
+        {terms.length > 0 && (
+          <TaxonomyTree
+            terms={terms}
+            selected={typeFilter}
+            onSelect={(t) => toggleFilter(typeFilter, t, setTypeFilter)}
+          />
+        )}
+
+        {/* Results */}
+        <div className="flex-1 min-w-0">
+          {query.length === 0 && (
+            <div className="rounded-lg border border-[--border] bg-[--bg-subtle] p-6 space-y-3 max-w-xl">
+              <p className="text-sm text-[--fg-muted]">
+                Search memories above. Agents will surface entities, documents, and events here as
+                they work.
+              </p>
+              <p className="text-sm text-[--fg-muted]">
+                Connect an agent via{" "}
+                <code className="font-mono text-xs bg-neutral-100 dark:bg-neutral-800 rounded px-1 py-0.5">
+                  freehold mcp setup claude-code
+                </code>
+              </p>
+            </div>
+          )}
+
+          {query.length > 0 && isLoading && <p className="text-sm text-[--fg-muted]">Searching…</p>}
+
+          {query.length > 0 && !isLoading && results.length === 0 && (
+            <p className="text-sm text-[--fg-muted]">No memories match your search.</p>
+          )}
+
+          {results.length > 0 && (
+            <ul className="space-y-4 max-w-2xl">
+              {results.map((result) => (
+                <li key={result.id}>
+                  <MemoryCard result={result} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
