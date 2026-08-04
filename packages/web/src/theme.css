@@ -1,41 +1,51 @@
 @import "tailwindcss";
-@import "@fontsource/newsreader/400.css";
-@import "@fontsource/newsreader/400-italic.css";
-@import "@fontsource/newsreader/600.css";
+@import "@fontsource/archivo/400.css";
+@import "@fontsource/archivo/500.css";
+@import "@fontsource/archivo/600.css";
+@import "@fontsource/archivo/700.css";
+@import "@fontsource/ibm-plex-mono/400.css";
+@import "@fontsource/ibm-plex-mono/500.css";
 
 @theme {
-  /* Freehold status-ink palette */
-  --color-status-approved: oklch(0.55 0.14 145); /* verified/approved: green ink */
-  --color-status-approved-bg: oklch(0.96 0.04 145);
-  --color-status-held: oklch(0.62 0.14 75); /* held: amber */
-  --color-status-held-bg: oklch(0.97 0.04 75);
-  --color-status-degraded: oklch(0.55 0.02 250); /* degraded: slate */
-  --color-status-degraded-bg: oklch(0.95 0.01 250);
-  --color-status-rejected: oklch(0.52 0.18 25); /* rejected: red */
-  --color-status-rejected-bg: oklch(0.97 0.04 25);
+  /* Status palette — semantic names kept (tests reference them) */
+  --color-status-approved: #0ba05f;
+  --color-status-approved-bg: #f0fdf4;
+  --color-status-held: #e8a200;
+  --color-status-held-bg: #fffbeb;
+  --color-status-degraded: #9aa096;
+  --color-status-degraded-bg: #f5f5f4;
+  --color-status-rejected: #d14b3a;
+  --color-status-rejected-bg: #fef2f0;
+
+  /* Accent */
+  --color-accent: #d9f103;
+  --color-accent-fg: #0e0e0c; /* text on chartreuse fills */
 
   /* Typography */
-  --font-serif: "Newsreader", Georgia, "Times New Roman", serif;
-  --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-mono: ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, Consolas, monospace;
+  --font-sans: "Archivo", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "Cascadia Code", Menlo, Consolas, monospace;
+  /* --font-serif intentionally removed; --font-sans covers all text */
 }
 
+/* ─── Light theme (default) ─────────────────────────────────────── */
 :root {
-  --bg: oklch(0.99 0.002 80);
-  --bg-subtle: oklch(0.97 0.003 80);
-  --border: oklch(0.88 0.008 80);
-  --fg: oklch(0.15 0.01 80);
-  --fg-muted: oklch(0.48 0.01 80);
+  --bg: #fafaf8;
+  --bg-subtle: #f4f4f0;
+  --border: #e4e4de;
+  --fg: #0e0e0c;
+  --fg-muted: #6b6f66;
 }
 
+/* ─── Dark theme ─────────────────────────────────────────────────── */
 :root[data-theme="dark"] {
-  --bg: oklch(0.12 0.005 265);
-  --bg-subtle: oklch(0.16 0.005 265);
-  --border: oklch(0.28 0.008 265);
-  --fg: oklch(0.94 0.005 265);
-  --fg-muted: oklch(0.62 0.008 265);
+  --bg: #101210;
+  --bg-subtle: #161815;
+  --border: #2a2d28;
+  --fg: #f0f0ec;
+  --fg-muted: #9aa096;
 }
 
+/* ─── Base ───────────────────────────────────────────────────────── */
 body {
   font-family: var(--font-sans);
   background-color: var(--bg);
@@ -43,8 +53,9 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Legacy utility — kept so any residual .font-serif falls back to sans */
 .font-serif {
-  font-family: var(--font-serif);
+  font-family: var(--font-sans);
 }
 
 .font-mono {
@@ -53,4 +64,127 @@ body {
 
 @utility text-muted {
   color: var(--fg-muted);
+}
+
+/* ─── Registration marks (proposal/featured cards) ───────────────── */
+/* Add class="reg-marks" to position:relative containers.             */
+/* Corner handles at top-left and top-right use ::before/::after.     */
+/* Bottom handles use child <span class="reg-mark-bl/br"> elements.   */
+.reg-marks {
+  position: relative;
+}
+
+.reg-marks::before,
+.reg-marks::after,
+.reg-marks > .reg-mark-bl,
+.reg-marks > .reg-mark-br {
+  content: "";
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border: 1px solid var(--fg);
+  background: transparent;
+  transition: background 120ms ease;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.reg-marks::before {
+  top: -1px;
+  left: -1px;
+}
+
+.reg-marks::after {
+  top: -1px;
+  right: -1px;
+}
+
+.reg-marks > .reg-mark-bl {
+  bottom: -1px;
+  left: -1px;
+}
+
+.reg-marks > .reg-mark-br {
+  bottom: -1px;
+  right: -1px;
+}
+
+.reg-marks:hover::before,
+.reg-marks:hover::after,
+.reg-marks:hover > .reg-mark-bl,
+.reg-marks:hover > .reg-mark-br {
+  background: var(--color-accent);
+}
+
+/* ─── Staggered fade-up reveal ───────────────────────────────────── */
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.reveal {
+  animation: fade-up 240ms ease both;
+}
+
+.reveal-1 {
+  animation-delay: 0ms;
+}
+
+.reveal-2 {
+  animation-delay: 60ms;
+}
+
+.reveal-3 {
+  animation-delay: 120ms;
+}
+
+.reveal-4 {
+  animation-delay: 180ms;
+}
+
+.reveal-5 {
+  animation-delay: 240ms;
+}
+
+.reveal-6 {
+  animation-delay: 300ms;
+}
+
+/* ─── Diff view semantic classes ─────────────────────────────────── */
+.diff-added {
+  color: var(--color-status-approved);
+  background: #f0fdf4;
+}
+
+.diff-changed {
+  color: var(--color-status-held);
+  background: #fffbeb;
+}
+
+:root[data-theme="dark"] .diff-added {
+  background: #052e16;
+}
+
+:root[data-theme="dark"] .diff-changed {
+  background: #1c1408;
+}
+
+/* ─── Held state: dashed amber border ────────────────────────────── */
+.held-border {
+  border: 1px dashed var(--color-status-held) !important;
+}
+
+/* ─── Active nav marker (applied via [&.active] on sidebar links) ── */
+/* 3px chartreuse left strip — no pill/rounded backgrounds.           */
+.nav-active-marker {
+  border-left: 3px solid var(--color-accent);
+  color: var(--fg);
+  font-weight: 500;
 }
