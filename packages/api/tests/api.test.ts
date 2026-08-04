@@ -315,3 +315,51 @@ describe("POST /api/v1/policy", () => {
     expect((body as { error?: { code?: string } }).error?.code).toBe("validation");
   });
 });
+
+describe("POST /api/v1/policy — real flow", () => {
+  const newPolicyYaml = `name: custom-test-policy
+rules:
+  - name: scratch-is-free
+    when:
+      all_ops_match:
+        region: workspace/scratch@1
+    allow: true
+`;
+
+  let policyHash: string | undefined;
+
+  test("POST /policy returns held with a real changeset hash", async () => {
+    const { status, body } = await req("POST", "/api/v1/policy", {
+      policy_yaml: newPolicyYaml,
+    });
+    expect(status).toBe(200);
+    const b = body as { status: string; hash: string };
+    expect(b.status).toBe("held");
+    // Real changeset hash from allod (not a synthetic sha256: prefix)
+    expect(typeof b.hash).toBe("string");
+    expect(b.hash.length).toBeGreaterThan(0);
+    policyHash = b.hash;
+  });
+
+  test("GET /proposals contains the policy proposal with isSchemaProposal true", async () => {
+    if (!policyHash) return;
+    const { status, body } = await req("GET", "/api/v1/proposals");
+    expect(status).toBe(200);
+    const b = body as { proposals: Array<{ hash: string; isSchemaProposal: boolean }> };
+    const policyProposal = b.proposals.find((p) => p.hash === policyHash);
+    expect(policyProposal).toBeDefined();
+    expect(policyProposal?.isSchemaProposal).toBe(true);
+  });
+
+  test("approve the policy proposal and verify GET /policy reflects new name", async () => {
+    if (!policyHash) return;
+    const { status: approveStatus } = await req("POST", `/api/v1/proposals/${policyHash}/approve`);
+    expect(approveStatus).toBe(200);
+
+    const { status, body } = await req("GET", "/api/v1/policy");
+    expect(status).toBe(200);
+    const b = body as { name: string; definition?: string };
+    // After approval the new policy name should be active
+    expect(b.name).toBe("custom-test-policy");
+  });
+});

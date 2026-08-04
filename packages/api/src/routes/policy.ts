@@ -1,4 +1,4 @@
-import { getPolicy } from "@freehold/core";
+import { getPolicy, proposePolicyChange } from "@freehold/core";
 import { Hono } from "hono";
 import type { AppEnv } from "../types.js";
 
@@ -41,18 +41,7 @@ policyRouter.post("/policy", async (c) => {
     );
   }
 
-  // Return held immediately — policy changes always require owner review.
-  // A synthetic hash derived from the YAML content provides a stable identifier.
-  const encoder = new TextEncoder();
-  const data = encoder.encode(policyYaml);
-  const hashBuf = await crypto.subtle.digest("SHA-256", data);
-  const hashHex = Array.from(new Uint8Array(hashBuf))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-
-  return c.json({
-    status: "held",
-    hash: `sha256:${hashHex}`,
-    rule: ["policy-changes-require-owner-review"],
-  });
+  const fh = c.get("freehold");
+  const result = await proposePolicyChange(fh.graph, policyYaml);
+  return c.json({ status: result.status, hash: result.hash });
 });
