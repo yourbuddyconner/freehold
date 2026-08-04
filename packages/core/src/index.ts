@@ -64,3 +64,17 @@ export { getEntity, traverse, entitiesOfType } from "./retrieval.js";
 // Schema operations
 export { describeSchema, proposeOntologyChange, installOntology } from "./schema.js";
 export type { OntologyProposalResult } from "./schema.js";
+
+// Embedding
+export { hashEmbedder, transformersEmbedder, makeEmbedder } from "./embed.js";
+export type { Embedder } from "./embed.js";
+
+// Database handle
+export type { DbHandle } from "./db.js";
+
+// Index sync
+export { syncIndex, reindex } from "./indexer.js";
+
+// Recall
+export { recall } from "./recall.js";
+export type { RecallResult, RecallFilters } from "./recall.js";

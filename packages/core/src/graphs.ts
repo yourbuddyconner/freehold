@@ -3,15 +3,19 @@ import { join } from "node:path";
 import type { AllodGraph } from "@allod/core";
 import { createGraph, openGraph } from "./allod.js";
 import { loadConfig } from "./config.js";
+import { openDb } from "./db.js";
+import type { DbHandle } from "./db.js";
 import { ensureHome } from "./home.js";
 
 export class Freehold {
   graph: AllodGraph;
+  db: DbHandle;
   readonly home: string;
   readonly graphName: string;
 
-  private constructor(graph: AllodGraph, home: string, graphName: string) {
+  private constructor(graph: AllodGraph, db: DbHandle, home: string, graphName: string) {
     this.graph = graph;
+    this.db = db;
     this.home = home;
     this.graphName = graphName;
   }
@@ -29,6 +33,8 @@ export class Freehold {
       // wires the config's owner name (or interactive first-run) into this path.
       graph = await createGraph(graphDir, "owner");
     }
-    return new Freehold(graph, h, graphName);
+    const pgDir = join(h, "pg");
+    const db = await openDb(pgDir);
+    return new Freehold(graph, db, h, graphName);
   }
 }
