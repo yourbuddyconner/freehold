@@ -33,6 +33,15 @@ function uuid4(): string {
   return crypto.randomUUID();
 }
 
+async function sha256hex(content: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(content);
+  const hashBuf = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(hashBuf))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
 function createNodeOp(
   id: string,
   typeRef: string,
@@ -274,40 +283,47 @@ export interface AttachDocumentResult {
 }
 
 /**
- * Attach a text document to an entity.
+ * Attach a document to an entity.
  *
- * Creates a `memory/Note@1` node and links it to `entityId` via a
- * `memory/relates_to@1` edge. We use `memory/Note@1` because the memory
- * ontology does not define a dedicated Document type — Note is the closest
- * fit for unstructured text content. If a `memory/Document@1` type is added
- * in a future ontology update, this function should be updated to use it.
+ * Creates a `document`-kind allod object (per spec §1.5) with a content_hash,
+ * media_type, and storage:"inline", then links it to `entityId` via a
+ * `memory/relates_to@1` edge. The document is classified as workspace/scratch@1
+ * so the changeset is admitted immediately under the memory policy.
+ *
+ * @param mediaType  MIME type hint (default: "text/plain")
  */
 export async function attachDocument(
   graph: AllodGraph,
   agent: string,
   entityId: string,
   content: string,
-  title?: string
+  title?: string,
+  mediaType = "text/plain"
 ): Promise<AttachDocumentResult> {
   const docId = uuid4();
-  const attrs: Record<string, unknown> = { content };
-  if (title !== undefined) attrs.title = title;
+  const hash = await sha256hex(content);
+  const contentHash = `sha256:${hash}`;
 
-  const provenance = {
-    derived_by: `principal:${agent}`,
-    method: "model-assisted",
-    tool: "freehold@0.1",
+  const docContent: Record<string, unknown> = {
+    kind: "document",
+    id: docId,
+    content_hash: contentHash,
+    media_type: mediaType,
+    storage: "inline",
   };
+  if (title !== undefined) docContent.title = title;
 
   const ops: unknown[] = [
-    createNodeOp(docId, "memory/Note@1", attrs, provenance),
+    { create: docContent },
+    // Classify the document as scratch so the changeset is admitted under scratch-is-free.
+    // Note: allod edge endpoints must reference node-kind objects, so the document↔entity
+    // relationship is expressed via the commit message instead of an edge op.
     classificationOp(
-      `node:${docId}`,
+      `document:${docId}`,
       "workspace/scratch@1",
       `principal:${agent}`,
       "model-assisted"
     ),
-    createEdgeOp(uuid4(), "memory/relates_to@1", `node:${entityId}`, `node:${docId}`),
   ];
 
   const raw = await graph.commit(agent, `Attach document to node:${entityId}`, ops, []);

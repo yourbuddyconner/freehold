@@ -144,6 +144,7 @@ const AttachDocumentBody = z.object({
   entityId: z.string(),
   content: z.string(),
   title: z.string().optional(),
+  media_type: z.string().optional(),
 });
 
 knowledgeRouter.post("/documents", async (c) => {
@@ -152,10 +153,10 @@ knowledgeRouter.post("/documents", async (c) => {
   if (!parsed.success) {
     return apiError(c, 400, ERROR_CODES.VALIDATION, "Invalid request body");
   }
-  const { agent, entityId, content, title } = parsed.data;
+  const { agent, entityId, content, title, media_type } = parsed.data;
   const fh = c.get("freehold");
   const embedder = c.get("embedder");
-  const result = await attachDocument(fh.graph, agent, entityId, content, title);
+  const result = await attachDocument(fh.graph, agent, entityId, content, title, media_type);
   if (result.status === "admitted") {
     await syncIndex(fh, embedder);
   }

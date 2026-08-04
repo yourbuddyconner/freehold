@@ -118,17 +118,22 @@ function registerTools(
       const result = await createEntity(fh.graph, by, type, attributes as Record<string, unknown>, {
         classification: classify,
       });
+      let edgeWarning: string | undefined;
       if (result.status === "admitted") {
         await syncIndex(fh, embedder);
         if (rel) {
-          await relate(
-            fh.graph,
-            by,
-            result.nodeId,
-            rel.to,
-            rel.edge_type,
-            rel.attributes as Record<string, unknown> | undefined
-          );
+          try {
+            await relate(
+              fh.graph,
+              by,
+              result.nodeId,
+              rel.to,
+              rel.edge_type,
+              rel.attributes as Record<string, unknown> | undefined
+            );
+          } catch (e) {
+            edgeWarning = `entity created; edge failed: ${e instanceof Error ? e.message : String(e)}`;
+          }
         }
       }
       return {
@@ -140,6 +145,7 @@ function registerTools(
               nodeId: result.nodeId,
               changeset: result.changeset,
               provenance: { author: by, tool: "freehold@0.1" },
+              ...(edgeWarning !== undefined ? { warning: edgeWarning } : {}),
             }),
           },
         ],
@@ -269,9 +275,9 @@ function registerTools(
         agent: z.string().optional().describe("Agent principal name"),
       },
     },
-    async ({ entity_id, content, title, agent }) => {
+    async ({ entity_id, content, media_type, title, agent }) => {
       const by = resolveAgent(agent, config);
-      const result = await attachDocument(fh.graph, by, entity_id, content, title);
+      const result = await attachDocument(fh.graph, by, entity_id, content, title, media_type);
       if (result.status === "admitted") {
         await syncIndex(fh, embedder);
       }

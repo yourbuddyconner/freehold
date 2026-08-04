@@ -95,7 +95,7 @@ describe("knowledge", () => {
     expect(["admitted", "held"]).toContain(result.status);
   });
 
-  test("attachDocument links a document node to an entity", async () => {
+  test("attachDocument creates a document-kind object with content_hash", async () => {
     const note = await remember(graph, "agent", "main note");
     const result = await attachDocument(
       graph,
@@ -107,5 +107,61 @@ describe("knowledge", () => {
     expect(["admitted", "held"]).toContain(result.status);
     expect(typeof result.docNodeId).toBe("string");
     expect(result.docNodeId.length).toBeGreaterThan(0);
+
+    // The document object should be in fold state under ("document", docNodeId)
+    const docObj = (
+      graph as unknown as {
+        object_get(
+          kind: string,
+          id: string
+        ): { content: Record<string, unknown>; rev: string; deleted: boolean } | null;
+      }
+    ).object_get("document", result.docNodeId);
+    expect(docObj).not.toBeNull();
+    expect(docObj?.deleted).toBe(false);
+    // content_hash must be a sha256: prefixed hex string
+    expect(typeof docObj?.content.content_hash).toBe("string");
+    expect((docObj?.content.content_hash as string).startsWith("sha256:")).toBe(true);
+    // media_type should default to text/plain
+    expect(docObj?.content.media_type).toBe("text/plain");
+  });
+
+  test("attachDocument with custom mediaType stores it correctly", async () => {
+    const note = await remember(graph, "agent", "source entity");
+    const result = await attachDocument(
+      graph,
+      "agent",
+      note.noteId,
+      "<html><body>hello</body></html>",
+      "HTML Doc",
+      "text/html"
+    );
+    expect(["admitted", "held"]).toContain(result.status);
+
+    const docObj = (
+      graph as unknown as {
+        object_get(
+          kind: string,
+          id: string
+        ): { content: Record<string, unknown>; rev: string; deleted: boolean } | null;
+      }
+    ).object_get("document", result.docNodeId);
+    expect(docObj?.content.media_type).toBe("text/html");
+  });
+
+  test("relate with a nonexistent target fails gracefully (throws or errors)", async () => {
+    const note = await remember(graph, "agent", "source note");
+    const fakeTargetId = "00000000-0000-0000-0000-000000000000";
+    // relate() builds the edge op and commits — the graph will reject the edge
+    // if the target node doesn't exist in fold state.
+    // Either: it throws, or it returns an error admission.
+    try {
+      const result = await relate(graph, "agent", note.noteId, fakeTargetId, "memory/relates_to@1");
+      // If it doesn't throw, the result should still be structurally valid
+      expect(["admitted", "held"]).toContain(result.status);
+    } catch (err) {
+      // Throwing is acceptable — the MCP layer catches it
+      expect(err).toBeDefined();
+    }
   });
 });
