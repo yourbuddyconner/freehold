@@ -91,6 +91,24 @@ pnpm build: clean (check:drift passes)
 
 ---
 
+## Post-review assertion tightening (Commit c9f5c6e)
+
+Following the initial review, three vacuous CLI test assertions were tightened per the memory policy:
+
+1. **"remember stores a note"** (line 145-155): Plain `remember` writes to scratch path with CLI default agent → deterministically admitted. Changed `expect([0, 2]).toContain(code)` to `expect(code).toBe(0)`.
+
+2. **"remember --json"** (line 157-167): Same scratch-path behavior with JSON output. Changed `expect([0, 2]).toContain(code)` to `expect(code).toBe(0)` and `parsed.status` to `expect(parsed.status).toBe("admitted")`.
+
+3. **"held response → exit code 2"** (line 227-251): AGENT-authored writes with `memory/Preference@1` type (non-scratch) are deterministically held under governance rules. Changed `expect([0, 2]).toContain(code)` to `expect(code).toBe(2)` and removed vacuous both-paths-valid comments (lines 241-243, 249).
+
+**Test results post-tightening:**
+- `pnpm --filter @freehold/api test`: 13 tests ✓
+- `pnpm -r test`: 72 tests ✓ (41 core + 30 api, 1 skipped)
+- `pnpm typecheck`: clean
+- `pnpm lint`: 67 files, no issues
+
+All three assertions pass, confirming behavior matches policy.
+
 ## Key files
 
 - `/Users/conner/code/freehold/packages/client/src/client.ts`
