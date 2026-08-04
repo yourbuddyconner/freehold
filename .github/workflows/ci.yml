@@ -11,7 +11,31 @@ jobs:
     name: Lint, typecheck, unit tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout freehold
+        uses: actions/checkout@v4
+        with:
+          path: freehold
+
+      # allod wasm build — required because @allod/core is a workspace link
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Checkout allod (main)
+        uses: actions/checkout@v4
+        with:
+          repository: yourbuddyconner/allod
+          ref: main
+          path: allod
+
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+      - name: Build allod-wasm package
+        working-directory: allod/crates/allod-wasm
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm run build
 
       - uses: pnpm/action-setup@v4
         with:
@@ -21,18 +45,22 @@ jobs:
         with:
           node-version: "22"
           cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
+          cache-dependency-path: freehold/pnpm-lock.yaml
 
       - name: Install dependencies
+        working-directory: freehold
         run: pnpm install --frozen-lockfile
 
       - name: Lint (biome)
+        working-directory: freehold
         run: pnpm lint
 
       - name: Typecheck (tsc --build)
+        working-directory: freehold
         run: pnpm typecheck
 
       - name: Unit tests (excludes e2e and kill)
+        working-directory: freehold
         run: |
           pnpm --filter @freehold/api test:unit
           pnpm --filter '!@freehold/api' -r test
@@ -156,7 +184,31 @@ jobs:
     name: Binary build + kill test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout freehold
+        uses: actions/checkout@v4
+        with:
+          path: freehold
+
+      # allod wasm build — required because @allod/core is a workspace link
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Checkout allod (main)
+        uses: actions/checkout@v4
+        with:
+          repository: yourbuddyconner/allod
+          ref: main
+          path: allod
+
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+      - name: Build allod-wasm package
+        working-directory: allod/crates/allod-wasm
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm run build
 
       - uses: pnpm/action-setup@v4
         with:
@@ -166,21 +218,24 @@ jobs:
         with:
           node-version: "22"
           cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
+          cache-dependency-path: freehold/pnpm-lock.yaml
 
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: "1.3.10"
 
       - name: Install dependencies
+        working-directory: freehold
         run: pnpm install --frozen-lockfile
 
       - name: Build binary (bun compile + sidecar copy)
+        working-directory: freehold
         run: node packages/api/build/compile-binary.mjs
         env:
           BUN: bun
 
       - name: Smoke test binary
+        working-directory: freehold
         run: |
           export FREEHOLD_HOME=$(mktemp -d)
           export PORT=28710
@@ -204,6 +259,7 @@ jobs:
           rm -rf "$FREEHOLD_HOME"
 
       - name: Kill test (SIGKILL recovery against compiled binary)
+        working-directory: freehold
         env:
-          FREEHOLD_BINARY: ${{ github.workspace }}/packages/api/dist/freehold
+          FREEHOLD_BINARY: ${{ github.workspace }}/freehold/packages/api/dist/freehold
         run: pnpm --filter @freehold/api test -- tests/kill.test.ts
