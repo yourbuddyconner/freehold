@@ -331,26 +331,41 @@ describe("pi-agent E2E scenario", () => {
     expect(admittedNoteId).toBeDefined();
 
     // -----------------------------------------------------------------------
-    // Assertions on recall result
+    // Assertions on recall result — must include provenance fields
     // -----------------------------------------------------------------------
     const recallText = toolResults.recall;
     expect(recallText).toBeDefined();
     if (!recallText) throw new Error("recall tool result missing");
-    const recallBody = JSON.parse(recallText) as { results?: Array<{ content?: unknown }> };
+    const recallBody = JSON.parse(recallText) as {
+      results?: Array<{ content?: unknown; author?: string; changeset?: string }>;
+    };
     expect(Array.isArray(recallBody.results)).toBe(true);
     expect(recallBody.results?.length).toBeGreaterThan(0);
+    // Every recall result must carry provenance: author (principal) and changeset hash
+    const firstResult = recallBody.results?.[0];
+    expect(typeof firstResult?.author).toBe("string");
+    expect(firstResult?.author?.length).toBeGreaterThan(0);
+    expect(typeof firstResult?.changeset).toBe("string");
+    expect(firstResult?.changeset?.length).toBeGreaterThan(0);
 
     // -----------------------------------------------------------------------
-    // HTTP verification: the admitted note exists and has provenance
+    // HTTP verification: the admitted note exists at /api/v1/entities/:id
     // -----------------------------------------------------------------------
     if (admittedNoteId) {
-      const nodeRes = await fetch(`http://127.0.0.1:${port}/api/v1/nodes/${admittedNoteId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      // Node endpoint may return 200 or 404 depending on implementation;
-      // the key assertion is that recall returned it above.
-      // Accept both — existence confirmed by recall result.
-      expect([200, 404]).toContain(nodeRes.status);
+      const entityRes = await fetch(
+        `http://127.0.0.1:${port}/api/v1/entities/${admittedNoteId}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      expect(entityRes.status).toBe(200);
+      const entityBody = (await entityRes.json()) as {
+        id?: string;
+        revisions?: Array<{ hash?: string }>;
+      };
+      // Entity must have at least one revision (the admission hash)
+      expect(Array.isArray(entityBody.revisions)).toBe(true);
+      expect((entityBody.revisions?.length ?? 0)).toBeGreaterThan(0);
+      // The revision hash is the provenance identifier
+      expect(typeof entityBody.revisions?.[0]?.hash).toBe("string");
     }
   }, 60_000);
 });
