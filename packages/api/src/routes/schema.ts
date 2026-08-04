@@ -6,9 +6,9 @@ import type { AppEnv } from "../types.js";
 
 export const schemaRouter = new Hono<AppEnv>();
 
-schemaRouter.get("/schema", (c) => {
+schemaRouter.get("/schema", async (c) => {
   const fh = c.get("freehold");
-  const schema = describeSchema(fh.graph);
+  const schema = await describeSchema(fh.graph);
   return c.json(schema);
 });
 

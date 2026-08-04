@@ -6,6 +6,7 @@
  */
 
 import type { AllodGraph } from "@allod/core";
+import { withGraph } from "./lock.js";
 import type { Admission } from "./types.js";
 
 // ---- Raw Allod admission shapes ----
@@ -128,13 +129,15 @@ export async function remember(
   agent: string,
   content: string
 ): Promise<RememberResult> {
-  const raw = await graph.note(agent, content);
-  const admission = parseAdmission(raw.admission as AllodAdmission);
-  return {
-    status: admission.status,
-    noteId: raw.note_id as string,
-    changeset: admission.hash,
-  };
+  return withGraph(graph, async () => {
+    const raw = await graph.note(agent, content);
+    const admission = parseAdmission(raw.admission as AllodAdmission);
+    return {
+      status: admission.status,
+      noteId: raw.note_id as string,
+      changeset: admission.hash,
+    };
+  });
 }
 
 export interface CreateEntityResult {
@@ -177,13 +180,15 @@ export async function createEntity(
     );
   }
 
-  const raw = await graph.commit(agent, `Create ${typeRef}`, ops, [], true);
-  const admission = parseAdmission(raw as AllodAdmission);
-  return {
-    status: admission.status,
-    nodeId,
-    changeset: admission.hash,
-  };
+  return withGraph(graph, async () => {
+    const raw = await graph.commit(agent, `Create ${typeRef}`, ops, [], true);
+    const admission = parseAdmission(raw as AllodAdmission);
+    return {
+      status: admission.status,
+      nodeId,
+      changeset: admission.hash,
+    };
+  });
 }
 
 export interface UpdateEntityResult {
@@ -196,6 +201,9 @@ export interface UpdateEntityResult {
  * `typeRef` is the entity type (e.g. "memory/Note@1") — required by fold validation.
  * If `prior` is not provided, it is fetched from the graph via `node_rev`.
  * The `prior` field is the revision hash of the node's current content.
+ *
+ * The node_rev read and commit are performed inside the same critical section
+ * to close the TOCTOU race: no other writer can slip between the read and the write.
  */
 export async function updateEntity(
   graph: AllodGraph,
@@ -205,15 +213,17 @@ export async function updateEntity(
   attributes: Record<string, unknown>,
   prior?: string | null
 ): Promise<UpdateEntityResult> {
-  // If prior not supplied, look it up from graph state.
-  const rev = prior ?? (graph.node_rev(nodeId) as string | null);
-  if (!rev) {
-    throw new Error(`node_rev: node not found: ${nodeId}`);
-  }
-  const ops = [updateNodeOp(nodeId, typeRef, rev, attributes)];
-  const raw = await graph.commit(agent, `Update node:${nodeId}`, ops, [], true);
-  const admission = parseAdmission(raw as AllodAdmission);
-  return { status: admission.status, changeset: admission.hash };
+  return withGraph(graph, async () => {
+    // node_rev read is inside the lock so no writer can interleave
+    const rev = prior ?? (graph.node_rev(nodeId) as string | null);
+    if (!rev) {
+      throw new Error(`node_rev: node not found: ${nodeId}`);
+    }
+    const ops = [updateNodeOp(nodeId, typeRef, rev, attributes)];
+    const raw = await graph.commit(agent, `Update node:${nodeId}`, ops, [], true);
+    const admission = parseAdmission(raw as AllodAdmission);
+    return { status: admission.status, changeset: admission.hash };
+  });
 }
 
 export interface RelateResult {
@@ -253,9 +263,11 @@ export async function relate(
       )
     );
   }
-  const raw = await graph.commit(agent, `Relate ${edgeType}`, ops, [], true);
-  const admission = parseAdmission(raw as AllodAdmission);
-  return { status: admission.status, edgeId, changeset: admission.hash };
+  return withGraph(graph, async () => {
+    const raw = await graph.commit(agent, `Relate ${edgeType}`, ops, [], true);
+    const admission = parseAdmission(raw as AllodAdmission);
+    return { status: admission.status, edgeId, changeset: admission.hash };
+  });
 }
 
 export interface ClassifyResult {
@@ -272,9 +284,11 @@ export async function classifyEntity(
   nodeId: string,
   term: string
 ): Promise<ClassifyResult> {
-  const raw = await graph.classify(nodeId, term, agent, "model-assisted");
-  const admission = parseAdmission(raw as AllodAdmission);
-  return { status: admission.status, changeset: admission.hash };
+  return withGraph(graph, async () => {
+    const raw = await graph.classify(nodeId, term, agent, "model-assisted");
+    const admission = parseAdmission(raw as AllodAdmission);
+    return { status: admission.status, changeset: admission.hash };
+  });
 }
 
 export interface AttachDocumentResult {
@@ -327,7 +341,9 @@ export async function attachDocument(
     ),
   ];
 
-  const raw = await graph.commit(agent, `Attach document to node:${entityId}`, ops, [], true);
-  const admission = parseAdmission(raw as AllodAdmission);
-  return { status: admission.status, docNodeId: docId, changeset: admission.hash };
+  return withGraph(graph, async () => {
+    const raw = await graph.commit(agent, `Attach document to node:${entityId}`, ops, [], true);
+    const admission = parseAdmission(raw as AllodAdmission);
+    return { status: admission.status, docNodeId: docId, changeset: admission.hash };
+  });
 }

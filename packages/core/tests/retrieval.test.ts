@@ -16,8 +16,8 @@ describe("retrieval", () => {
     await graph.principal_add("agent", "agent", "owner");
   });
 
-  test("getEntity returns null for an unknown nodeId", () => {
-    const entity = getEntity(graph, "00000000-0000-0000-0000-000000000000");
+  test("getEntity returns null for an unknown nodeId", async () => {
+    const entity = await getEntity(graph, "00000000-0000-0000-0000-000000000000");
     expect(entity).toBeNull();
   });
 
@@ -26,7 +26,7 @@ describe("retrieval", () => {
     expect(note.status).toBe("saved");
 
     // Use object_get to verify the node exists, then check getEntity
-    const entity = getEntity(graph, note.noteId);
+    const entity = await getEntity(graph, note.noteId);
     expect(entity).not.toBeNull();
     expect(entity?.id).toBe(note.noteId);
     expect(typeof entity?.type).toBe("string");
@@ -45,14 +45,14 @@ describe("retrieval", () => {
     const note1 = await remember(graph, "agent", "first note content");
     expect(note1.status).toBe("saved");
 
-    const result = traverse(graph, note1.noteId, ["memory/relates_to@1"], "out", 1);
+    const result = await traverse(graph, note1.noteId, ["memory/relates_to@1"], "out", 1);
     expect(Array.isArray(result)).toBe(true);
     // May be empty because edge ID enumeration is not available via the public API
     // This is the honest result — see comments in traverse() implementation
   });
 
-  test("traverse returns empty array for a nodeId that does not exist", () => {
-    const result = traverse(graph, "00000000-0000-0000-0000-000000000000");
+  test("traverse returns empty array for a nodeId that does not exist", async () => {
+    const result = await traverse(graph, "00000000-0000-0000-0000-000000000000");
     expect(Array.isArray(result)).toBe(true);
     expect(result.length).toBe(0);
   });
@@ -67,7 +67,7 @@ describe("retrieval", () => {
     await relate(graph, "agent", note1.noteId, note2.noteId, "memory/relates_to@1");
 
     // Both nodes exist and an edge was created. traverse returns an EntityView[].
-    const result = traverse(graph, note1.noteId, ["memory/relates_to@1"], "out", 1);
+    const result = await traverse(graph, note1.noteId, ["memory/relates_to@1"], "out", 1);
     expect(Array.isArray(result)).toBe(true);
     // Result may be empty (API surface limitation) or contain note2's EntityView
     // This test verifies the API contract (returns EntityView[]) without
@@ -91,7 +91,7 @@ describe("retrieval", () => {
     // Create an edge from noteA to noteB
     await relate(graph, "agent", noteA.noteId, noteB.noteId, "memory/relates_to@1");
 
-    const entity = getEntity(graph, noteA.noteId);
+    const entity = await getEntity(graph, noteA.noteId);
     expect(entity).not.toBeNull();
 
     // classifications: remember() adds workspace/scratch@1 via scratch classification op
@@ -107,7 +107,7 @@ describe("retrieval", () => {
     expect(outEdge?.from).toBe(`node:${noteA.noteId}`);
 
     // noteB should have an in-edge from noteA
-    const entityB = getEntity(graph, noteB.noteId);
+    const entityB = await getEntity(graph, noteB.noteId);
     expect(entityB).not.toBeNull();
     const inEdge = entityB?.edges.find((e) => e.direction === "incoming");
     expect(inEdge).toBeDefined();
@@ -127,13 +127,13 @@ describe("retrieval", () => {
     await relate(graph, "agent", noteB.noteId, noteC.noteId, "memory/relates_to@1");
 
     // depth=1 from A should only reach B
-    const depth1 = traverse(graph, noteA.noteId, undefined, "out", 1);
+    const depth1 = await traverse(graph, noteA.noteId, undefined, "out", 1);
     const ids1 = depth1.map((e) => e.id);
     expect(ids1).toContain(noteB.noteId);
     expect(ids1).not.toContain(noteC.noteId);
 
     // depth=2 from A should reach B and C
-    const depth2 = traverse(graph, noteA.noteId, undefined, "out", 2);
+    const depth2 = await traverse(graph, noteA.noteId, undefined, "out", 2);
     const ids2 = depth2.map((e) => e.id);
     expect(ids2).toContain(noteB.noteId);
     expect(ids2).toContain(noteC.noteId);
@@ -149,7 +149,7 @@ describe("retrieval", () => {
     await relate(graph, "agent", noteB.noteId, noteC.noteId, "memory/relates_to@1");
 
     // direction="in" from C: only B points to C
-    const result = traverse(graph, noteC.noteId, undefined, "in", 1);
+    const result = await traverse(graph, noteC.noteId, undefined, "in", 1);
     const ids = result.map((e) => e.id);
     expect(ids).toContain(noteB.noteId);
     expect(ids).not.toContain(noteA.noteId);
@@ -163,11 +163,11 @@ describe("retrieval", () => {
     await relate(graph, "agent", noteA.noteId, noteB.noteId, "memory/relates_to@1");
 
     // Filter for a non-existent edge type: should return empty
-    const result = traverse(graph, noteA.noteId, ["memory/nonexistent@1"], "out", 1);
+    const result = await traverse(graph, noteA.noteId, ["memory/nonexistent@1"], "out", 1);
     expect(result).toHaveLength(0);
 
     // Filter for the actual edge type: should return noteB
-    const result2 = traverse(graph, noteA.noteId, ["memory/relates_to@1"], "out", 1);
+    const result2 = await traverse(graph, noteA.noteId, ["memory/relates_to@1"], "out", 1);
     const ids = result2.map((e) => e.id);
     expect(ids).toContain(noteB.noteId);
   });

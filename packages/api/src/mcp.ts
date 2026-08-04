@@ -352,7 +352,7 @@ function registerTools(
       },
     },
     async ({ id }) => {
-      const entity = getEntity(fh.graph, id);
+      const entity = await getEntity(fh.graph, id);
       if (!entity) {
         return {
           content: [
@@ -390,7 +390,7 @@ function registerTools(
       },
     },
     async ({ from, edge_types, direction, depth }) => {
-      const results = traverse(
+      const results = await traverse(
         fh.graph,
         from,
         edge_types,
@@ -416,7 +416,7 @@ function registerTools(
     },
     async ({ agent }) => {
       const by = resolveAgent(agent, config);
-      const all = pending(fh.graph);
+      const all = await pending(fh.graph);
       const mine = all.filter((p) => p.agent === by);
       return {
         content: [{ type: "text" as const, text: JSON.stringify({ proposals: mine }) }],
@@ -436,7 +436,7 @@ function registerTools(
       inputSchema: {},
     },
     async () => {
-      const schema = describeSchema(fh.graph);
+      const schema = await describeSchema(fh.graph);
       return {
         content: [{ type: "text" as const, text: JSON.stringify(schema) }],
       };

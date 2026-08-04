@@ -31,7 +31,7 @@ describe("governance", () => {
     });
     expect(created.status).toBe("pending");
 
-    const proposals = pending(graph);
+    const proposals = await pending(graph);
     expect(Array.isArray(proposals)).toBe(true);
     expect(proposals.length).toBeGreaterThanOrEqual(1);
 
@@ -83,7 +83,7 @@ describe("governance", () => {
     );
     expect(prefResult.admission?.Held).toBeDefined();
 
-    const proposals = pending(graph);
+    const proposals = await pending(graph);
     expect(proposals.length).toBeGreaterThanOrEqual(1);
     const target = proposals.find((p) => p.hash === prefResult.hash);
     expect(target).toBeDefined();
@@ -92,20 +92,20 @@ describe("governance", () => {
     expect(result.status).toBe("approved");
 
     // Proposal should no longer be pending
-    const after = pending(graph);
+    const after = await pending(graph);
     const stillPending = after.find((p) => p.hash === prefResult.hash);
     expect(stillPending).toBeUndefined();
   });
 
-  test("verifyGraph() returns { ok: true } for a fresh graph", () => {
-    const report = verifyGraph(graph);
+  test("verifyGraph() returns { ok: true } for a fresh graph", async () => {
+    const report = await verifyGraph(graph);
     expect(report.ok).toBe(true);
     expect(typeof report.stateHash).toBe("string");
     expect(Array.isArray(report.degraded)).toBe(true);
   });
 
-  test("principals() returns array including the owner", () => {
-    const ps = principals(graph);
+  test("principals() returns array including the owner", async () => {
+    const ps = await principals(graph);
     expect(Array.isArray(ps)).toBe(true);
     // Owner is a User principal, agent is an Agent principal
     expect(ps.length).toBeGreaterThanOrEqual(1);
@@ -134,7 +134,7 @@ describe("governance", () => {
     );
     expect(prefResult.admission?.Held).toBeDefined();
 
-    const proposals = pending(graph);
+    const proposals = await pending(graph);
     expect(proposals.length).toBeGreaterThanOrEqual(1);
     const target = proposals.find((p) => p.hash === prefResult.hash);
     expect(target).toBeDefined();
@@ -145,7 +145,7 @@ describe("governance", () => {
 
     // Proposal should still be pending (stays on disk for audit per allod semantics)
     // Note: per allod docs, rejected proposals remain in pending state
-    const after = pending(graph);
+    const after = await pending(graph);
     // After rejection, the proposal leaves pending (depending on allod's implementation)
     // We assert the function didn't crash and returned correct shape
     expect(Array.isArray(after)).toBe(true);

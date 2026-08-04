@@ -5,9 +5,9 @@ import type { AppEnv } from "../types.js";
 export const policyRouter = new Hono<AppEnv>();
 
 // GET /policy — return the graph's active policy name, definition YAML, and parsed rules array.
-policyRouter.get("/policy", (c) => {
+policyRouter.get("/policy", async (c) => {
   const fh = c.get("freehold");
-  const policy = getPolicy(fh.graph);
+  const policy = await getPolicy(fh.graph);
   if (!policy) {
     return c.json({ rules: [] });
   }

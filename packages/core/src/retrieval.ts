@@ -5,6 +5,7 @@
  */
 
 import type { AllodGraph } from "@allod/core";
+import { withGraph } from "./lock.js";
 import type { EdgeView, EntityView, RevisionView } from "./types.js";
 
 // ---- Raw Allod shapes from object_get ----
@@ -103,7 +104,7 @@ export interface LoggableGraph {
   log(): RawLogEntry[];
 }
 
-// ---- Internal helpers ----
+// ---- Internal helpers (all called from within withGraph critical sections) ----
 
 /**
  * Strip the `node:` / `edge:` prefix from a reference, returning the bare UUID.
@@ -116,6 +117,7 @@ function bareId(ref: string | undefined): string {
 
 /**
  * Fetch the live object from fold state via object_get.
+ * Must be called from within a withGraph critical section.
  */
 function getObject(graph: AllodGraph, kind: string, id: string): RawObject | null {
   try {
@@ -134,6 +136,8 @@ function getObject(graph: AllodGraph, kind: string, id: string): RawObject | nul
  * This is a best-effort implementation — it returns the changeset hash as the
  * revision hash. A richer implementation would require per-op access from JS
  * (not currently exposed via log()).
+ *
+ * Must be called from within a withGraph critical section.
  */
 function revisionsForNode(graph: AllodGraph, nodeId: string): RevisionView[] {
   try {
@@ -158,6 +162,8 @@ function revisionsForNode(graph: AllodGraph, nodeId: string): RevisionView[] {
 /**
  * Fetch classifications and edges for a node from fold state via entity_context.
  * Returns null if entity_context is not available or the node doesn't exist.
+ *
+ * Must be called from within a withGraph critical section.
  */
 function entityContext(graph: AllodGraph, nodeId: string): RawEntityContext | null {
   try {
@@ -167,18 +173,11 @@ function entityContext(graph: AllodGraph, nodeId: string): RawEntityContext | nu
   }
 }
 
-// ---- Public API ----
-
 /**
- * Get a rich view of a single entity by its node ID (bare UUID).
- *
- * Uses `object_get("node", id)` for content and rev, derives edges from
- * the fold state (all live edge objects whose from/to reference this node),
- * and derives revisions from the log.
- *
- * Returns null if the node is not found in the current fold state.
+ * Build an EntityView from fold state. Must be called from within a withGraph
+ * critical section — does NOT acquire the lock itself.
  */
-export function getEntity(graph: AllodGraph, nodeId: string): EntityView | null {
+function buildEntityView(graph: AllodGraph, nodeId: string): EntityView | null {
   const obj = getObject(graph, "node", nodeId);
   if (!obj || obj.deleted) return null;
 
@@ -227,6 +226,21 @@ export function getEntity(graph: AllodGraph, nodeId: string): EntityView | null 
   };
 }
 
+// ---- Public API ----
+
+/**
+ * Get a rich view of a single entity by its node ID (bare UUID).
+ *
+ * Uses `object_get("node", id)` for content and rev, derives edges from
+ * the fold state (all live edge objects whose from/to reference this node),
+ * and derives revisions from the log.
+ *
+ * Returns null if the node is not found in the current fold state.
+ */
+export async function getEntity(graph: AllodGraph, nodeId: string): Promise<EntityView | null> {
+  return withGraph(graph, () => buildEntityView(graph, nodeId));
+}
+
 /**
  * BFS traversal starting from `fromId`, following edges of `edgeTypes`
  * (all edge types if omitted) in `direction` ("out" | "in" | "both", default "out")
@@ -254,80 +268,84 @@ export function getEntity(graph: AllodGraph, nodeId: string): EntityView | null 
  * @param direction - "out" (default), "in", or "both".
  * @param depth - Maximum hops (default 1).
  */
-export function traverse(
+export async function traverse(
   graph: AllodGraph,
   fromId: string,
   edgeTypes?: string[],
   direction: "out" | "in" | "both" = "out",
   depth = 1
-): EntityView[] {
+): Promise<EntityView[]> {
   if (depth <= 0) return [];
 
-  const visited = new Set<string>([fromId]);
-  const results: EntityView[] = [];
-  let frontier: string[] = [fromId];
+  return withGraph(graph, () => {
+    const visited = new Set<string>([fromId]);
+    const results: EntityView[] = [];
+    let frontier: string[] = [fromId];
 
-  for (let hop = 0; hop < depth; hop++) {
-    const nextFrontier: string[] = [];
+    for (let hop = 0; hop < depth; hop++) {
+      const nextFrontier: string[] = [];
 
-    for (const currentId of frontier) {
-      const ctx = entityContext(graph, currentId);
-      if (!ctx) continue;
+      for (const currentId of frontier) {
+        const ctx = entityContext(graph, currentId);
+        if (!ctx) continue;
 
-      const candidates: string[] = [];
+        const candidates: string[] = [];
 
-      if (direction === "out" || direction === "both") {
-        for (const edge of ctx.edges_out) {
-          if (!edgeTypes || edgeTypes.length === 0 || edgeTypes.includes(edge.type)) {
-            candidates.push(bareId(edge.to));
+        if (direction === "out" || direction === "both") {
+          for (const edge of ctx.edges_out) {
+            if (!edgeTypes || edgeTypes.length === 0 || edgeTypes.includes(edge.type)) {
+              candidates.push(bareId(edge.to));
+            }
+          }
+        }
+
+        if (direction === "in" || direction === "both") {
+          for (const edge of ctx.edges_in) {
+            if (!edgeTypes || edgeTypes.length === 0 || edgeTypes.includes(edge.type)) {
+              candidates.push(bareId(edge.from));
+            }
+          }
+        }
+
+        for (const candidateId of candidates) {
+          if (!visited.has(candidateId)) {
+            visited.add(candidateId);
+            nextFrontier.push(candidateId);
+            const ev = buildEntityView(graph, candidateId);
+            if (ev) results.push(ev);
           }
         }
       }
 
-      if (direction === "in" || direction === "both") {
-        for (const edge of ctx.edges_in) {
-          if (!edgeTypes || edgeTypes.length === 0 || edgeTypes.includes(edge.type)) {
-            candidates.push(bareId(edge.from));
-          }
-        }
-      }
-
-      for (const candidateId of candidates) {
-        if (!visited.has(candidateId)) {
-          visited.add(candidateId);
-          nextFrontier.push(candidateId);
-          const ev = getEntity(graph, candidateId);
-          if (ev) results.push(ev);
-        }
-      }
+      frontier = nextFrontier;
+      if (frontier.length === 0) break;
     }
 
-    frontier = nextFrontier;
-    if (frontier.length === 0) break;
-  }
-
-  return results;
+    return results;
+  });
 }
 
 /**
  * Return all entities of a given type currently live in the graph.
  */
-export function entitiesOfType(graph: AllodGraph, typeRef: string): EntityView[] {
-  const raw = (graph as unknown as ExtendedGraph).state();
-  if (!raw?.nodes) return [];
-  const bare = typeRef.split("@")[0];
-  return raw.nodes
-    .filter((n) => {
-      const nBare = (n.type_ref ?? "").split("@")[0];
-      return nBare === bare || n.type_ref === typeRef;
-    })
-    .map((n) => ({
-      id: n.label ?? "",
-      type: n.type_ref ?? "",
-      attributes: { label: n.label },
-      classifications: [],
-      edges: [],
-      provenance: n.derived_by ? { derived_by: n.derived_by } : undefined,
-      revisions: [],
-    }));
+export async function entitiesOfType(graph: AllodGraph, typeRef: string): Promise<EntityView[]> {
+  return withGraph(graph, () => {
+    const raw = (graph as unknown as ExtendedGraph).state();
+    if (!raw?.nodes) return [];
+    const bare = typeRef.split("@")[0];
+    return raw.nodes
+      .filter((n) => {
+        const nBare = (n.type_ref ?? "").split("@")[0];
+        return nBare === bare || n.type_ref === typeRef;
+      })
+      .map((n) => ({
+        id: n.label ?? "",
+        type: n.type_ref ?? "",
+        attributes: { label: n.label },
+        classifications: [],
+        edges: [],
+        provenance: n.derived_by ? { derived_by: n.derived_by } : undefined,
+        revisions: [],
+      }));
+  });
 }

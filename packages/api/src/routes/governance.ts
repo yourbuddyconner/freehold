@@ -40,9 +40,9 @@ function classifyDecideError(err: unknown): {
 
 export const governanceRouter = new Hono<AppEnv>();
 
-governanceRouter.get("/proposals", (c) => {
+governanceRouter.get("/proposals", async (c) => {
   const fh = c.get("freehold");
-  const proposals = pending(fh.graph);
+  const proposals = await pending(fh.graph);
   return c.json({ proposals });
 });
 
@@ -76,9 +76,9 @@ governanceRouter.post("/proposals/:hash/reject", async (c) => {
   }
 });
 
-governanceRouter.get("/verify", (c) => {
+governanceRouter.get("/verify", async (c) => {
   const fh = c.get("freehold");
-  const report = verifyGraph(fh.graph);
+  const report = await verifyGraph(fh.graph);
   return c.json(report);
 });
 
@@ -89,9 +89,9 @@ governanceRouter.post("/reindex", async (c) => {
   return c.json({ status: "ok" });
 });
 
-governanceRouter.get("/principals", (c) => {
+governanceRouter.get("/principals", async (c) => {
   const fh = c.get("freehold");
-  const list = principals(fh.graph);
+  const list = await principals(fh.graph);
   return c.json({ principals: list });
 });
 

@@ -5,6 +5,7 @@
  */
 
 import type { AllodGraph } from "@allod/core";
+import { withGraph } from "./lock.js";
 import type { AttributeDiff, PrincipalView, ProposalView, VerifyReport } from "./types.js";
 
 // ---- Raw Allod shapes ----
@@ -128,6 +129,8 @@ function buildSummary(agent: string, ops: RawOp[]): string {
  * Build op-level diffs from changeset ops.
  * For create ops, `before` is null, `after` is the new attribute value.
  * For update ops, `before` is the current value from object_get, `after` is the new value.
+ *
+ * Called from within a withGraph critical section — must NOT call withGraph itself.
  */
 function buildDiff(graph: AllodGraph, ops: RawOp[]): AttributeDiff[] {
   const diffs: AttributeDiff[] = [];
@@ -186,44 +189,46 @@ function checkIsSchemaProposal(ops: RawOp[]): boolean {
  * a plain-language summary, op-level diff, matched policy rule names,
  * and a schema-proposal flag.
  */
-export function pending(graph: AllodGraph): ProposalView[] {
-  const raw = graph.proposals() as RawProposalSummary[];
-  if (!Array.isArray(raw)) return [];
+export async function pending(graph: AllodGraph): Promise<ProposalView[]> {
+  return withGraph(graph, () => {
+    const raw = graph.proposals() as RawProposalSummary[];
+    if (!Array.isArray(raw)) return [];
 
-  return raw.map((p) => {
-    const hash = p.hash ?? "";
-    const intent = p.intent ?? "";
-    const agent = principalName(p.author);
+    return raw.map((p) => {
+      const hash = p.hash ?? "";
+      const intent = p.intent ?? "";
+      const agent = principalName(p.author);
 
-    // Fetch full changeset to get operations
-    let ops: RawOp[] = [];
-    try {
-      const cs = (graph as unknown as { proposal_get(hash: string): RawChangeset }).proposal_get(
-        hash
-      );
-      ops = cs?.operations ?? [];
-    } catch {
-      // Fall back to empty ops — summary/diff will be generic
-    }
-
-    // Fetch matched rule names via policy re-evaluation
-    let rules: string[] = [];
-    try {
-      const checklist = (
-        graph as unknown as { proposal_checklist(hash: string): string[] }
-      ).proposal_checklist(hash);
-      if (Array.isArray(checklist)) {
-        rules = checklist;
+      // Fetch full changeset to get operations
+      let ops: RawOp[] = [];
+      try {
+        const cs = (graph as unknown as { proposal_get(hash: string): RawChangeset }).proposal_get(
+          hash
+        );
+        ops = cs?.operations ?? [];
+      } catch {
+        // Fall back to empty ops — summary/diff will be generic
       }
-    } catch {
-      // Leave rules empty on failure
-    }
 
-    const summary = buildSummary(agent, ops);
-    const diff = buildDiff(graph, ops);
-    const isSchemaProposal = checkIsSchemaProposal(ops);
+      // Fetch matched rule names via policy re-evaluation
+      let rules: string[] = [];
+      try {
+        const checklist = (
+          graph as unknown as { proposal_checklist(hash: string): string[] }
+        ).proposal_checklist(hash);
+        if (Array.isArray(checklist)) {
+          rules = checklist;
+        }
+      } catch {
+        // Leave rules empty on failure
+      }
 
-    return { hash, agent, intent, summary, rules, diff, isSchemaProposal };
+      const summary = buildSummary(agent, ops);
+      const diff = buildDiff(graph, ops);
+      const isSchemaProposal = checkIsSchemaProposal(ops);
+
+      return { hash, agent, intent, summary, rules, diff, isSchemaProposal };
+    });
   });
 }
 
@@ -277,9 +282,11 @@ function parseDecisionOutcome(raw: unknown): {
  * Approve a held proposal by hash.
  */
 export async function approve(graph: AllodGraph, by: string, hash: string): Promise<ApproveResult> {
-  const raw = await graph.decide(hash, by, "approve");
-  const parsed = parseDecisionOutcome(raw);
-  return { hash, ...parsed };
+  return withGraph(graph, async () => {
+    const raw = await graph.decide(hash, by, "approve");
+    const parsed = parseDecisionOutcome(raw);
+    return { hash, ...parsed };
+  });
 }
 
 export interface RejectResult {
@@ -291,39 +298,45 @@ export interface RejectResult {
  * Reject a held proposal by hash.
  */
 export async function reject(graph: AllodGraph, by: string, hash: string): Promise<RejectResult> {
-  const raw = await graph.decide(hash, by, "reject");
-  const parsed = parseDecisionOutcome(raw);
-  return { hash, status: parsed.status as "rejected" };
+  return withGraph(graph, async () => {
+    const raw = await graph.decide(hash, by, "reject");
+    const parsed = parseDecisionOutcome(raw);
+    return { hash, status: parsed.status as "rejected" };
+  });
 }
 
 /**
  * Run the full cryptographic verification of the graph chain.
  */
-export function verifyGraph(graph: AllodGraph): VerifyReport {
-  const raw = graph.verify() as RawVerifyReport;
-  return {
-    ok: raw.ok ?? false,
-    stateHash: raw.state_hash,
-    degraded: (raw.degraded ?? []).map((reason, i) => ({ id: String(i), reason })),
-  };
+export async function verifyGraph(graph: AllodGraph): Promise<VerifyReport> {
+  return withGraph(graph, () => {
+    const raw = graph.verify() as RawVerifyReport;
+    return {
+      ok: raw.ok ?? false,
+      stateHash: raw.state_hash,
+      degraded: (raw.degraded ?? []).map((reason, i) => ({ id: String(i), reason })),
+    };
+  });
 }
 
 /**
  * Return the list of principals (users and agents) registered in the graph.
  */
-export function principals(graph: AllodGraph): PrincipalView[] {
-  const raw = graph.state() as RawStateView;
-  if (!raw?.nodes) return [];
-  return raw.nodes
-    .filter((n) => {
-      const bare = n.type_ref?.split("@")[0] ?? "";
-      return bare === "core/User" || bare === "core/Agent" || bare === "core/Service";
-    })
-    .map((n) => {
-      const bare = n.type_ref?.split("@")[0] ?? "";
-      const kind = bare.split("/")[1]?.toLowerCase() ?? "user";
-      return { name: n.label ?? "", kind };
-    });
+export async function principals(graph: AllodGraph): Promise<PrincipalView[]> {
+  return withGraph(graph, () => {
+    const raw = graph.state() as RawStateView;
+    if (!raw?.nodes) return [];
+    return raw.nodes
+      .filter((n) => {
+        const bare = n.type_ref?.split("@")[0] ?? "";
+        return bare === "core/User" || bare === "core/Agent" || bare === "core/Service";
+      })
+      .map((n) => {
+        const bare = n.type_ref?.split("@")[0] ?? "";
+        const kind = bare.split("/")[1]?.toLowerCase() ?? "user";
+        return { name: n.label ?? "", kind };
+      });
+  });
 }
 
 /**
@@ -338,18 +351,20 @@ export async function registerAgent(
   agentName: string,
   by: string
 ): Promise<{ name: string; mcpSnippet: string }> {
-  await graph.principal_add(agentName, "agent", by);
-  const mcpSnippet = JSON.stringify(
-    {
-      mcpServers: {
-        freehold: {
-          command: "npx",
-          args: ["@freehold/mcp", "--agent", agentName],
+  return withGraph(graph, async () => {
+    await graph.principal_add(agentName, "agent", by);
+    const mcpSnippet = JSON.stringify(
+      {
+        mcpServers: {
+          freehold: {
+            command: "npx",
+            args: ["@freehold/mcp", "--agent", agentName],
+          },
         },
       },
-    },
-    null,
-    2
-  );
-  return { name: agentName, mcpSnippet };
+      null,
+      2
+    );
+    return { name: agentName, mcpSnippet };
+  });
 }

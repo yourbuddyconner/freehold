@@ -11,6 +11,11 @@
  *
  * syncIndex  — incremental: only processes new log entries
  * reindex    — destructive: wipes PGlite and calls syncIndex
+ *
+ * Graph access is serialized through withGraph to prevent wasm-bindgen aliasing
+ * errors (AllodGraph holds a Rust &mut borrow across async persists). All graph
+ * reads are batched inside a single withGraph call; PGlite writes happen outside
+ * the lock to avoid holding it during unrelated I/O.
  */
 
 import { existsSync, readFileSync } from "node:fs";
@@ -19,6 +24,7 @@ import { load as yamlLoad } from "js-yaml";
 import { fmtVec } from "./db.js";
 import type { Embedder } from "./embed.js";
 import type { Freehold } from "./graphs.js";
+import { withGraph } from "./lock.js";
 
 // UUID v4 pattern (lowercase hex with hyphens)
 const UUID_RE = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
@@ -179,15 +185,20 @@ function collectNodeOps(
  *
  * Idempotent: calling this twice in a row is safe (the second call is a no-op
  * if no new changesets were admitted between calls).
+ *
+ * Graph reads (log + object_get calls) are serialized through withGraph.
+ * PGlite writes happen outside the lock to avoid holding it during unrelated I/O.
  */
 export async function syncIndex(freehold: Freehold, embedder: Embedder): Promise<void> {
   const { pg } = freehold.db;
 
-  // Step 1: get the admitted log
-  const log = freehold.graph.log() as RawLogEntry[];
+  // Step 1: get the admitted log — serialized through the graph lock
+  const log = await withGraph(freehold.graph, () => {
+    return freehold.graph.log() as RawLogEntry[];
+  });
   if (!Array.isArray(log)) return;
 
-  // Step 2: check indexed_head
+  // Step 2: check indexed_head (PGlite — no graph lock needed)
   const metaResult = await pg.query<{ value: string }>(
     "SELECT value FROM meta WHERE key = 'indexed_head'"
   );
@@ -201,6 +212,7 @@ export async function syncIndex(freehold: Freehold, embedder: Embedder): Promise
   const newEntries = log.slice(indexedHead);
 
   // Step 4: collect node operations from new changeset files (structural YAML parse)
+  // collectNodeOps reads the filesystem only — no graph lock needed
   const { nodeMap: nodeOps, warnings } = collectNodeOps(freehold, newEntries);
 
   // Surface any file-read warnings. A missing changeset during indexing is not
@@ -209,7 +221,11 @@ export async function syncIndex(freehold: Freehold, embedder: Embedder): Promise
     console.warn(w);
   }
 
-  // Step 5+6: for each node, fetch content via object_get and upsert into objects.
+  // Step 5+6: for each node, fetch content via object_get (inside lock) then
+  // upsert into PGlite (outside lock). We batch the graph reads so we hold
+  // the lock for one acquisition per node, not one giant critical section that
+  // includes all the async PGlite work.
+  //
   // Non-UUID node ids (meta schema nodes like "memory/Note@1") are skipped here
   // because object_get("node", non-uuid) returns null; they are not user-facing
   // objects and carry no search_text per the F3 decision.
@@ -217,18 +233,26 @@ export async function syncIndex(freehold: Freehold, embedder: Embedder): Promise
     // Skip non-UUID ids: meta/schema nodes use path-style ids, not UUIDs
     if (!UUID_RE.test(nodeId)) continue;
 
-    let objContent: Record<string, unknown> = {};
-
+    // Fetch object content under the graph lock
+    let objContent: Record<string, unknown> | null = null;
     try {
-      const obj = freehold.graph.object_get("node", nodeId) as RawObject | null;
-      if (!obj || obj.deleted) continue;
-      objContent = obj.content ?? {};
+      objContent = await withGraph(freehold.graph, () => {
+        const obj = (
+          freehold.graph as unknown as {
+            object_get(kind: string, id: string): RawObject | null;
+          }
+        ).object_get("node", nodeId);
+        if (!obj || obj.deleted) return null;
+        return obj.content ?? {};
+      });
     } catch (err) {
       console.warn(
         `[indexer] object_get("node", ${nodeId}) threw for changeset ${changesetHash}: ${err instanceof Error ? err.message : String(err)} — skipping node`
       );
       continue;
     }
+
+    if (objContent === null) continue;
 
     const isMeta = typeRef.split("@")[0].startsWith("meta/");
     const searchText = isMeta ? "" : extractSearchText(objContent);
@@ -239,7 +263,7 @@ export async function syncIndex(freehold: Freehold, embedder: Embedder): Promise
     const provenance = objContent.provenance as Record<string, unknown> | undefined;
     const method = (provenance?.method as string) ?? null;
 
-    // Upsert into objects table
+    // Upsert into objects table (PGlite — no graph lock needed)
     await pg.query(
       `INSERT INTO objects (id, kind, type, content, author, method, approval, changeset, search_text, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now())

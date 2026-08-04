@@ -5,6 +5,7 @@
  */
 
 import type { AllodGraph } from "@allod/core";
+import { withGraph } from "./lock.js";
 import type {
   Admission,
   EdgeTypeView,
@@ -54,36 +55,38 @@ interface RawSchemaDescription {
 /**
  * Return a human-friendly description of the ontology loaded in the graph.
  */
-export function describeSchema(graph: AllodGraph): SchemaDescription {
-  const raw = graph.describe_schema() as RawSchemaDescription;
+export async function describeSchema(graph: AllodGraph): Promise<SchemaDescription> {
+  return withGraph(graph, () => {
+    const raw = graph.describe_schema() as RawSchemaDescription;
 
-  const entityTypes: EntityTypeView[] = (raw.entity_types ?? []).map((et) => {
-    const attrs: Record<string, unknown> = {};
-    for (const a of et.attributes ?? []) {
-      attrs[a.name] = { type: a.type_expr, required: a.required };
-    }
-    // name from allod is already "package/TypeName"
-    const parts = et.name.split("/");
-    return {
-      name: et.name,
-      package: parts[0],
-      attributes: Object.keys(attrs).length > 0 ? attrs : undefined,
-      extends: et.extends ?? undefined,
-    };
+    const entityTypes: EntityTypeView[] = (raw.entity_types ?? []).map((et) => {
+      const attrs: Record<string, unknown> = {};
+      for (const a of et.attributes ?? []) {
+        attrs[a.name] = { type: a.type_expr, required: a.required };
+      }
+      // name from allod is already "package/TypeName"
+      const parts = et.name.split("/");
+      return {
+        name: et.name,
+        package: parts[0],
+        attributes: Object.keys(attrs).length > 0 ? attrs : undefined,
+        extends: et.extends ?? undefined,
+      };
+    });
+
+    const edgeTypes: EdgeTypeView[] = (raw.edge_types ?? []).map((edge) => ({
+      name: edge.name,
+      domain: (edge.domain ?? []).join(", ") || undefined,
+      range: (edge.range ?? []).join(", ") || undefined,
+    }));
+
+    const terms: TermView[] = (raw.terms ?? []).map((t) => ({
+      name: t.name,
+      parent: (t.parents ?? [])[0],
+    }));
+
+    return { entityTypes, edgeTypes, terms };
   });
-
-  const edgeTypes: EdgeTypeView[] = (raw.edge_types ?? []).map((edge) => ({
-    name: edge.name,
-    domain: (edge.domain ?? []).join(", ") || undefined,
-    range: (edge.range ?? []).join(", ") || undefined,
-  }));
-
-  const terms: TermView[] = (raw.terms ?? []).map((t) => ({
-    name: t.name,
-    parent: (t.parents ?? [])[0],
-  }));
-
-  return { entityTypes, edgeTypes, terms };
 }
 
 export type OntologyProposalResult = Admission;
@@ -104,6 +107,8 @@ interface RawStateView {
 /**
  * Resolve the graph owner name (display_name of the first live core/User node).
  * Returns "owner" as a fallback if no user node is found.
+ *
+ * Called from within a withGraph critical section — must NOT call withGraph itself.
  */
 function resolveOwner(graph: AllodGraph): string {
   const raw = graph.state() as RawStateView;
@@ -163,8 +168,10 @@ export async function proposeOntologyChange(
   ontologyYaml: string
 ): Promise<OntologyProposalResult> {
   const docsYaml = wrapDocsYaml(packageName, ontologyYaml);
-  const raw = await graph.install_package(docsYaml, by);
-  return parseInstallAdmission(raw);
+  return withGraph(graph, async () => {
+    const raw = await graph.install_package(docsYaml, by);
+    return parseInstallAdmission(raw);
+  });
 }
 
 // ---- Policy accessor ----
@@ -177,19 +184,23 @@ export async function proposeOntologyChange(
  * deserialized to a plain JS object) or `null` when no policy node exists.
  * The `definition` field is the JSON-stringified policy for stable string consumers.
  */
-export function getPolicy(
+export async function getPolicy(
   graph: AllodGraph
-): { name: string; definition: string; rules?: unknown[] } | null {
-  try {
-    const raw = (graph as unknown as { get_policy(): Record<string, unknown> | null }).get_policy();
-    if (!raw) return null;
-    const name = typeof raw.name === "string" ? raw.name : "memory-baseline";
-    const definition = JSON.stringify(raw);
-    const rules = Array.isArray(raw.rules) ? (raw.rules as unknown[]) : undefined;
-    return { name, definition, rules };
-  } catch {
-    return null;
-  }
+): Promise<{ name: string; definition: string; rules?: unknown[] } | null> {
+  return withGraph(graph, () => {
+    try {
+      const raw = (
+        graph as unknown as { get_policy(): Record<string, unknown> | null }
+      ).get_policy();
+      if (!raw) return null;
+      const name = typeof raw.name === "string" ? raw.name : "memory-baseline";
+      const definition = JSON.stringify(raw);
+      const rules = Array.isArray(raw.rules) ? (raw.rules as unknown[]) : undefined;
+      return { name, definition, rules };
+    } catch {
+      return null;
+    }
+  });
 }
 
 /**
@@ -205,11 +216,13 @@ export async function proposePolicyChange(
   graph: AllodGraph,
   policyYaml: string
 ): Promise<OntologyProposalResult> {
-  const owner = resolveOwner(graph);
-  const raw = await (
-    graph as unknown as { install_policy(yaml: string, by: string): Promise<unknown> }
-  ).install_policy(policyYaml, owner);
-  return parseInstallAdmission(raw);
+  return withGraph(graph, async () => {
+    const owner = resolveOwner(graph);
+    const raw = await (
+      graph as unknown as { install_policy(yaml: string, by: string): Promise<unknown> }
+    ).install_policy(policyYaml, owner);
+    return parseInstallAdmission(raw);
+  });
 }
 
 /**
@@ -230,21 +243,23 @@ export async function installOntology(
   graph: AllodGraph,
   docsYaml: string
 ): Promise<OntologyProposalResult> {
-  const owner = resolveOwner(graph);
-  // Check if docsYaml is already a mapping (contains `:` on the first non-blank line
-  // and the first key is not `ontology:`). If it looks like a bare ontology doc,
-  // wrap it under a default package name.
-  const trimmed = docsYaml.trimStart();
-  let wrappedYaml: string;
-  if (trimmed.startsWith("ontology:")) {
-    // Bare ontology doc — extract the ontology name for the key
-    const nameMatch = trimmed.match(/^ontology:\s*(\S+)/);
-    const pkgName = nameMatch?.[1] ?? "custom";
-    wrappedYaml = wrapDocsYaml(pkgName, docsYaml);
-  } else {
-    // Assume it's already a `{name: doc}` mapping
-    wrappedYaml = docsYaml;
-  }
-  const raw = await graph.install_package(wrappedYaml, owner);
-  return parseInstallAdmission(raw);
+  return withGraph(graph, async () => {
+    const owner = resolveOwner(graph);
+    // Check if docsYaml is already a mapping (contains `:` on the first non-blank line
+    // and the first key is not `ontology:`). If it looks like a bare ontology doc,
+    // wrap it under a default package name.
+    const trimmed = docsYaml.trimStart();
+    let wrappedYaml: string;
+    if (trimmed.startsWith("ontology:")) {
+      // Bare ontology doc — extract the ontology name for the key
+      const nameMatch = trimmed.match(/^ontology:\s*(\S+)/);
+      const pkgName = nameMatch?.[1] ?? "custom";
+      wrappedYaml = wrapDocsYaml(pkgName, docsYaml);
+    } else {
+      // Assume it's already a `{name: doc}` mapping
+      wrappedYaml = docsYaml;
+    }
+    const raw = await graph.install_package(wrappedYaml, owner);
+    return parseInstallAdmission(raw);
+  });
 }

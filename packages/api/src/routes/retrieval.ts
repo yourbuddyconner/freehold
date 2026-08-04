@@ -25,17 +25,17 @@ retrievalRouter.get("/recall", async (c) => {
   return c.json({ results });
 });
 
-retrievalRouter.get("/entities/:id", (c) => {
+retrievalRouter.get("/entities/:id", async (c) => {
   const id = c.req.param("id");
   const fh = c.get("freehold");
-  const entity = getEntity(fh.graph, id);
+  const entity = await getEntity(fh.graph, id);
   if (!entity) {
     return apiError(c, 404, ERROR_CODES.NOT_FOUND, `Entity '${id}' not found`);
   }
   return c.json(entity);
 });
 
-retrievalRouter.get("/entities/:id/traverse", (c) => {
+retrievalRouter.get("/entities/:id/traverse", async (c) => {
   const id = c.req.param("id");
   const edgeTypesRaw = c.req.query("edgeTypes");
   const direction = (c.req.query("direction") ?? "out") as "out" | "in" | "both";
@@ -43,6 +43,6 @@ retrievalRouter.get("/entities/:id/traverse", (c) => {
   const depth = depthRaw ? Number.parseInt(depthRaw, 10) : 1;
   const edgeTypes = edgeTypesRaw ? edgeTypesRaw.split(",") : undefined;
   const fh = c.get("freehold");
-  const results = traverse(fh.graph, id, edgeTypes, direction, depth);
+  const results = await traverse(fh.graph, id, edgeTypes, direction, depth);
   return c.json({ results });
 });

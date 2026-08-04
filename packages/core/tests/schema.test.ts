@@ -19,24 +19,24 @@ describe("schema", () => {
     graph = await createGraph(graphDir, "owner");
   });
 
-  test("describeSchema() returns correct shape with entityTypes, edgeTypes, terms", () => {
-    const schema = describeSchema(graph);
+  test("describeSchema() returns correct shape with entityTypes, edgeTypes, terms", async () => {
+    const schema = await describeSchema(graph);
     expect(typeof schema).toBe("object");
     expect(Array.isArray(schema.entityTypes)).toBe(true);
     expect(Array.isArray(schema.edgeTypes)).toBe(true);
     expect(Array.isArray(schema.terms)).toBe(true);
   });
 
-  test("describeSchema() includes memory/Note entity type", () => {
-    const schema = describeSchema(graph);
+  test("describeSchema() includes memory/Note entity type", async () => {
+    const schema = await describeSchema(graph);
     const noteType = schema.entityTypes.find(
       (et) => et.name === "memory/Note" || et.name.endsWith("/Note")
     );
     expect(noteType).toBeDefined();
   });
 
-  test("describeSchema() entityTypes have name and optional package/extends", () => {
-    const schema = describeSchema(graph);
+  test("describeSchema() entityTypes have name and optional package/extends", async () => {
+    const schema = await describeSchema(graph);
     for (const et of schema.entityTypes) {
       expect(typeof et.name).toBe("string");
       expect(et.name.length).toBeGreaterThan(0);
@@ -66,8 +66,8 @@ entity_types:
     expect(typeof result.hash).toBe("string");
   });
 
-  test("getPolicy() returns policy with rules after createGraph", () => {
-    const policy = getPolicy(graph);
+  test("getPolicy() returns policy with rules after createGraph", async () => {
+    const policy = await getPolicy(graph);
     expect(policy).not.toBeNull();
     expect(typeof policy?.name).toBe("string");
     expect(policy?.name.length).toBeGreaterThan(0);

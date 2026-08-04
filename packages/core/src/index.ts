@@ -1,5 +1,8 @@
 // @freehold/core — public API
 
+// Graph mutex
+export { withGraph } from "./lock.js";
+
 // Types
 export type {
   AdmissionStatus,
