@@ -336,12 +336,9 @@ function buildRegistry(): OpenAPIRegistry {
         q: z.string().openapi({ description: "Search query (required)" }),
         type: z.string().optional(),
         author: z.string().optional(),
-        status: z
-          .string()
-          .optional()
-          .openapi({
-            description: "Filter by approval state — maps to the `approval` field on RecallResult",
-          }),
+        status: z.string().optional().openapi({
+          description: "Filter by approval state — maps to the `approval` field on RecallResult",
+        }),
       }),
     },
     responses: {
