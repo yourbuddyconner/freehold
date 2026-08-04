@@ -25,6 +25,7 @@ governanceRouter.post("/proposals/:hash/approve", async (c) => {
   const hash = c.req.param("hash");
   const fh = c.get("freehold");
   const embedder = c.get("embedder");
+  // SAFETY: single-token model — bearer possession implies owner authority until multi-principal auth lands (post-v0).
   const result = await approve(fh.graph, "owner", hash);
   if (result.status === "admitted") {
     await syncIndex(fh, embedder);
@@ -35,6 +36,7 @@ governanceRouter.post("/proposals/:hash/approve", async (c) => {
 governanceRouter.post("/proposals/:hash/reject", async (c) => {
   const hash = c.req.param("hash");
   const fh = c.get("freehold");
+  // SAFETY: single-token model — bearer possession implies owner authority until multi-principal auth lands (post-v0).
   const result = await reject(fh.graph, "owner", hash);
   return c.json(result);
 });
@@ -69,6 +71,7 @@ governanceRouter.post("/agents", async (c) => {
     return apiError(c, 400, ERROR_CODES.VALIDATION, "Invalid request body");
   }
   const fh = c.get("freehold");
+  // SAFETY: single-token model — bearer possession implies owner authority until multi-principal auth lands (post-v0).
   const result = await registerAgent(fh.graph, parsed.data.name, "owner");
   return c.json(result);
 });
