@@ -58,17 +58,23 @@ export function createApp(
   //   packages/api/dist/app.js → ../../web/dist → packages/web/dist
   const webDistPath = new URL("../../web/dist", import.meta.url).pathname;
 
-  app.get("/", async (c) => {
+  // Cache the injected index.html after the first successful read so the
+  // filesystem is not hit on every request.
+  let cachedHtml: string | null = null;
+
+  async function serveIndex(c: Parameters<Parameters<typeof app.get>[1]>[0]): Promise<Response> {
     try {
-      const { readFile } = await import("node:fs/promises");
-      const html = await readFile(path.join(webDistPath, "index.html"), "utf-8");
-      const injected = html.replace(
-        '<meta name="freehold-token" content="">',
-        `<meta name="freehold-token" content="${config.token}">`
-      );
-      return c.html(injected);
+      if (cachedHtml === null) {
+        const { readFile } = await import("node:fs/promises");
+        const html = await readFile(path.join(webDistPath, "index.html"), "utf-8");
+        cachedHtml = html.replace(
+          '<meta name="freehold-token" content="">',
+          `<meta name="freehold-token" content="${config.token}">`
+        );
+      }
+      return c.html(cachedHtml);
     } catch {
-      // dist not built yet — F7 placeholder
+      // dist not built yet — placeholder fallback
       return c.html(`<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><title>Freehold</title></head>
@@ -79,13 +85,23 @@ export function createApp(
 </body>
 </html>`);
     }
-  });
+  }
 
-  // Serve static assets from web/dist
+  app.get("/", (c) => serveIndex(c));
+
+  // Serve static assets from web/dist.
+  // Security: resolve the full path and verify it stays within webDistPath
+  // before reading — prevents path traversal via `..` segments in the URL.
+  // Caching: Vite produces content-hashed filenames, so assets can be cached
+  // indefinitely by browsers.
   app.get("/assets/*", async (c) => {
     try {
       const { readFile } = await import("node:fs/promises");
-      const filePath = path.join(webDistPath, c.req.path);
+      // Strip the leading `/` so path.resolve treats it as relative to webDistPath
+      const filePath = path.resolve(webDistPath, c.req.path.slice(1));
+      if (!filePath.startsWith(webDistPath + path.sep)) {
+        return c.notFound();
+      }
       const data = await readFile(filePath);
       const ext = filePath.split(".").pop() ?? "";
       const contentTypes: Record<string, string> = {
@@ -100,10 +116,23 @@ export function createApp(
       };
       return c.body(data, 200, {
         "Content-Type": contentTypes[ext] ?? "application/octet-stream",
+        "Cache-Control": "public, max-age=31536000, immutable",
       });
     } catch {
       return c.notFound();
     }
+  });
+
+  // SPA catch-all: serve index.html for any non-API, non-MCP path so that
+  // hard refreshes and direct deep-links work with TanStack Router's History
+  // API routing. Unknown /api/* and /mcp paths return 404 so they don't
+  // silently serve HTML when a client misses a route.
+  app.get("*", (c) => {
+    const p = c.req.path;
+    if (p.startsWith("/api/") || p === "/api" || p === "/mcp" || p.startsWith("/mcp/")) {
+      return c.notFound();
+    }
+    return serveIndex(c);
   });
 
   return app;

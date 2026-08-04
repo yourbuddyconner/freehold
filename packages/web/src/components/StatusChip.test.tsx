@@ -20,10 +20,16 @@ describe("StatusChip", () => {
     expect(screen.getByRole("link", { name: "Verified ✓" })).toBeInTheDocument();
   });
 
-  it("is always a link (href required)", () => {
+  it("renders as a link when href is provided", () => {
     render(<StatusChip status="held" href="/proposals/abc123" />);
     const chip = screen.getByRole("link");
     expect(chip).toHaveAttribute("href", "/proposals/abc123");
+  });
+
+  it("renders as a non-interactive span when href is omitted", () => {
+    render(<StatusChip status="held" />);
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
+    expect(screen.getByText("Held")).toBeInTheDocument();
   });
 
   it("approved chip has approved-palette class reference", () => {

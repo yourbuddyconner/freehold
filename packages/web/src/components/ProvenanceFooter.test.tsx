@@ -41,6 +41,39 @@ describe("ProvenanceFooter", () => {
     expect(screen.getByTestId("provenance-approval")).toHaveTextContent("Approved");
   });
 
+  it("renders held status with amber palette class when approvalStatus=held", () => {
+    render(<ProvenanceFooter {...props} approvalLabel="Held" approvalStatus="held" />);
+    const badge = screen.getByTestId("provenance-approval");
+    expect(badge).toHaveTextContent("Held");
+    // StatusChip must apply the held palette class
+    const chip = badge.firstElementChild as HTMLElement;
+    expect(chip?.className).toContain("status-held");
+  });
+
+  it("renders rejected status with red palette class when approvalStatus=rejected", () => {
+    render(<ProvenanceFooter {...props} approvalLabel="Rejected" approvalStatus="rejected" />);
+    const badge = screen.getByTestId("provenance-approval");
+    expect(badge).toHaveTextContent("Rejected");
+    const chip = badge.firstElementChild as HTMLElement;
+    expect(chip?.className).toContain("status-rejected");
+  });
+
+  it("renders approved status with approved palette class when approvalStatus=approved", () => {
+    render(
+      <ProvenanceFooter
+        {...props}
+        approvalLabel="Approved"
+        approvalStatus="approved"
+        evidenceHref="/evidence/abc"
+      />
+    );
+    const badge = screen.getByTestId("provenance-approval");
+    const chip = badge.firstElementChild as HTMLElement;
+    expect(chip?.className).toContain("status-approved");
+    // When evidenceHref is set, StatusChip renders as an <a>
+    expect(chip?.tagName).toBe("A");
+  });
+
   it("renders truncated hash", () => {
     render(<ProvenanceFooter {...props} />);
     const hashEl = screen.getByTestId("provenance-hash");

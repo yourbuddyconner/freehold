@@ -381,3 +381,53 @@ describe("GET / — web console serving", () => {
     expect(text).not.toContain(token);
   });
 });
+
+describe("SPA catch-all routing", () => {
+  test("GET /memory returns HTML shell (not 404) when dist is absent", async () => {
+    const res = await app.request("/memory");
+    expect(res.status).toBe(200);
+    const text = await res.text();
+    expect(text).toContain("<html");
+  });
+
+  test("GET /settings returns HTML shell (not 404) when dist is absent", async () => {
+    const res = await app.request("/settings");
+    expect(res.status).toBe(200);
+    const text = await res.text();
+    expect(text).toContain("<html");
+  });
+
+  test("unknown /api/* path still returns 404", async () => {
+    const res = await app.request("/api/v1/does-not-exist", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(res.status).toBe(404);
+  });
+});
+
+describe("Static asset security and caching", () => {
+  // Hono normalises `..` segments before routing, so /assets/../../etc/passwd
+  // is delivered to the handler as /etc/passwd — it cannot reach the assets
+  // handler at all (falls through to the SPA catch-all which returns HTML, not
+  // the file). The containment check in the assets handler defends against any
+  // future case where a raw traversal path reaches it directly.
+  test("path traversal with encoded segments returns 404", async () => {
+    const res = await app.request("/assets/%2e%2e%2f%2e%2e%2fetc%2fpasswd");
+    expect(res.status).toBe(404);
+  });
+
+  test("valid /assets/* path that does not exist returns 404", async () => {
+    const res = await app.request("/assets/nonexistent-file.js");
+    expect(res.status).toBe(404);
+  });
+
+  test("traversal-normalised path does not return file contents", async () => {
+    // Hono normalises /assets/../../../etc/passwd → /etc/passwd which hits the
+    // SPA catch-all and returns HTML, not the file.
+    const res = await app.request("/assets/../../../etc/passwd");
+    expect(res.status).toBe(200); // catch-all serves SPA HTML, not the file
+    const text = await res.text();
+    expect(text).toContain("<html"); // HTML shell, not /etc/passwd contents
+    expect(text).not.toContain("root:"); // definitely not /etc/passwd
+  });
+});

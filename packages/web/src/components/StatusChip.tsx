@@ -21,23 +21,25 @@ const STATUS_LABELS: Record<StatusKind, string> = {
 
 interface StatusChipProps {
   status: StatusKind;
-  /** Link to the decision record, failing check, or rule — required per design. */
-  href: string;
+  /** Link to the decision record, failing check, or rule. When omitted, renders as a non-interactive span. */
+  href?: string;
   label?: string;
   className?: string;
 }
 
 export function StatusChip({ status, href, label, className }: StatusChipProps) {
-  return (
-    <a
-      href={href}
-      className={cn(
-        "inline-flex items-center rounded border px-1.5 py-0.5 text-[11px] font-medium tracking-wide no-underline transition-opacity hover:opacity-80",
-        STATUS_CLASSES[status],
-        className
-      )}
-    >
-      {label ?? STATUS_LABELS[status]}
-    </a>
+  const classes = cn(
+    "inline-flex items-center rounded border px-1.5 py-0.5 text-[11px] font-medium tracking-wide no-underline transition-opacity hover:opacity-80",
+    STATUS_CLASSES[status],
+    className
   );
+  const content = label ?? STATUS_LABELS[status];
+  if (href) {
+    return (
+      <a href={href} className={classes}>
+        {content}
+      </a>
+    );
+  }
+  return <span className={classes}>{content}</span>;
 }

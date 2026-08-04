@@ -21,4 +21,12 @@ export default defineConfig({
   build: {
     outDir: "dist",
   },
+  server: {
+    // Proxy API and MCP requests to the running daemon so `pnpm dev` works
+    // alongside `freehold serve` without CORS issues or token wiring changes.
+    proxy: {
+      "/api": "http://127.0.0.1:8710",
+      "/mcp": "http://127.0.0.1:8710",
+    },
+  },
 });

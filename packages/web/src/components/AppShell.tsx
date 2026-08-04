@@ -1,16 +1,25 @@
 import { Link, Outlet } from "@tanstack/react-router";
 import { Archive, BookOpen, GitBranch, Settings, Shield, SquareCheck } from "lucide-react";
+import type React from "react";
 import { cn } from "~/lib/cn";
 import { usePending } from "~/lib/hooks";
 
-const NAV = [
-  { to: "/inbox", label: "Inbox", icon: Archive },
+interface NavEntry {
+  to: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string; "aria-hidden"?: boolean | "true" | "false" }>;
+  /** When true, this nav item renders a count badge driven by the pending proposals query. */
+  badge?: boolean;
+}
+
+const NAV: NavEntry[] = [
+  { to: "/inbox", label: "Inbox", icon: Archive, badge: true },
   { to: "/memory", label: "Memory", icon: BookOpen },
   { to: "/schema", label: "Schema", icon: GitBranch },
   { to: "/policy", label: "Policy", icon: Shield },
   { to: "/verify", label: "Verify", icon: SquareCheck },
   { to: "/settings", label: "Settings", icon: Settings },
-] as const;
+];
 
 export function AppShell() {
   const { data } = usePending();
@@ -26,7 +35,7 @@ export function AppShell() {
         <div className="px-4 pb-4">
           <h1 className="font-serif text-lg font-semibold tracking-tight">Freehold</h1>
         </div>
-        {NAV.map(({ to, label, icon: Icon }) => (
+        {NAV.map(({ to, label, icon: Icon, badge }) => (
           <Link
             key={to}
             to={to}
@@ -39,7 +48,7 @@ export function AppShell() {
           >
             <Icon className="h-4 w-4 shrink-0" aria-hidden />
             <span>{label}</span>
-            {label === "Inbox" && pendingCount > 0 && (
+            {badge && pendingCount > 0 && (
               <span
                 aria-label={`${pendingCount} pending`}
                 className="ml-auto inline-flex h-4 w-4 items-center justify-center rounded-full bg-amber-500 text-[10px] font-bold text-white"

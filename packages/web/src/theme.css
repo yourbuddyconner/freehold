@@ -51,6 +51,6 @@ body {
   font-family: var(--font-mono);
 }
 
-.text-muted {
+@utility text-muted {
   color: var(--fg-muted);
 }

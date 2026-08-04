@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { cn } from "~/lib/cn";
+import { StatusChip, type StatusKind } from "./StatusChip";
 
 interface ProvenanceFooterProps {
   /** Which agent or human authored this memory. */
@@ -8,6 +9,10 @@ interface ProvenanceFooterProps {
   method: string;
   /** Approval status label (e.g. "Approved", "Held", "Pending"). */
   approvalLabel: string;
+  /** StatusKind for the approval badge — drives the colour via StatusChip. */
+  approvalStatus?: StatusKind;
+  /** Optional href linking the approval badge to the decision record. */
+  evidenceHref?: string;
   /** Full changeset hash (hex or similar). Displayed truncated; click to copy. */
   changesetHash: string;
   className?: string;
@@ -17,6 +22,8 @@ export function ProvenanceFooter({
   author,
   method,
   approvalLabel,
+  approvalStatus,
+  evidenceHref,
   changesetHash,
   className,
 }: ProvenanceFooterProps) {
@@ -48,12 +55,15 @@ export function ProvenanceFooter({
         <span data-testid="provenance-method">{method}</span>
       </span>
 
-      {/* Approval badge */}
-      <span
-        data-testid="provenance-approval"
-        className="inline-flex items-center rounded bg-green-100 text-green-700 dark:bg-green-700/20 dark:text-green-400 px-1.5 py-0.5 font-medium"
-      >
-        {approvalLabel}
+      {/* Approval badge — uses StatusChip so colour follows the status palette */}
+      <span data-testid="provenance-approval">
+        {approvalStatus ? (
+          <StatusChip status={approvalStatus} href={evidenceHref} label={approvalLabel} />
+        ) : (
+          <span className="inline-flex items-center rounded bg-neutral-100 dark:bg-neutral-800 px-1.5 py-0.5 font-medium">
+            {approvalLabel}
+          </span>
+        )}
       </span>
 
       {/* Changeset hash — mono, truncated, copy-on-click */}
