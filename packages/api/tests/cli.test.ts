@@ -147,11 +147,8 @@ describe("Founding loop (daemon + CLI)", () => {
       ["remember", "I prefer morning meetings", "--agent", "cli-test"],
       { FREEHOLD_HOME: home }
     );
-    // admitted → exit 0; held → exit 2
-    expect([0, 2]).toContain(code);
-    if (code === 0) {
-      expect(stdout.toLowerCase()).toMatch(/remember/i);
-    }
+    expect(code).toBe(0);
+    expect(stdout.toLowerCase()).toMatch(/remember/i);
   });
 
   test("remember --json returns admission shape", () => {
@@ -159,11 +156,10 @@ describe("Founding loop (daemon + CLI)", () => {
       ["--json", "remember", "test memory for recall", "--agent", "cli-test"],
       { FREEHOLD_HOME: home }
     );
-    // 0 = admitted, 2 = held
-    expect([0, 2]).toContain(code);
+    expect(code).toBe(0);
     const parsed = JSON.parse(stdout.trim());
     expect(parsed).toHaveProperty("status");
-    expect(["admitted", "held"]).toContain(parsed.status);
+    expect(parsed.status).toBe("admitted");
   });
 
   test("recall returns results array", () => {
@@ -238,16 +234,12 @@ describe("Exit-code matrix", () => {
       body: JSON.stringify({ name: heldTestAgent }),
     });
 
-    // memory/Preference@1 without classification is held (per governance rules).
-    // Drive the CLI with `remember --type memory/Preference@1` (no --classify).
-    // This should exit 2 if held, or 0 if admitted. We verify both paths work.
     const { code } = runCli(
       ["remember", "prefers tea", "--agent", heldTestAgent, "--type", "memory/Preference@1"],
       { FREEHOLD_HOME: home }
     );
 
-    // Exit code 2 (held) or 0 (admitted) are both valid depending on policy
-    expect([0, 2]).toContain(code);
+    expect(code).toBe(2);
   });
 
   test("bad token → exit code 4", () => {
