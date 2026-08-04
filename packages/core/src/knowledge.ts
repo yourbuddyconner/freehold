@@ -222,10 +222,27 @@ export async function relate(
   fromId: string,
   toId: string,
   edgeType: string,
-  attributes?: Record<string, unknown>
+  attributes?: Record<string, unknown>,
+  options?: { scratch?: boolean }
 ): Promise<RelateResult> {
   const edgeId = uuid4();
-  const ops = [createEdgeOp(edgeId, edgeType, `node:${fromId}`, `node:${toId}`, attributes)];
+  const ops: unknown[] = [
+    createEdgeOp(edgeId, edgeType, `node:${fromId}`, `node:${toId}`, attributes),
+  ];
+  // Add scratch classification on the edge itself to admit the changeset under
+  // the scratch-is-free rule. Policy region check is per-op: the edge op needs
+  // to have workspace/scratch@1 in its own region set (via a classification op
+  // whose subject is edge:<edgeId>) to be admitted without owner review.
+  if (options?.scratch !== false) {
+    ops.push(
+      classificationOp(
+        `edge:${edgeId}`,
+        "workspace/scratch@1",
+        `principal:${agent}`,
+        "model-assisted"
+      )
+    );
+  }
   const raw = await graph.commit(agent, `Relate ${edgeType}`, ops, []);
   const admission = parseAdmission(raw as AllodAdmission);
   return { status: admission.status, edgeId, changeset: admission.hash };

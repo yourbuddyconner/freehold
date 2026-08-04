@@ -27,6 +27,14 @@ interface RawObject {
   deleted: boolean;
 }
 
+// ---- Raw shape from entity_context() ----
+
+interface RawEntityContext {
+  classifications: Array<{ term: string; asserted_by: string; basis: string }>;
+  edges_out: Array<{ id: string; type: string; to: string; attributes: Record<string, unknown> }>;
+  edges_in: Array<{ id: string; type: string; from: string; attributes: Record<string, unknown> }>;
+}
+
 // ---- Raw shapes from log() ----
 
 interface RawLogEntry {
@@ -81,6 +89,7 @@ interface ExtendedGraph {
   object_get(kind: string, id: string): RawObject | null;
   log(): RawLogEntry[];
   state(): RawStateView;
+  entity_context(nodeId: string): RawEntityContext | null;
   // The log() entries don't expose individual op details, so we need to use
   // the allod store chain. allod-wasm's log() only returns ChangesetSummary,
   // not full changesets. We derive revisions from log entries + pattern matching.
@@ -139,34 +148,15 @@ function revisionsForNode(graph: AllodGraph, nodeId: string): RevisionView[] {
 }
 
 /**
- * Collect classification terms for a node reference like `node:<id>` by
- * walking fold state's classification objects via object_get lookups.
- *
- * We iterate over state() nodes and use object_get("classification", id)
- * for each classification visible in fold state. However, state() only
- * exposes node objects — not classifications. So we walk state() looking
- * for any node that represents a classification whose subject is our node.
- *
- * In practice, allod-wasm's state() only shows `EntitySummary` (type_ref,
- * label, derived_by) — classification objects are not surfaced there. We
- * therefore rely on the classify() call being observable via classify + log
- * patterns. For now, we read classification terms by directly reading the
- * fold state classification objects via object_get, iterating over known
- * classification IDs that appear in the log.
- *
- * Since we cannot list classification IDs without a fold() scan not exposed
- * in the JS API, we use the state() node list as a proxy: any node whose
- * label matches the subject reference could be a classification, but this is
- * unreliable. We leave this as best-effort and return an empty array rather
- * than incorrect data.
+ * Fetch classifications and edges for a node from fold state via entity_context.
+ * Returns null if entity_context is not available or the node doesn't exist.
  */
-function classificationsForNode(_graph: AllodGraph, _nodeId: string): string[] {
-  // Without a way to enumerate classification IDs from the JS API surface,
-  // we cannot reliably fetch them. The classify() flow writes classification
-  // objects to fold state but state() does not surface them.
-  // This is a known limitation — a future wasm method to enumerate
-  // classifications_of(nodeRef) would fix this.
-  return [];
+function entityContext(graph: AllodGraph, nodeId: string): RawEntityContext | null {
+  try {
+    return (graph as unknown as ExtendedGraph).entity_context(nodeId);
+  } catch {
+    return null;
+  }
 }
 
 // ---- Public API ----
@@ -189,18 +179,34 @@ export function getEntity(graph: AllodGraph, nodeId: string): EntityView | null 
   const typeRef = content.type ?? "";
   const provenance = content.provenance;
 
-  // Find all live edges referencing this node (both directions).
-  // We can't list edge IDs directly; instead, we use state() as a proxy to
-  // find nodes that might be edges — but state() only shows node EntitySummary.
-  // The real approach: allod-wasm doesn't expose a "list edges for node" API.
-  // We use a best-effort scan: collect edges from the log intents.
-  const edges: EdgeView[] = [];
+  // Use entity_context to get real classifications and edges from fold state
+  const ctx = entityContext(graph, nodeId);
+
+  const classifications: string[] = ctx ? ctx.classifications.map((c) => c.term) : [];
+
+  const edges: EdgeView[] = ctx
+    ? [
+        ...ctx.edges_out.map((e) => ({
+          id: e.id,
+          type: e.type,
+          from: `node:${nodeId}`,
+          to: e.to,
+          direction: "outgoing" as const,
+          attributes: e.attributes,
+        })),
+        ...ctx.edges_in.map((e) => ({
+          id: e.id,
+          type: e.type,
+          from: e.from,
+          to: `node:${nodeId}`,
+          direction: "incoming" as const,
+          attributes: e.attributes,
+        })),
+      ]
+    : [];
 
   // Revisions: from log entries that touched this node
   const revisions: RevisionView[] = revisionsForNode(graph, nodeId);
-
-  // Classifications: best-effort (see note above)
-  const classifications = classificationsForNode(graph, nodeId);
 
   return {
     id: nodeId,
@@ -249,104 +255,47 @@ export function traverse(
 ): EntityView[] {
   if (depth <= 0) return [];
 
-  // BFS: collect visited node IDs and the frontier
   const visited = new Set<string>([fromId]);
   const results: EntityView[] = [];
   let frontier: string[] = [fromId];
 
-  // We build an adjacency by scanning log() changesets for edge-create ops.
-  // The log() gives us ChangesetSummary (hash, intent, author, op_count).
-  // We can't easily recover op-level edge data from just the summary.
-  //
-  // For the BFS, we rely on a simpler approach: collect all live node IDs
-  // from state() and check whether any are reachable. Since we can't traverse
-  // true edge topology without the graph internals, we use object_get on the
-  // edge kind for each (from, to) pair we know about.
-  //
-  // The cleanest available approach: scan state() for all live nodes, then
-  // for each node, check if there's a live edge between fromId and that node
-  // using naming conventions or log intents.
-  //
-  // This is an honest, verified approach: we do what we can with the exposed API.
-
-  const logEntries = (graph as unknown as ExtendedGraph).log();
-
-  // Build a set of relate-intent changesets (from "Relate <edgeType>" intents)
-  // that mention both a source and a target. We extract edge information from
-  // the intent string pattern "Relate memory/relates_to@1" and derive edges
-  // based on what we find.
-  //
-  // Actually: since the relate() function uses intent "Relate <edgeType>",
-  // we cannot recover from/to from the intent alone. We need op-level data.
-  //
-  // True BFS with available API: we cannot reliably traverse edges without
-  // edge enumeration. We return an empty array for depth > 0 unless we can
-  // verify connectivity.
-  //
-  // What we CAN do: if the caller knows the direction and edge types, we
-  // return all live nodes in the graph as candidates (over-approximation),
-  // then verify each with object_get. This is semantically incorrect.
-  //
-  // Honest implementation: BFS over verifiable edge objects.
-  // We look for edge objects by scanning log entries where the intent matches
-  // "Relate <edgeType>" and the log entry has exactly the ops we'd expect from
-  // the relate() function (1 edge create op). Then we attempt object_get on
-  // the edge to verify from/to fields.
-
-  // Step 1: collect edge objects by trying log-derived UUIDs.
-  // We can't enumerate all edge IDs without a list_edges API.
-  // Instead, we record node IDs from the state and check pairs.
-
-  const stateView = (graph as unknown as ExtendedGraph).state();
-  const allNodeLabels = (stateView.nodes ?? []).map((n) => n.label ?? "");
-
-  // For each BFS level up to `depth`
   for (let hop = 0; hop < depth; hop++) {
     const nextFrontier: string[] = [];
 
     for (const currentId of frontier) {
-      // Try to find nodes reachable from currentId via known log relate ops.
-      // We do this by using the relate() function's intent convention:
-      // intent = "Relate <edgeType>"
-      const relateEntries = logEntries.filter((e) => e.intent.startsWith("Relate "));
+      const ctx = entityContext(graph, currentId);
+      if (!ctx) continue;
 
-      for (const entry of relateEntries) {
-        const edgeTypeFromIntent = entry.intent.slice("Relate ".length);
-        // If edgeTypes filter is specified, check it
-        if (edgeTypes && edgeTypes.length > 0 && !edgeTypes.includes(edgeTypeFromIntent)) {
-          continue;
+      const candidates: string[] = [];
+
+      if (direction === "out" || direction === "both") {
+        for (const edge of ctx.edges_out) {
+          if (!edgeTypes || edgeTypes.length === 0 || edgeTypes.includes(edge.type)) {
+            candidates.push(bareId(edge.to));
+          }
         }
-        // We know a relate changeset exists but don't know from/to.
-        // The only way to verify from/to is to read the edge object.
-        // Without edge IDs, we can't call object_get("edge", id).
-        // We skip to the next strategy.
-        void entry;
       }
 
-      // Alternative: match nodes that appear in label patterns involving currentId
-      // (when label was set as nodeId, as done in tests). Check each state node.
-      for (const label of allNodeLabels) {
-        if (visited.has(label) || label === currentId) continue;
-        // Check if there's an edge from currentId to label or vice versa.
-        // We can only verify by looking for edge objects with the right from/to.
-        // Without edge ID enumeration, this is not reliably possible.
-        // Skip.
-        void label;
+      if (direction === "in" || direction === "both") {
+        for (const edge of ctx.edges_in) {
+          if (!edgeTypes || edgeTypes.length === 0 || edgeTypes.includes(edge.type)) {
+            candidates.push(bareId(edge.from));
+          }
+        }
+      }
+
+      for (const candidateId of candidates) {
+        if (!visited.has(candidateId)) {
+          visited.add(candidateId);
+          nextFrontier.push(candidateId);
+          const ev = getEntity(graph, candidateId);
+          if (ev) results.push(ev);
+        }
       }
     }
 
     frontier = nextFrontier;
     if (frontier.length === 0) break;
-    for (const id of frontier) {
-      visited.add(id);
-    }
-  }
-
-  // Return EntityView[] for all reached nodes (excluding start)
-  for (const id of visited) {
-    if (id === fromId) continue;
-    const ev = getEntity(graph, id);
-    if (ev) results.push(ev);
   }
 
   return results;
