@@ -363,3 +363,21 @@ rules:
     expect(b.name).toBe("custom-test-policy");
   });
 });
+
+describe("GET / — web console serving", () => {
+  test("returns HTML when dist/index.html is missing (placeholder fallback)", async () => {
+    // The dist doesn't exist in test environment — should get the fallback HTML
+    const res = await app.request("/");
+    expect(res.status).toBe(200);
+    const text = await res.text();
+    expect(text).toContain("<html");
+    expect(text).toContain("Freehold");
+  });
+
+  test("fallback HTML does not contain the bearer token", async () => {
+    const res = await app.request("/");
+    const text = await res.text();
+    // The bearer token must not leak into placeholder HTML
+    expect(text).not.toContain(token);
+  });
+});

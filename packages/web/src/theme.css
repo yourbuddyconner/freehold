@@ -1,0 +1,56 @@
+@import "tailwindcss";
+@import "@fontsource/newsreader/400.css";
+@import "@fontsource/newsreader/400-italic.css";
+@import "@fontsource/newsreader/600.css";
+
+@theme {
+  /* Freehold status-ink palette */
+  --color-status-approved: oklch(0.55 0.14 145); /* verified/approved: green ink */
+  --color-status-approved-bg: oklch(0.96 0.04 145);
+  --color-status-held: oklch(0.62 0.14 75); /* held: amber */
+  --color-status-held-bg: oklch(0.97 0.04 75);
+  --color-status-degraded: oklch(0.55 0.02 250); /* degraded: slate */
+  --color-status-degraded-bg: oklch(0.95 0.01 250);
+  --color-status-rejected: oklch(0.52 0.18 25); /* rejected: red */
+  --color-status-rejected-bg: oklch(0.97 0.04 25);
+
+  /* Typography */
+  --font-serif: "Newsreader", Georgia, "Times New Roman", serif;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, Consolas, monospace;
+}
+
+:root {
+  --bg: oklch(0.99 0.002 80);
+  --bg-subtle: oklch(0.97 0.003 80);
+  --border: oklch(0.88 0.008 80);
+  --fg: oklch(0.15 0.01 80);
+  --fg-muted: oklch(0.48 0.01 80);
+}
+
+:root[data-theme="dark"] {
+  --bg: oklch(0.12 0.005 265);
+  --bg-subtle: oklch(0.16 0.005 265);
+  --border: oklch(0.28 0.008 265);
+  --fg: oklch(0.94 0.005 265);
+  --fg-muted: oklch(0.62 0.008 265);
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--bg);
+  color: var(--fg);
+  -webkit-font-smoothing: antialiased;
+}
+
+.font-serif {
+  font-family: var(--font-serif);
+}
+
+.font-mono {
+  font-family: var(--font-mono);
+}
+
+.text-muted {
+  color: var(--fg-muted);
+}

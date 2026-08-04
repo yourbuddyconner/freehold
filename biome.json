@@ -28,7 +28,8 @@
       "pkg",
       "*.d.ts",
       "pnpm-lock.yaml",
-      "packages/client/src/types.ts"
+      "packages/client/src/types.ts",
+      "packages/web/src/routeTree.gen.ts"
     ]
   }
 }
