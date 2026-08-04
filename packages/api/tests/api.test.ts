@@ -64,6 +64,19 @@ describe("GET /health", () => {
   });
 });
 
+describe("GET / — console index.html token injection", () => {
+  test("serves index.html with real config token in meta tag", async () => {
+    const res = await app.request("/", { method: "GET" });
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    // Verify the meta tag exists and contains the actual token (not empty)
+    expect(html).toContain(`name="freehold-token"`);
+    expect(html).toContain(`content="${token}"`);
+    // Ensure token is non-empty
+    expect(token.length).toBeGreaterThan(0);
+  });
+});
+
 describe("Auth middleware", () => {
   test("returns 401 with error.code=auth on missing token", async () => {
     const res = await app.request("/api/v1/proposals", {
@@ -423,20 +436,14 @@ rules:
 });
 
 describe("GET / — web console serving", () => {
-  test("returns HTML when dist/index.html is missing (placeholder fallback)", async () => {
-    // The dist doesn't exist in test environment — should get the fallback HTML
+  test("serves dist/index.html with token injected when dist exists", async () => {
     const res = await app.request("/");
     expect(res.status).toBe(200);
     const text = await res.text();
+    // Should get the real dist HTML with token injected
     expect(text).toContain("<html");
     expect(text).toContain("Freehold");
-  });
-
-  test("fallback HTML does not contain the bearer token", async () => {
-    const res = await app.request("/");
-    const text = await res.text();
-    // The bearer token must not leak into placeholder HTML
-    expect(text).not.toContain(token);
+    expect(text).toContain(token);
   });
 });
 

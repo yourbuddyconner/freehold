@@ -171,10 +171,9 @@ describe("SIGKILL recovery", () => {
     expect(preKillNoteId).toBeDefined();
 
     // a) Entity lookup by exact UUID — must be found (not a 404)
-    const entityRes = await fetch(
-      `http://127.0.0.1:${port}/api/v1/entities/${preKillNoteId}`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
+    const entityRes = await fetch(`http://127.0.0.1:${port}/api/v1/entities/${preKillNoteId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
     expect(entityRes.status).toBe(200);
     const entityBody = (await entityRes.json()) as { id?: string; type?: string; error?: unknown };
     // Must not be an error — the note must survive the SIGKILL + restart cycle

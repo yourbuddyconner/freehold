@@ -22,6 +22,11 @@ export function createApp(
   embedder: Embedder,
   config: FreeholdConfig
 ): Hono<AppEnv> {
+  // Validate token is not empty at boot
+  if (!config.token || config.token.trim() === "") {
+    throw new Error("Freehold config.token must be a non-empty string at app creation time");
+  }
+
   const app = new Hono<AppEnv>();
 
   // Global error handler — ensures any unhandled route error returns JSON
@@ -90,10 +95,25 @@ export function createApp(
       if (cachedHtml === null) {
         const { readFile } = await import("node:fs/promises");
         const html = await readFile(path.join(webDistPath, "index.html"), "utf-8");
-        cachedHtml = html.replace(
-          '<meta name="freehold-token" content="">',
-          `<meta name="freehold-token" content="${config.token}">`
-        );
+
+        // Replace or inject the freehold-token meta tag using a regex that
+        // matches any existing meta tag with that name, regardless of spacing or content.
+        const metaTagRegex = /<meta\s+name="freehold-token"[^>]*>/i;
+        const newMetaTag = `<meta name="freehold-token" content="${config.token}" />`;
+
+        if (metaTagRegex.test(html)) {
+          // Replace the existing meta tag
+          cachedHtml = html.replace(metaTagRegex, newMetaTag);
+        } else {
+          // Meta tag not found — inject it into <head>
+          const headEndRegex = /<\/head>/i;
+          if (headEndRegex.test(html)) {
+            cachedHtml = html.replace(headEndRegex, `  ${newMetaTag}\n  </head>`);
+          } else {
+            // No </head> found — fallback to appending to start of html
+            cachedHtml = `${newMetaTag}\n${html}`;
+          }
+        }
       }
       return c.html(cachedHtml);
     } catch {
