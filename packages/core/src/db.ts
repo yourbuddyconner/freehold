@@ -4,10 +4,24 @@
  * Opens (or creates) a PGlite database with pgvector and the Freehold schema.
  * Uses raw SQL for DDL because drizzle's type-safe schema declarations don't
  * handle vector(384) and tsvector cleanly with the pglite adapter.
+ *
+ * Binary mode (bun --compile):
+ *   PGlite's pglite.data and vector.tar.gz are NOT embedded by bun's bundler
+ *   automatically.  When running from a compiled binary (detected via the
+ *   "/$bunfs/" prefix on import.meta.url), we load these files from sidecar
+ *   paths placed next to the binary by compile-binary.mjs:
+ *     <binary-dir>/freehold.pglite.data
+ *     <binary-dir>/freehold.pglite.wasm
+ *     <binary-dir>/freehold.initdb.wasm
+ *     <binary-dir>/freehold.vector.tar.gz
+ *   and pass them via PGliteOptions (fsBundle, pgliteWasmModule, etc.) so
+ *   pglite never tries to read from the virtual /$bunfs filesystem.
  */
 
-import { PGlite } from "@electric-sql/pglite";
-import { vector } from "@electric-sql/pglite-pgvector";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { type Extension, type ExtensionSetupResult, PGlite } from "@electric-sql/pglite";
+import { vector as _vectorExt } from "@electric-sql/pglite-pgvector";
 
 export type DbHandle = { pg: PGlite };
 
@@ -52,8 +66,110 @@ export function fmtVec(vec: number[]): string {
   return `[${vec.join(",")}]`;
 }
 
+/**
+ * Detect whether we are running inside a `bun --compile` binary.
+ *
+ * In a compiled binary, all bundled module URLs have the synthetic prefix
+ * "/$bunfs/" rather than a real filesystem path.
+ */
+function isCompiledBinary(): boolean {
+  return import.meta.url.startsWith("file:///$bunfs/");
+}
+
+/**
+ * Return the directory that contains the compiled binary.
+ * Only call this when isCompiledBinary() is true.
+ */
+function binaryDir(): string {
+  return path.dirname(process.execPath);
+}
+
+/**
+ * Build PGlite options for the compiled binary case.
+ *
+ * Reads sidecar files from the directory containing the binary and returns
+ * options that bypass pglite's own file-loading logic (which would look in
+ * the virtual /$bunfs filesystem and fail).
+ *
+ * Expected sidecars (placed by compile-binary.mjs):
+ *   freehold.pglite.wasm  — pglite.wasm
+ *   freehold.pglite.data  — pglite.data (the FS bundle)
+ *   freehold.initdb.wasm  — initdb.wasm
+ *   freehold.vector.tar.gz — vector extension bundle
+ */
+function buildBinaryPgOptions(): {
+  fsBundle: Blob;
+  pgliteWasmModule: WebAssembly.Module;
+  initdbWasmModule: WebAssembly.Module;
+  vectorBundlePath: URL;
+} {
+  const dir = binaryDir();
+
+  const readSidecar = (name: string): ArrayBuffer => {
+    const p = path.join(dir, name);
+    if (!fs.existsSync(p)) {
+      throw new Error(
+        `[freehold] compiled binary is missing sidecar file: ${p}\nRun the build script to regenerate the binary with its sidecars.`
+      );
+    }
+    const buf = fs.readFileSync(p);
+    // slice() copies the underlying bytes into a plain ArrayBuffer (not SharedArrayBuffer)
+    return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
+  };
+
+  const pgliteWasmBytes = readSidecar("freehold.pglite.wasm");
+  const initdbWasmBytes = readSidecar("freehold.initdb.wasm");
+  const pgliteDataBytes = readSidecar("freehold.pglite.data");
+  const vectorTarGzPath = path.join(dir, "freehold.vector.tar.gz");
+  if (!fs.existsSync(vectorTarGzPath)) {
+    throw new Error(`[freehold] compiled binary is missing sidecar: ${vectorTarGzPath}`);
+  }
+
+  return {
+    fsBundle: new Blob([pgliteDataBytes]),
+    pgliteWasmModule: new WebAssembly.Module(pgliteWasmBytes),
+    initdbWasmModule: new WebAssembly.Module(initdbWasmBytes),
+    // file:// URL is accepted by pglite's extension loader for bundlePath
+    vectorBundlePath: new URL(`file://${vectorTarGzPath}`),
+  };
+}
+
+/**
+ * Build a custom vector extension that uses a sidecar bundlePath.
+ *
+ * In binary mode the normal vector extension's bundlePath points into /$bunfs
+ * which doesn't contain the .tar.gz file.  We replace it with a file:// URL
+ * that points at the sidecar placed next to the binary.
+ */
+function makeSidecarVectorExt(vectorBundlePath: URL): Extension {
+  return {
+    name: "vector",
+    setup: async (pg, emscriptenOpts): Promise<ExtensionSetupResult> => {
+      // Delegate to the real vector extension's setup so we inherit all its
+      // initialisation logic; then override the bundlePath it returns.
+      const base = await (_vectorExt as Extension).setup(pg, emscriptenOpts);
+      return { ...base, bundlePath: vectorBundlePath };
+    },
+  };
+}
+
 export async function openDb(pgDir: string): Promise<DbHandle> {
-  const pg = new PGlite(pgDir, { extensions: { vector } });
+  let pg: PGlite;
+
+  if (isCompiledBinary()) {
+    const { fsBundle, pgliteWasmModule, initdbWasmModule, vectorBundlePath } =
+      buildBinaryPgOptions();
+    const sidecarVector = makeSidecarVectorExt(vectorBundlePath);
+    pg = new PGlite(pgDir, {
+      extensions: { vector: sidecarVector },
+      fsBundle,
+      pgliteWasmModule,
+      initdbWasmModule,
+    });
+  } else {
+    pg = new PGlite(pgDir, { extensions: { vector: _vectorExt as unknown as Extension } });
+  }
+
   await pg.waitReady;
   await pg.exec(SCHEMA_SQL);
   return { pg };
