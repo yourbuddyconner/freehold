@@ -5,7 +5,8 @@ export type StatusKind = "approved" | "pending" | "degraded" | "rejected";
 const STATUS_CLASSES: Record<StatusKind, string> = {
   approved:
     "bg-[var(--color-status-approved-bg)] text-[var(--color-status-approved)] border-[var(--color-status-approved)]",
-  pending: "bg-[var(--color-status-pending-bg)] text-[var(--color-status-pending)] border-[var(--color-status-pending)]",
+  pending:
+    "bg-[var(--color-status-pending-bg)] text-[var(--color-status-pending)] border-[var(--color-status-pending)]",
   degraded:
     "bg-[var(--color-status-degraded-bg)] text-[var(--color-status-degraded)] border-[var(--color-status-degraded)]",
   rejected:

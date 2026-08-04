@@ -15,7 +15,8 @@ function LevelRow({ label, description, state, degradedItems = [] }: LevelRowPro
       className={cn(
         "border p-4 space-y-2",
         state === "ok" && "border-[var(--color-status-approved)] bg-[#f0fdf4] dark:bg-[#052e16]",
-        state === "degraded" && "border-[var(--color-status-pending)] bg-[#fffbeb] dark:bg-[#1c1408]",
+        state === "degraded" &&
+          "border-[var(--color-status-pending)] bg-[#fffbeb] dark:bg-[#1c1408]",
         (state === "pending" || state === "loading") && "border-[--border] bg-[--bg-subtle]"
       )}
     >

@@ -27,6 +27,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Build packages
+        run: pnpm -r build
+
       - name: Lint (biome)
         run: pnpm lint
 
@@ -76,6 +79,10 @@ jobs:
       - name: Install freehold dependencies
         working-directory: freehold
         run: pnpm install --frozen-lockfile
+
+      - name: Build packages
+        working-directory: freehold
+        run: pnpm -r build
 
       - name: Run API e2e tests (includes pi-agent E2E + kill test)
         working-directory: freehold
@@ -163,6 +170,9 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Build packages
+        run: pnpm -r build
 
       - name: Build binary (bun compile + sidecar copy)
         run: node packages/api/build/compile-binary.mjs
