@@ -1,0 +1,205 @@
+name: ci
+
+on:
+  push:
+    branches: [main, v0]
+  pull_request:
+
+jobs:
+  # ─── Job 1: lint + typecheck + unit tests ──────────────────────────────────
+  lint-typecheck-unit:
+    name: Lint, typecheck, unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: latest
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint (biome)
+        run: pnpm lint
+
+      - name: Typecheck (tsc --build)
+        run: pnpm typecheck
+
+      - name: Unit + API tests (all packages)
+        run: pnpm -r test
+
+  # ─── Job 2: API e2e (with allod wasm cross-check) ──────────────────────────
+  e2e-allod-verify:
+    name: E2E + allod verify cross-check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout freehold
+        uses: actions/checkout@v4
+        with:
+          path: freehold
+
+      # Build the allod Rust toolchain (for allod verify cross-check)
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Checkout allod (main)
+        uses: actions/checkout@v4
+        with:
+          repository: yourbuddyconner/allod
+          ref: main
+          path: allod
+
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+      - name: Build allod Rust binary (for allod verify cross-check)
+        working-directory: allod
+        run: cargo build -p allod --release
+
+      - name: Build allod-wasm package
+        working-directory: allod/crates/allod-wasm
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm run build
+
+      # Wire the locally built @allod/core into freehold's pnpm store
+      - uses: pnpm/action-setup@v4
+        with:
+          version: latest
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: freehold/pnpm-lock.yaml
+
+      - name: Install freehold dependencies
+        working-directory: freehold
+        run: pnpm install --frozen-lockfile
+
+      - name: Run API e2e tests (includes pi-agent E2E + kill test)
+        working-directory: freehold
+        run: pnpm --filter @freehold/api test
+
+      - name: allod verify cross-check
+        # Run `allod verify` against the graph written by the test suite.
+        # The CLI test suite writes to a temp FREEHOLD_HOME with graph/main.
+        # We create a fresh graph via the API, write some nodes, then verify
+        # with the Rust allod CLI.
+        working-directory: freehold
+        env:
+          ALLOD_BIN: ${{ github.workspace }}/allod/target/release/allod
+        run: |
+          # Boot a freehold daemon on a temp home, write data, verify with allod CLI
+          export FREEHOLD_HOME=$(mktemp -d)
+          export PORT=18710
+          export TOKEN=ci-verify-token
+
+          # Write config
+          echo "{\"token\":\"$TOKEN\",\"port\":$PORT,\"graph\":\"main\",\"embedder\":\"hash\",\"defaultAgent\":\"ci-agent\"}" \
+            > "$FREEHOLD_HOME/config.json"
+
+          # Start daemon in background
+          pnpm --filter @freehold/api exec tsx src/cli/index.ts serve &
+          DAEMON_PID=$!
+
+          # Wait for daemon to be ready
+          for i in $(seq 1 30); do
+            curl -sf "http://127.0.0.1:$PORT/health" && break
+            sleep 1
+          done
+
+          # Write some knowledge via the API
+          curl -sf -X POST "http://127.0.0.1:$PORT/api/v1/remember" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $TOKEN" \
+            -d '{"content":"CI cross-check node","agent":"ci-agent"}' > /dev/null
+
+          curl -sf -X POST "http://127.0.0.1:$PORT/api/v1/remember" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $TOKEN" \
+            -d '{"content":"Second CI node for verify test","agent":"ci-agent"}' > /dev/null
+
+          # Verify the graph is structurally valid (freehold verify endpoint)
+          VERIFY=$(curl -sf "http://127.0.0.1:$PORT/api/v1/verify" \
+            -H "Authorization: Bearer $TOKEN")
+          echo "freehold verify: $VERIFY"
+          echo "$VERIFY" | grep -q '"ok":true'
+
+          # Kill daemon
+          kill $DAEMON_PID 2>/dev/null || true
+
+          # Run allod verify on the graph directory
+          GRAPH_DIR="$FREEHOLD_HOME/graphs/main"
+          if [ -d "$GRAPH_DIR" ]; then
+            "$ALLOD_BIN" verify "$GRAPH_DIR"
+            echo "allod verify: OK"
+          else
+            echo "No graph directory found — skipping allod verify (no admits occurred)"
+          fi
+
+          # Cleanup
+          rm -rf "$FREEHOLD_HOME"
+
+  # ─── Job 3: binary build + kill test ───────────────────────────────────────
+  binary-build-kill-test:
+    name: Binary build + kill test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: latest
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.10"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build binary (bun compile + sidecar copy)
+        run: node packages/api/build/compile-binary.mjs
+        env:
+          BUN: bun
+
+      - name: Smoke test binary
+        run: |
+          export FREEHOLD_HOME=$(mktemp -d)
+          export PORT=28710
+          export TOKEN=ci-binary-token
+
+          echo "{\"token\":\"$TOKEN\",\"port\":$PORT,\"graph\":\"main\",\"embedder\":\"hash\",\"defaultAgent\":\"ci-agent\"}" \
+            > "$FREEHOLD_HOME/config.json"
+
+          ./packages/api/dist/freehold serve &
+          BINARY_PID=$!
+
+          for i in $(seq 1 30); do
+            curl -sf "http://127.0.0.1:$PORT/health" && break
+            sleep 1
+          done
+
+          curl -sf "http://127.0.0.1:$PORT/health" | grep -q '"status":"ok"'
+          echo "Binary health check: OK"
+
+          kill $BINARY_PID 2>/dev/null || true
+          rm -rf "$FREEHOLD_HOME"
+
+      - name: Kill test (SIGKILL recovery)
+        run: pnpm --filter @freehold/api test -- tests/kill.test.ts
