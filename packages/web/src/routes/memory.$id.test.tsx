@@ -24,6 +24,22 @@ vi.mock("~/lib/api", () => ({
   },
 }));
 
+// Mock the Link component to avoid router context issues in tests
+vi.mock("@tanstack/react-router", async () => {
+  const actual = await vi.importActual("@tanstack/react-router");
+  return {
+    ...actual,
+    Link: ({ to, params, children, ...props }: any) => {
+      const href = typeof to === "string" && params?.id ? `${to.replace("$id", params.id)}` : to;
+      return (
+        <a href={href} {...props}>
+          {children}
+        </a>
+      );
+    },
+  };
+});
+
 const sampleEntity = {
   type: "User",
   attributes: {
@@ -58,6 +74,38 @@ async function renderPage(entityData: typeof sampleEntity | undefined, loading =
     isError: false,
     error: null,
   } as unknown as ReturnType<typeof hooks.useEntity>);
+
+  // Mock usePending for AppShell
+  vi.mocked(hooks.usePending).mockReturnValue({
+    data: { proposals: [] },
+    isLoading: false,
+    isError: false,
+    error: null,
+  } as unknown as ReturnType<typeof hooks.usePending>);
+
+  // Mock useRecall for AppShell
+  vi.mocked(hooks.useRecall).mockReturnValue({
+    data: { results: [] },
+    isLoading: false,
+    isError: false,
+    error: null,
+  } as unknown as ReturnType<typeof hooks.useRecall>);
+
+  // Mock useSchema for AppShell
+  vi.mocked(hooks.useSchema).mockReturnValue({
+    data: { entityTypes: [], edgeTypes: [], terms: [] },
+    isLoading: false,
+    isError: false,
+    error: null,
+  } as unknown as ReturnType<typeof hooks.useSchema>);
+
+  // Mock useVerify for AppShell
+  vi.mocked(hooks.useVerify).mockReturnValue({
+    data: undefined,
+    isLoading: false,
+    isError: false,
+    error: null,
+  } as unknown as ReturnType<typeof hooks.useVerify>);
 
   await act(async () => {
     render(

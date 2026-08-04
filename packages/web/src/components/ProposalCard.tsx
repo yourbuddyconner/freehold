@@ -8,6 +8,12 @@ interface DiffEntry {
   after?: unknown;
 }
 
+interface SchemaProposalMeta {
+  name?: string;
+  extends?: string;
+  definition?: string;
+}
+
 interface Proposal {
   hash: string;
   agent: string;
@@ -38,6 +44,78 @@ function AgentMark({ agent }: { agent: string }) {
   );
 }
 
+function parseSchemaProposalMeta(diff: DiffEntry[]): SchemaProposalMeta | null {
+  // For a schema proposal, the first diff entry typically contains the schema create op
+  // with the entity type name as the key and a definition structure as the value
+  for (const entry of diff) {
+    if (entry.after && typeof entry.after === "object" && !Array.isArray(entry.after)) {
+      // The key is the entity type name
+      const obj = entry.after as Record<string, unknown>;
+      // Look for attributes or definition field
+      if (obj.attributes || obj.extends || typeof obj === "object") {
+        return {
+          name: entry.key,
+          extends: typeof obj === "object" && !Array.isArray(obj) && "extends" in obj ? (obj as any).extends : undefined,
+          definition: typeof obj === "object" && !Array.isArray(obj) && "attributes" in obj ? JSON.stringify((obj as any).attributes, null, 2) : undefined,
+        };
+      }
+    }
+  }
+  return null;
+}
+
+function SchemaTypeDefinition({ meta }: { meta: SchemaProposalMeta }) {
+  if (!meta.name) return null;
+
+  let attributes: Record<string, unknown> = {};
+
+  // Try to extract attributes from the definition JSON or from structured data
+  if (meta.definition) {
+    try {
+      const parsed = JSON.parse(meta.definition);
+      if (typeof parsed === "object" && parsed !== null) {
+        attributes = parsed;
+      }
+    } catch {
+      // If not JSON, treat as plain string attributes
+      attributes = {};
+    }
+  }
+
+  return (
+    <div className="rounded border border-[--border] bg-[--bg-subtle] p-3 space-y-2 font-mono text-[11px]">
+      <div className="text-[--fg-muted]">Type definition:</div>
+      <div className="pl-2 space-y-1.5">
+        <div className="text-[--fg]">
+          <span className="font-semibold">{meta.name}</span>
+          {meta.extends && (
+            <>
+              <span className="text-[--fg-muted]"> extends </span>
+              <span>{meta.extends}</span>
+            </>
+          )}
+        </div>
+        {Object.keys(attributes).length > 0 ? (
+          <table className="w-full text-[10px] border-collapse ml-2">
+            <tbody>
+              {Object.entries(attributes).map(([key, value]) => (
+                <tr key={key} className="border-b border-[--border] border-opacity-30">
+                  <td className="py-0.5 pr-2 text-[--fg-muted]">{key}:</td>
+                  <td className="py-0.5 text-[--fg]">
+                    {typeof value === "string" ? value : JSON.stringify(value)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <div className="text-[--fg-muted] pl-2 italic">No attributes defined</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function ProposalCard({
   proposal,
   onApprove,
@@ -46,6 +124,7 @@ export function ProposalCard({
   isRejecting,
 }: ProposalCardProps) {
   const { hash, agent, intent, summary, rules, diff, isSchemaProposal } = proposal;
+  const schemaMeta = isSchemaProposal ? parseSchemaProposalMeta(diff) : null;
 
   return (
     <article
@@ -90,6 +169,9 @@ export function ProposalCard({
           ))}
         </div>
       )}
+
+      {/* Schema type definition preview */}
+      {schemaMeta && <SchemaTypeDefinition meta={schemaMeta} data-testid="schema-definition" />}
 
       {/* Diff */}
       <DiffView diff={diff} />

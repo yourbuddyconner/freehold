@@ -160,4 +160,43 @@ describe("Memory browser", () => {
     });
     expect(screen.getByText(/No memories match your search/)).toBeInTheDocument();
   });
+
+  it("author filter chip renders", async () => {
+    await renderMemory();
+    expect(screen.getByTestId("author-filter-claude-code")).toBeInTheDocument();
+  });
+
+  it("clicking author filter toggles active state (adds bg-[--fg] class)", async () => {
+    await renderMemory();
+    const authorBtn = screen.getByTestId("author-filter-claude-code");
+    await act(async () => {
+      fireEvent.click(authorBtn);
+    });
+    expect(authorBtn.className).toContain("bg-[--fg]");
+  });
+
+  it("toggling author filter composes the query", async () => {
+    await renderMemory({ results: [sampleResult] });
+    const input = screen.getByRole("searchbox", { name: /search memories/i });
+
+    // Set query
+    await act(async () => {
+      fireEvent.change(input, { target: { value: "alice" } });
+    });
+
+    // Toggle author filter
+    const authorBtn = screen.getByTestId("author-filter-claude-code");
+    await act(async () => {
+      fireEvent.click(authorBtn);
+    });
+
+    // Verify useRecall was called with author filter in the filters object
+    expect(vi.mocked(hooks.useRecall)).toHaveBeenCalledWith(
+      "alice",
+      expect.objectContaining({
+        author: "claude-code",
+      }),
+      true
+    );
+  });
 });

@@ -44,7 +44,18 @@ const schemaProposal = {
   intent: "add type",
   summary: "Adds a new ProjectTask entity type to the schema.",
   rules: [] as string[],
-  diff: [{ key: "ProjectTask", after: { attributes: { title: "string" } } }],
+  diff: [
+    {
+      key: "ProjectTask",
+      after: {
+        attributes: {
+          title: "string",
+          description: "string",
+          status: "string",
+        },
+      },
+    },
+  ],
   isSchemaProposal: true,
 };
 
@@ -167,6 +178,27 @@ describe("Inbox", () => {
     expect(screen.getByTestId("schema-badge")).toHaveTextContent("Schema proposal");
   });
 
+  it("schema proposal renders type definition block with type name and attributes", async () => {
+    await renderInbox([schemaProposal]);
+    expect(screen.getByText("Type definition:")).toBeInTheDocument();
+    expect(screen.getByText("ProjectTask")).toBeInTheDocument();
+    // Check for at least one attribute row
+    expect(screen.getByText("title:")).toBeInTheDocument();
+    // The table should have at least 3 rows (title, description, status)
+    const tables = screen.queryAllByRole("table");
+    expect(tables.length).toBeGreaterThan(0);
+  });
+
+  it("diff toggle shows aria-expanded attribute", async () => {
+    await renderInbox([normalProposal]);
+    const showDiff = screen.getByRole("button", { name: /show diff/i });
+    expect(showDiff).toHaveAttribute("aria-expanded", "false");
+    await act(async () => {
+      fireEvent.click(showDiff);
+    });
+    expect(showDiff).toHaveAttribute("aria-expanded", "true");
+  });
+
   it("diff toggle shows key labels after clicking Show diff", async () => {
     await renderInbox([normalProposal]);
     const showDiff = screen.getByRole("button", { name: /show diff/i });
@@ -176,5 +208,68 @@ describe("Inbox", () => {
     // email is an added key (after only), name is changed (before+after)
     expect(screen.getByText("email:")).toBeInTheDocument();
     expect(screen.getByText("name:")).toBeInTheDocument();
+  });
+
+  it("clicking approve button and then confirming invalidates queries", async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const invalidateSpy = vi.spyOn(qc, "invalidateQueries");
+
+    vi.mocked(hooks.usePending).mockReturnValue({
+      data: { proposals: [normalProposal] },
+      isLoading: false,
+      isError: false,
+      error: null,
+    } as unknown as ReturnType<typeof hooks.usePending>);
+    vi.mocked(hooks.useRecall).mockReturnValue({
+      data: { results: [] },
+      isLoading: false,
+      isError: false,
+      error: null,
+    } as unknown as ReturnType<typeof hooks.useRecall>);
+    vi.mocked(hooks.useSchema).mockReturnValue({
+      data: { entityTypes: [], edgeTypes: [], terms: [] },
+      isLoading: false,
+      isError: false,
+      error: null,
+    } as unknown as ReturnType<typeof hooks.useSchema>);
+    vi.mocked(hooks.useVerify).mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: false,
+      error: null,
+    } as unknown as ReturnType<typeof hooks.useVerify>);
+
+    const router = createRouter({
+      routeTree,
+      history: createMemoryHistory({ initialEntries: ["/inbox"] }),
+    });
+    await act(async () => {
+      render(
+        <QueryClientProvider client={qc}>
+          <RouterProvider router={router} />
+        </QueryClientProvider>
+      );
+    });
+
+    // Open dialog
+    const triggerBtn = screen.getAllByRole("button", { name: /^approve$/i })[0];
+    await act(async () => {
+      fireEvent.click(triggerBtn);
+    });
+
+    // Click approve in dialog
+    const dialogApproveBtn = screen
+      .getAllByRole("button", { name: /^approve$/i })
+      .find((b) => b.closest("[role=dialog]"));
+    expect(dialogApproveBtn).toBeDefined();
+
+    await act(async () => {
+      // biome-ignore lint/style/noNonNullAssertion: existence asserted above with toBeDefined()
+      fireEvent.click(dialogApproveBtn!);
+    });
+
+    // Verify invalidateQueries was called with the proposals key
+    expect(invalidateSpy).toHaveBeenCalledWith(expect.objectContaining({ queryKey: ["proposals"] }));
+    invalidateSpy.mockRestore();
   });
 });

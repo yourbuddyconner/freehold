@@ -27,6 +27,7 @@ export function DiffView({ diff, className }: DiffViewProps) {
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
         className="text-[--fg-muted] hover:text-[--fg] underline underline-offset-2 transition-colors"
       >
         {open ? "Hide diff" : "Show diff"}

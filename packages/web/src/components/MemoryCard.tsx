@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router";
 import { ProvenanceFooter } from "~/components/ProvenanceFooter";
 
 interface RecallResult {
@@ -31,12 +32,13 @@ export function MemoryCard({ result }: MemoryCardProps) {
         <span className="inline-flex items-center rounded border border-[--border] px-1.5 py-0.5 text-[11px] font-medium font-mono text-[--fg-muted]">
           {type}
         </span>
-        <a
-          href={`/memory/${id}`}
+        <Link
+          to="/memory/$id"
+          params={{ id }}
           className="text-xs text-[--fg-muted] hover:text-[--fg] underline underline-offset-2 transition-colors"
         >
           View detail →
-        </a>
+        </Link>
       </div>
 
       {/* Content */}

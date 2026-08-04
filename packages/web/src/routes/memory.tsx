@@ -14,14 +14,18 @@ export const Route = createRoute({
 const TYPE_FILTERS = ["entity", "document", "event"] as const;
 const STATUS_FILTERS = ["approved", "held", "rejected"] as const;
 
+const AUTHOR_FILTERS = ["claude-code"] as const;
+
 function MemoryPage() {
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<string | undefined>();
   const [statusFilter, setStatusFilter] = useState<string | undefined>();
+  const [authorFilter, setAuthorFilter] = useState<string | undefined>();
 
   const filters = {
     type: typeFilter,
     status: statusFilter,
+    author: authorFilter,
   };
 
   const { data, isLoading } = useRecall(query, filters, query.length > 0);
@@ -78,6 +82,22 @@ function MemoryPage() {
             onClick={() => toggleFilter(statusFilter, f, setStatusFilter)}
             className={`rounded border px-2 py-0.5 text-xs font-medium transition-colors ${
               statusFilter === f
+                ? "border-[--fg] bg-[--fg] text-white dark:text-black"
+                : "border-[--border] text-[--fg-muted] hover:text-[--fg]"
+            }`}
+          >
+            {f}
+          </button>
+        ))}
+        <span className="text-xs text-[--fg-muted] self-center ml-2">Author:</span>
+        {AUTHOR_FILTERS.map((f) => (
+          <button
+            key={f}
+            type="button"
+            data-testid={`author-filter-${f}`}
+            onClick={() => toggleFilter(authorFilter, f, setAuthorFilter)}
+            className={`rounded border px-2 py-0.5 text-xs font-medium transition-colors ${
+              authorFilter === f
                 ? "border-[--fg] bg-[--fg] text-white dark:text-black"
                 : "border-[--border] text-[--fg-muted] hover:text-[--fg]"
             }`}

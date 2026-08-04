@@ -1,4 +1,5 @@
 import { createRoute } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import { LineageTrail } from "~/components/LineageTrail";
 import { ProvenanceFooter } from "~/components/ProvenanceFooter";
 import { useEntity } from "~/lib/hooks";
@@ -136,12 +137,13 @@ export function MemoryDetailPage({ entityId }: MemoryDetailPageProps) {
                       <span className="rounded bg-neutral-100 dark:bg-neutral-800 px-1 py-0.5 text-[10px] font-medium">
                         {edge.direction}
                       </span>
-                      <a
-                        href={`/memory/${edge.targetId}`}
+                      <Link
+                        to="/memory/$id"
+                        params={{ id: edge.targetId }}
                         className="font-mono text-[--fg] hover:underline"
                       >
                         {edge.targetId}
-                      </a>
+                      </Link>
                       {edge.targetType && (
                         <span className="text-[--fg-muted]">({edge.targetType})</span>
                       )}
