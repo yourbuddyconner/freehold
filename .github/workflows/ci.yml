@@ -32,8 +32,10 @@ jobs:
       - name: Typecheck (tsc --build)
         run: pnpm typecheck
 
-      - name: Unit + API tests (all packages)
-        run: pnpm -r test
+      - name: Unit tests (excludes e2e and kill)
+        run: |
+          pnpm --filter @freehold/api test:unit
+          pnpm --filter '!@freehold/api' -r test
 
   # ─── Job 2: API e2e (with allod wasm cross-check) ──────────────────────────
   e2e-allod-verify:

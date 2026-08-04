@@ -21,6 +21,7 @@
     "build": "tsc --build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:unit": "vitest run --exclude 'tests/e2e-agent.test.ts' --exclude 'tests/kill.test.ts'",
     "openapi": "tsx scripts/gen-openapi.ts",
     "serve": "tsx src/serve.ts",
     "binary": "node build/compile-binary.mjs"

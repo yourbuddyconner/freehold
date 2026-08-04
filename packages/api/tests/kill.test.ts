@@ -28,7 +28,7 @@ const BINARY = process.env.FREEHOLD_BINARY ?? null;
 
 function makeTempHome(): { home: string; token: string; port: number } {
   const home = mkdtempSync(join(tmpdir(), "freehold-kill-test-"));
-  const port = 46000 + Math.floor(Math.random() * 4999);
+  const port = 51000 + Math.floor(Math.random() * 4999);
   const token = `kill-test-token-${Date.now()}`;
   const config = { token, port, graph: "main", embedder: "hash", defaultAgent: "test-agent" };
   writeFileSync(join(home, "config.json"), JSON.stringify(config));

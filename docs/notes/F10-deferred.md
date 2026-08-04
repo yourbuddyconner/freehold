@@ -62,3 +62,13 @@ graph directory is guaranteed to exist after the two test writes.
 
 The vacuous conditional skip has been removed. The CI now unconditionally asserts that the
 graph directory exists (failing fast if admission is broken) and then runs `allod verify`.
+
+## pi-ai package: @mariozechner/pi-ai deprecation
+
+The e2e-agent test uses `@mariozechner/pi-ai@0.73.0` and `@mariozechner/pi-agent-core@0.73.0`.
+The `@mariozechner/` namespace is deprecated; the successor package is `@earendil-works/pi-ai`.
+
+**Path forward:** Migrate the e2e-agent test and the API package dependencies from
+`@mariozechner/pi-ai` and `@mariozechner/pi-agent-core` to `@earendil-works/pi-ai` once
+that package stabilizes and publishes compatible versions. For v0, the existing
+`@mariozechner/` packages continue to work.
