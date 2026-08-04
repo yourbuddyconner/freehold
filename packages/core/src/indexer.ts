@@ -4,9 +4,10 @@
  * Reads admitted changesets from the allod graph and upserts rows into PGlite
  * so that recall() can search them.
  *
- * The allod WASM API exposes log() (ChangesetSummary[]) but not full changeset
- * contents for admitted entries. We bridge the gap by reading the raw YAML
- * changeset files from the graph's .allod/changesets/ directory.
+ * The allod WASM API exposes log() (ChangesetSummary[]) and object_get(kind,id)
+ * (full content+rev for any live object). We bridge from log hash → node IDs by
+ * parsing each admitted changeset file as structured YAML (via js-yaml) and
+ * reading the operations array — no line-scanning heuristics.
  *
  * syncIndex  — incremental: only processes new log entries
  * reindex    — destructive: wipes PGlite and calls syncIndex
@@ -14,9 +15,13 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { load as yamlLoad } from "js-yaml";
 import { fmtVec } from "./db.js";
 import type { Embedder } from "./embed.js";
 import type { Freehold } from "./graphs.js";
+
+// UUID v4 pattern (lowercase hex with hyphens)
+const UUID_RE = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 
 interface RawLogEntry {
   hash: string;
@@ -29,6 +34,14 @@ interface RawObject {
   content: Record<string, unknown>;
   rev: string;
   deleted: boolean;
+}
+
+/**
+ * A parsed node operation from a changeset's operations array.
+ */
+interface NodeOp {
+  id: string;
+  type: string;
 }
 
 /**
@@ -46,58 +59,50 @@ function extractSearchText(content: Record<string, unknown>): string {
 }
 
 /**
- * Parse node UUIDs from a YAML changeset file using line-by-line scanning.
- * Returns { id, type }[] for each create/update node operation.
+ * Parse node operations from a changeset YAML file using js-yaml.
  *
- * We use a line scanner rather than a full YAML parser since we only need
- * the id and type fields from node operation blocks.
+ * Allod changeset operations are wrapped in an action envelope:
+ *   { create: { kind: node, id: "...", type: "...", ... } }
+ *   { update: { kind: node, id: "...", type: "...", ... } }
+ *
+ * Returns { id, type }[] for each create/update node operation.
  */
-function parseNodeOpsLineByLine(yaml: string): Array<{ id: string; type: string }> {
-  const lines = yaml.split("\n");
-  const results: Array<{ id: string; type: string }> = [];
-  let inNodeBlock = false;
-  let currentId = "";
-  let currentType = "";
+function parseNodeOps(yaml: string): NodeOp[] {
+  let doc: unknown;
+  try {
+    doc = yamlLoad(yaml);
+  } catch {
+    return [];
+  }
 
-  for (const line of lines) {
-    const trimmed = line.trim();
+  if (!doc || typeof doc !== "object" || Array.isArray(doc)) {
+    return [];
+  }
 
-    if (trimmed === "kind: node") {
-      inNodeBlock = true;
-      currentId = "";
-      currentType = "";
-      continue;
-    }
+  const cs = doc as Record<string, unknown>;
+  const operations = cs.operations;
+  if (!Array.isArray(operations)) {
+    return [];
+  }
 
-    if (inNodeBlock) {
-      if (trimmed.startsWith("id: ")) {
-        const val = trimmed.slice("id: ".length).trim();
-        // UUID pattern check: schema/classification nodes have non-UUID ids like
-        // "memory/Note@1"; setting inNodeBlock=false skips the rest of that block.
-        // The next "kind: node" line will correctly open a fresh block, so nodes
-        // that appear later in the same file are still processed.
-        if (/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(val)) {
-          currentId = val;
-        } else {
-          inNodeBlock = false;
-        }
-        continue;
-      }
+  const results: NodeOp[] = [];
+  for (const op of operations) {
+    if (!op || typeof op !== "object" || Array.isArray(op)) continue;
+    const o = op as Record<string, unknown>;
 
-      if (trimmed.startsWith("type: ") && currentId) {
-        currentType = trimmed.slice("type: ".length).trim();
-        results.push({ id: currentId, type: currentType });
-        inNodeBlock = false;
-        continue;
-      }
+    // Each op is { create: { kind, id, type, ... } } or { update: { kind, id, type, ... } }
+    const inner =
+      (o.create as Record<string, unknown> | undefined) ??
+      (o.update as Record<string, unknown> | undefined);
+    if (!inner || typeof inner !== "object" || Array.isArray(inner)) continue;
 
-      // Any unrelated kind: line resets the block (e.g. kind: edge, kind: schema)
-      if (trimmed.startsWith("kind: ") && trimmed !== "kind: node") {
-        inNodeBlock = false;
-        currentId = "";
-        currentType = "";
-      }
-    }
+    if (inner.kind !== "node") continue;
+
+    const id = typeof inner.id === "string" ? inner.id : null;
+    const type = typeof inner.type === "string" ? inner.type : null;
+    if (!id || !type) continue;
+
+    results.push({ id, type });
   }
 
   return results;
@@ -113,6 +118,9 @@ function changesetDir(freehold: Freehold): string {
 /**
  * Read all node operations from admitted changesets.
  * Returns a map from node UUID → { type, author, changesetHash }.
+ *
+ * Non-UUID node ids (meta/schema nodes) are also included; callers can
+ * distinguish them by checking UUID_RE against the key if needed.
  */
 function collectNodeOps(
   freehold: Freehold,
@@ -140,7 +148,7 @@ function collectNodeOps(
       ? authorRef.slice("principal:".length)
       : authorRef;
 
-    const ops = parseNodeOpsLineByLine(yaml);
+    const ops = parseNodeOps(yaml);
     for (const { id, type } of ops) {
       // Later entries (higher index in log) take precedence for updated nodes
       nodeMap.set(id, { type, author, changesetHash: entry.hash });
@@ -176,11 +184,17 @@ export async function syncIndex(freehold: Freehold, embedder: Embedder): Promise
   // Only process new log entries
   const newEntries = log.slice(indexedHead);
 
-  // Step 4: collect node operations from new changeset files
+  // Step 4: collect node operations from new changeset files (structural YAML parse)
   const nodeOps = collectNodeOps(freehold, newEntries);
 
-  // Step 5+6: for each node, fetch content and upsert into objects
+  // Step 5+6: for each node, fetch content via object_get and upsert into objects.
+  // Non-UUID node ids (meta schema nodes like "memory/Note@1") are skipped here
+  // because object_get("node", non-uuid) returns null; they are not user-facing
+  // objects and carry no search_text per the F3 decision.
   for (const [nodeId, { type: typeRef, author, changesetHash }] of nodeOps) {
+    // Skip non-UUID ids: meta/schema nodes use path-style ids, not UUIDs
+    if (!UUID_RE.test(nodeId)) continue;
+
     let objContent: Record<string, unknown> = {};
 
     try {

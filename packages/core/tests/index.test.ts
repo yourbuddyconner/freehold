@@ -255,7 +255,59 @@ describe("reindex golden", () => {
   });
 });
 
-// ---- Test 5: Real transformers embedder smoke test (gated) ----
+// ---- Test 5: Approved preference survives reindex ----
+
+describe("reindex: approved preference row", () => {
+  test("held → approve → reindex: Preference row exists with search_text=statement and approval=admitted", async () => {
+    const fh = await makeFreehold();
+    const statement = "prefers quiet workspaces over open-plan offices";
+
+    // 1. Propose a preference (held by default under memory policy)
+    const prefResult = await fh.graph.propose_preference(
+      "agent",
+      statement,
+      "soft",
+      undefined
+    );
+    expect(prefResult.admission?.Held).toBeDefined();
+    const prefHash = prefResult.hash as string;
+
+    // 2. Owner approves — this admits the preference node via decide()
+    const approveResult = await approve(fh.graph, "owner", prefHash);
+    expect(approveResult.status).toBe("admitted");
+
+    // 3. Full reindex (wipes pg and rebuilds from scratch)
+    await reindex(fh as unknown as Freehold, hashEmbedder);
+
+    // 4. Assert the Preference row exists with correct fields
+    const { pg } = fh.db;
+    const prefRows = await pg.query<{
+      id: string;
+      type: string;
+      search_text: string;
+      approval: string;
+    }>("SELECT id, type, search_text, approval FROM objects WHERE type LIKE '%Preference%'");
+
+    expect(prefRows.rows.length).toBe(1);
+    const row = prefRows.rows[0];
+    expect(row.search_text).toBe(statement);
+    expect(row.approval).toBe("admitted");
+
+    // 5. recall() finds the preference ranked above unrelated rows
+    //    (words from the statement overlap with the FTS/embedding query)
+    const results = await recall(fh as unknown as Freehold, "quiet workspaces", hashEmbedder);
+    expect(results.length).toBeGreaterThan(0);
+    // The preference row must appear in the results
+    const prefInResults = results.find((r) => r.id === row.id);
+    expect(prefInResults).toBeDefined();
+    // The preference must be the top-ranked result: its statement directly
+    // contains the query words "quiet" and "workspaces" so it wins both
+    // vector (via hashEmbedder similarity) and FTS
+    expect(results[0].id).toBe(row.id);
+  });
+});
+
+// ---- Test 7: Real transformers embedder smoke test (gated) ----
 //
 // Run with: FREEHOLD_E2E_REAL_EMBEDDER=1 pnpm -r test
 //
