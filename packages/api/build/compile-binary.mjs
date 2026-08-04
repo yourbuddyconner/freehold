@@ -132,10 +132,16 @@ if (!inputsOk) process.exit(1);
 
 mkdirSync(DIST, { recursive: true });
 
-const BUN = process.env.BUN ?? (() => {
-  try { return execSync("which bun", { stdio: "pipe" }).toString().trim(); } catch { /* not on PATH */ }
-  return "/opt/homebrew/bin/bun";
-})();
+const BUN =
+  process.env.BUN ??
+  (() => {
+    try {
+      return execSync("which bun", { stdio: "pipe" }).toString().trim();
+    } catch {
+      /* not on PATH */
+    }
+    return "/opt/homebrew/bin/bun";
+  })();
 const buildArgs = ["build", "--compile", ENTRYPOINT, `--outfile=${BINARY}`, "--target=bun"];
 
 console.log(`\n[freehold build] running: ${BUN} ${buildArgs.join(" ")}\n`);

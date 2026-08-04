@@ -352,10 +352,9 @@ describe("pi-agent E2E scenario", () => {
     // HTTP verification: the admitted note exists at /api/v1/entities/:id
     // -----------------------------------------------------------------------
     if (admittedNoteId) {
-      const entityRes = await fetch(
-        `http://127.0.0.1:${port}/api/v1/entities/${admittedNoteId}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      const entityRes = await fetch(`http://127.0.0.1:${port}/api/v1/entities/${admittedNoteId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       expect(entityRes.status).toBe(200);
       const entityBody = (await entityRes.json()) as {
         id?: string;
@@ -363,7 +362,7 @@ describe("pi-agent E2E scenario", () => {
       };
       // Entity must have at least one revision (the admission hash)
       expect(Array.isArray(entityBody.revisions)).toBe(true);
-      expect((entityBody.revisions?.length ?? 0)).toBeGreaterThan(0);
+      expect(entityBody.revisions?.length ?? 0).toBeGreaterThan(0);
       // The revision hash is the provenance identifier
       expect(typeof entityBody.revisions?.[0]?.hash).toBe("string");
     }

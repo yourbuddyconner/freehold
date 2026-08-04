@@ -50,9 +50,7 @@ async function waitForDaemon(port: number, maxWait = 20_000): Promise<void> {
 }
 
 function spawnDaemon(home: string): ReturnType<typeof spawn> {
-  const [cmd, args] = BINARY
-    ? [BINARY, ["serve"]]
-    : [TSX, [CLI_ENTRY, "serve"]];
+  const [cmd, args] = BINARY ? [BINARY, ["serve"]] : [TSX, [CLI_ENTRY, "serve"]];
   const proc = spawn(cmd, args, {
     env: { ...process.env, FREEHOLD_HOME: home },
     stdio: "pipe",
