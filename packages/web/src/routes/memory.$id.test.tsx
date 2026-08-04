@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, render, screen } from "@testing-library/react";
+import { act, render, screen, within } from "@testing-library/react";
 import type React from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as hooks from "~/lib/hooks";
@@ -11,6 +11,9 @@ vi.mock("~/lib/hooks", () => ({
   useVerify: vi.fn(),
   useSchema: vi.fn(),
   useEntity: vi.fn(),
+  useMemoryIndex: vi.fn(),
+  useUpdateMemory: vi.fn(),
+  useSession: vi.fn(),
 }));
 
 vi.mock("~/lib/api", () => ({
@@ -88,6 +91,39 @@ async function renderPage(entityData: typeof sampleEntity | undefined, loading =
     error: null,
   } as unknown as ReturnType<typeof hooks.useEntity>);
 
+  vi.mocked(hooks.useMemoryIndex).mockReturnValue({
+    data: {
+      results: [
+        {
+          id: "org-42",
+          type: "memory/Org@1",
+          title: "Acme Org",
+          approval: "saved",
+          author: "claude",
+          updatedAt: "2026-08-04T00:00:00.000Z",
+          terms: [],
+        },
+      ],
+    },
+    isLoading: false,
+    isError: false,
+    error: null,
+  } as unknown as ReturnType<typeof hooks.useMemoryIndex>);
+
+  vi.mocked(hooks.useUpdateMemory).mockReturnValue({
+    mutate: vi.fn(),
+    mutateAsync: vi.fn(),
+    isPending: false,
+    reset: vi.fn(),
+  } as unknown as ReturnType<typeof hooks.useUpdateMemory>);
+
+  vi.mocked(hooks.useSession).mockReturnValue({
+    data: { defaultAgent: "claude", embedder: "hash", port: 8710, owner: "owner" },
+    isLoading: false,
+    isError: false,
+    error: null,
+  } as unknown as ReturnType<typeof hooks.useSession>);
+
   // Mock usePending for AppShell
   vi.mocked(hooks.usePending).mockReturnValue({
     data: { proposals: [] },
@@ -136,10 +172,11 @@ describe("MemoryDetailPage", () => {
 
   it("renders attribute table with key-value rows", async () => {
     await renderPage(sampleEntity);
-    expect(screen.getByText("email")).toBeInTheDocument();
-    expect(screen.getByText("alice@example.com")).toBeInTheDocument();
-    expect(screen.getByText("name")).toBeInTheDocument();
-    expect(screen.getByText("Alice Smith")).toBeInTheDocument();
+    const table = within(screen.getByTestId("memory-properties"));
+    expect(table.getByText("email")).toBeInTheDocument();
+    expect(table.getByText("alice@example.com")).toBeInTheDocument();
+    expect(table.getByText("name")).toBeInTheDocument();
+    expect(table.getByText("Alice Smith")).toBeInTheDocument();
   });
 
   it("renders classifications as chips", async () => {
@@ -148,12 +185,21 @@ describe("MemoryDetailPage", () => {
     expect(screen.getByText("pii")).toBeInTheDocument();
   });
 
-  it("renders edges grouped by type with direction label", async () => {
+  it("renders connections with peer titles from the index", async () => {
     await renderPage(sampleEntity);
-    expect(screen.getByText("belongsTo")).toBeInTheDocument();
-    // targetId is extracted from the "to" field: "node:org-42" → "org-42"
-    expect(screen.getByText("org-42")).toBeInTheDocument();
-    expect(screen.getByText("Out")).toBeInTheDocument();
+    expect(screen.getByText("belongsTo →")).toBeInTheDocument();
+    // Peer title resolved from the workspace index
+    expect(screen.getByTestId("connection-org-42")).toHaveTextContent("Acme Org");
+  });
+
+  it("renders markdown content when the node has a prose body", async () => {
+    await renderPage({
+      ...sampleEntity,
+      attributes: { content: "# Heading\n\nSome **bold** body" },
+    } as unknown as typeof sampleEntity);
+    const content = within(screen.getByTestId("memory-content"));
+    expect(content.getByRole("heading", { name: "Heading" })).toBeInTheDocument();
+    expect(content.getByText("bold")).toBeInTheDocument();
   });
 
   it("renders lineage trail with Latest label on first revision", async () => {
