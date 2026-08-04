@@ -15,6 +15,7 @@ vi.mock("~/lib/hooks", () => ({
   usePolicy: vi.fn(),
   useLog: vi.fn(),
   usePrincipals: vi.fn(),
+  useSession: vi.fn(),
 }));
 
 vi.mock("~/lib/api", () => ({
@@ -110,6 +111,13 @@ function setupHooks(principalsData: unknown = principalsFixture) {
     isError: false,
     error: null,
   } as unknown as ReturnType<typeof hooks.useLog>);
+
+  vi.mocked(hooks.useSession).mockReturnValue({
+    data: { defaultAgent: "claude-code", embedder: "transformers", port: 8710 },
+    isLoading: false,
+    isError: false,
+    error: null,
+  } as unknown as ReturnType<typeof hooks.useSession>);
 }
 
 async function renderSettings(principalsData: unknown = principalsFixture) {
@@ -137,7 +145,8 @@ describe("Settings", () => {
   it("renders principal cards with names and fingerprints", async () => {
     await renderSettings();
     expect(screen.getByText("Conner Swann")).toBeInTheDocument();
-    expect(screen.getByText("claude-code")).toBeInTheDocument();
+    // "claude-code" may appear in both the principals list and the embedder section
+    expect(screen.getAllByText("claude-code").length).toBeGreaterThan(0);
     expect(screen.getByText("SHA256:abcdef1234567890")).toBeInTheDocument();
   });
 

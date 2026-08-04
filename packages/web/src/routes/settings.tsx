@@ -1,3 +1,4 @@
+import * as Dialog from "@radix-ui/react-dialog";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createRoute, useNavigate } from "@tanstack/react-router";
 import { Check, Copy } from "lucide-react";
@@ -5,7 +6,7 @@ import { useState } from "react";
 import { type Principal, PrincipalCard } from "~/components/PrincipalCard";
 import { apiClient } from "~/lib/api";
 import { cn } from "~/lib/cn";
-import { usePrincipals } from "~/lib/hooks";
+import { usePrincipals, useSession } from "~/lib/hooks";
 import { type ThemeChoice, readStoredTheme, setTheme } from "~/lib/theme";
 import { Route as RootRoute } from "./__root";
 
@@ -14,6 +15,17 @@ export const Route = createRoute({
   path: "/settings",
   component: SettingsPage,
 });
+
+// ---------------------------------------------------------------------------
+// Read the bearer token injected by the daemon into the meta tag.
+// The token is available client-side this way so it never touches localStorage
+// or the JS bundle. This is the same mechanism used by packages/web/src/lib/api.ts.
+// ---------------------------------------------------------------------------
+
+function readBearerToken(): string {
+  const meta = document.querySelector<HTMLMetaElement>('meta[name="freehold-token"]');
+  return meta?.content ?? "";
+}
 
 // ---------------------------------------------------------------------------
 // Parse principals
@@ -36,6 +48,102 @@ function parsePrincipals(raw: unknown): Principal[] {
       status: p.status === "revoked" ? "revoked" : "active",
     };
   });
+}
+
+// ---------------------------------------------------------------------------
+// API token display
+// ---------------------------------------------------------------------------
+
+function ApiTokenSection() {
+  const token = readBearerToken();
+  const [copied, setCopied] = useState(false);
+
+  function handleCopy() {
+    navigator.clipboard.writeText(token).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  }
+
+  return (
+    <section className="space-y-3">
+      <h3 className="text-sm font-semibold text-[--fg]">API bearer token</h3>
+      <p className="text-xs text-[--fg-muted]">
+        Used to authenticate API and MCP requests to this daemon.{" "}
+        <strong className="text-amber-700 dark:text-amber-400">Keep this secret.</strong>
+      </p>
+      {token ? (
+        <div className="relative">
+          <code
+            className="block rounded border border-[--border] bg-[--bg-subtle] px-3 py-2 font-mono text-xs text-[--fg] overflow-auto break-all pr-16"
+            data-testid="api-token"
+          >
+            {token}
+          </code>
+          <button
+            type="button"
+            onClick={handleCopy}
+            aria-label="Copy API token"
+            className="absolute top-1.5 right-2 flex items-center gap-1 rounded border border-[--border] bg-white dark:bg-neutral-900 px-2 py-1 text-[10px] text-[--fg-muted] hover:text-[--fg] transition-colors"
+          >
+            {copied ? (
+              <Check className="h-3 w-3 text-green-600" aria-hidden />
+            ) : (
+              <Copy className="h-3 w-3" aria-hidden />
+            )}
+            {copied ? "Copied!" : "Copy"}
+          </button>
+        </div>
+      ) : (
+        <p className="text-xs text-[--fg-muted] italic">
+          Token not available — open this page via the daemon (not the Vite dev server without a
+          running daemon).
+        </p>
+      )}
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Embedder config display
+// ---------------------------------------------------------------------------
+
+function EmbedderSection() {
+  const { data, isLoading } = useSession();
+
+  return (
+    <section className="space-y-3">
+      <h3 className="text-sm font-semibold text-[--fg]">Embedder configuration</h3>
+      {isLoading && <p className="text-xs text-[--fg-muted]">Loading…</p>}
+      {data && (
+        <dl className="rounded border border-[--border] bg-[--bg-subtle] p-3 space-y-2 text-xs">
+          <div className="flex gap-4">
+            <dt className="text-[--fg-muted] w-28 shrink-0">Backend</dt>
+            <dd className="font-mono text-[--fg]" data-testid="embedder-backend">
+              {data.embedder}
+            </dd>
+          </div>
+          {data.defaultAgent != null && (
+            <div className="flex gap-4">
+              <dt className="text-[--fg-muted] w-28 shrink-0">Default agent</dt>
+              <dd className="font-mono text-[--fg]" data-testid="embedder-default-agent">
+                {data.defaultAgent}
+              </dd>
+            </div>
+          )}
+          <div className="flex gap-4">
+            <dt className="text-[--fg-muted] w-28 shrink-0">Port</dt>
+            <dd className="font-mono text-[--fg]">{data.port}</dd>
+          </div>
+        </dl>
+      )}
+      {!isLoading && !data && (
+        <p className="text-xs text-[--fg-muted] italic">
+          Could not load session config. Is the daemon running?
+        </p>
+      )}
+    </section>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -166,8 +274,11 @@ function OntologyInstallSection() {
 
   const previewMutation = useMutation({
     mutationFn: async () => {
-      // No preview endpoint; we attempt to parse the YAML locally and show
-      // a stub preview. The install endpoint does the real validation.
+      // DECLARED OMISSION: The spec requires Schema-viewer component preview of the ontology
+      // package contents before confirming install. No server-side preview endpoint exists;
+      // a real preview requires a POST /api/v1/schema/preview round-trip that returns
+      // SchemaDescription. Until that endpoint is added, the preview is a client-side stub
+      // returning empty data, and the confirm dialog tells the user as much.
       return { entityTypes: [], edgeTypes: [], terms: [] };
     },
     onSuccess: () => {
@@ -306,13 +417,18 @@ function SettingsPage() {
   const { data: principalsData, isLoading } = usePrincipals();
   const principals = parsePrincipals(principalsData);
 
-  function handleRevoke(principal: Principal) {
-    // Revocation is a governed change — route through Inbox
-    // We create a policy proposal for revocation
+  // Pending revocation confirmation
+  const [revokeTarget, setRevokeTarget] = useState<Principal | null>(null);
+
+  function confirmRevoke() {
+    if (!revokeTarget) return;
+    const target = revokeTarget;
+    setRevokeTarget(null);
+    // Revocation is a governed change — creates a proposal routed through the Inbox
     apiClient
       .proposePolicy({
         action: "revoke",
-        principalId: principal.id,
+        principalId: target.id,
       })
       .then(() => {
         qc.invalidateQueries({ queryKey: ["proposals"] });
@@ -341,12 +457,56 @@ function SettingsPage() {
           <ul className="space-y-2">
             {principals.map((p) => (
               <li key={p.id}>
-                <PrincipalCard principal={p} onRevoke={() => handleRevoke(p)} />
+                <PrincipalCard principal={p} onRevoke={() => setRevokeTarget(p)} />
               </li>
             ))}
           </ul>
         )}
       </section>
+
+      {/* Revocation confirmation dialog */}
+      <Dialog.Root
+        open={revokeTarget !== null}
+        onOpenChange={(open) => !open && setRevokeTarget(null)}
+      >
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 bg-black/40 z-40" />
+          <Dialog.Content className="fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 w-full max-w-sm rounded-lg bg-white dark:bg-neutral-900 border border-[--border] p-6 shadow-xl space-y-4">
+            <Dialog.Title className="text-base font-semibold text-[--fg]">
+              Revoke principal
+            </Dialog.Title>
+            <Dialog.Description className="text-sm text-[--fg-muted]">
+              Revoking is a governed change — it creates a proposal you approve in the Inbox.
+            </Dialog.Description>
+            <div className="flex gap-2 justify-end">
+              <Dialog.Close asChild>
+                <button
+                  type="button"
+                  className="rounded border border-[--border] px-3 py-1.5 text-xs font-medium text-[--fg] hover:bg-[--bg-subtle] transition-colors"
+                >
+                  Cancel
+                </button>
+              </Dialog.Close>
+              <button
+                type="button"
+                onClick={confirmRevoke}
+                className="rounded bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700 transition-colors"
+                data-testid="confirm-revoke"
+              >
+                Revoke
+              </button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+
+      <div className="border-t border-[--border]" />
+
+      <ApiTokenSection />
+
+      <div className="border-t border-[--border]" />
+
+      <EmbedderSection />
 
       <div className="border-t border-[--border]" />
 

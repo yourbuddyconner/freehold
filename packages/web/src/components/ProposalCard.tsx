@@ -55,8 +55,11 @@ function parseSchemaProposalMeta(diff: DiffEntry[]): SchemaProposalMeta | null {
       if (obj.attributes || obj.extends || typeof obj === "object") {
         return {
           name: entry.key,
-          extends: typeof obj === "object" && !Array.isArray(obj) && "extends" in obj ? (obj as any).extends : undefined,
-          definition: typeof obj === "object" && !Array.isArray(obj) && "attributes" in obj ? JSON.stringify((obj as any).attributes, null, 2) : undefined,
+          extends: "extends" in obj && typeof obj.extends === "string" ? obj.extends : undefined,
+          definition:
+            "attributes" in obj && typeof obj.attributes === "object" && obj.attributes !== null
+              ? JSON.stringify(obj.attributes, null, 2)
+              : undefined,
         };
       }
     }

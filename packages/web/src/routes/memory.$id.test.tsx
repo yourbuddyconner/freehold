@@ -24,12 +24,19 @@ vi.mock("~/lib/api", () => ({
   },
 }));
 
+interface LinkMockProps {
+  to: string;
+  params?: Record<string, string>;
+  children?: React.ReactNode;
+  [key: string]: unknown;
+}
+
 // Mock the Link component to avoid router context issues in tests
 vi.mock("@tanstack/react-router", async () => {
   const actual = await vi.importActual("@tanstack/react-router");
   return {
     ...actual,
-    Link: ({ to, params, children, ...props }: any) => {
+    Link: ({ to, params, children, ...props }: LinkMockProps) => {
       const href = typeof to === "string" && params?.id ? `${to.replace("$id", params.id)}` : to;
       return (
         <a href={href} {...props}>

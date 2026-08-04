@@ -361,6 +361,25 @@
           }
         },
         "required": ["entityTypes", "edgeTypes", "terms"]
+      },
+      "SessionInfo": {
+        "type": "object",
+        "properties": {
+          "defaultAgent": {
+            "type": ["string", "null"],
+            "description": "Default MCP agent name, if set"
+          },
+          "embedder": {
+            "type": "string",
+            "enum": ["transformers", "hash"],
+            "description": "Active embedder backend"
+          },
+          "port": {
+            "type": "number",
+            "description": "Daemon listening port"
+          }
+        },
+        "required": ["defaultAgent", "embedder", "port"]
       }
     },
     "parameters": {}
@@ -1120,6 +1139,32 @@
         "responses": {
           "200": {
             "description": "Changeset log entries"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/session": {
+      "get": {
+        "summary": "Get daemon session config",
+        "description": "Returns non-secret daemon configuration (defaultAgent, embedder, port). The bearer token is NOT returned here — it is injected as a meta tag by the server.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Session config",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionInfo"
+                }
+              }
+            }
           },
           "401": {
             "description": "Unauthorized"

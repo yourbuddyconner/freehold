@@ -269,7 +269,9 @@ describe("Inbox", () => {
     });
 
     // Verify invalidateQueries was called with the proposals key
-    expect(invalidateSpy).toHaveBeenCalledWith(expect.objectContaining({ queryKey: ["proposals"] }));
+    expect(invalidateSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ queryKey: ["proposals"] })
+    );
     invalidateSpy.mockRestore();
   });
 });

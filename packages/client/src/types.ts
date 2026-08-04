@@ -1104,6 +1104,52 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get daemon session config
+         * @description Returns non-secret daemon configuration (defaultAgent, embedder, port). The bearer token is NOT returned here — it is injected as a meta tag by the server.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Session config */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SessionInfo"];
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/openapi.json": {
         parameters: {
             query?: never;
@@ -1259,6 +1305,17 @@ export interface components {
                 name: string;
                 parent?: string;
             }[];
+        };
+        SessionInfo: {
+            /** @description Default MCP agent name, if set */
+            defaultAgent: string | null;
+            /**
+             * @description Active embedder backend
+             * @enum {string}
+             */
+            embedder: "transformers" | "hash";
+            /** @description Daemon listening port */
+            port: number;
         };
     };
     responses: never;

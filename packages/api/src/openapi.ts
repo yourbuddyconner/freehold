@@ -86,6 +86,14 @@ const InstallOntologyBody = z
 
 const PolicyBody = z.object({}).passthrough().openapi("PolicyBody");
 
+const SessionInfo = z
+  .object({
+    defaultAgent: z.string().nullable().openapi({ description: "Default MCP agent name, if set" }),
+    embedder: z.enum(["transformers", "hash"]).openapi({ description: "Active embedder backend" }),
+    port: z.number().openapi({ description: "Daemon listening port" }),
+  })
+  .openapi("SessionInfo");
+
 // ---- Response schemas ----
 
 const AdmissionResponse = z
@@ -191,6 +199,7 @@ function buildRegistry(): OpenAPIRegistry {
   registry.register("RecallResult", RecallResult);
   registry.register("VerifyReport", VerifyReport);
   registry.register("SchemaDescription", SchemaDescription);
+  registry.register("SessionInfo", SessionInfo);
 
   const auth = [{ bearerAuth: [] }];
 
@@ -564,6 +573,23 @@ function buildRegistry(): OpenAPIRegistry {
     security: auth,
     responses: {
       "200": { description: "Changeset log entries" },
+      "401": { description: "Unauthorized" },
+    },
+  });
+
+  // Session — daemon config visible to authenticated console
+  registry.registerPath({
+    method: "get",
+    path: "/api/v1/session",
+    summary: "Get daemon session config",
+    description:
+      "Returns non-secret daemon configuration (defaultAgent, embedder, port). The bearer token is NOT returned here — it is injected as a meta tag by the server.",
+    security: auth,
+    responses: {
+      "200": {
+        description: "Session config",
+        content: { "application/json": { schema: SessionInfo } },
+      },
       "401": { description: "Unauthorized" },
     },
   });

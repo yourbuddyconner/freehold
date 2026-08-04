@@ -72,3 +72,11 @@ export function usePrincipals() {
     queryFn: () => apiClient.principals() as Promise<unknown>,
   });
 }
+
+/** Daemon session config (defaultAgent, embedder, port). */
+export function useSession() {
+  return useQuery({
+    queryKey: ["session"],
+    queryFn: () => apiClient.session(),
+  });
+}

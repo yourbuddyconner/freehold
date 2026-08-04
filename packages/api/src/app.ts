@@ -13,6 +13,7 @@ import { logRouter } from "./routes/log.js";
 import { policyRouter } from "./routes/policy.js";
 import { retrievalRouter } from "./routes/retrieval.js";
 import { schemaRouter } from "./routes/schema.js";
+import { sessionRouter } from "./routes/session.js";
 import type { AppEnv } from "./types.js";
 
 export function createApp(
@@ -43,6 +44,7 @@ export function createApp(
   api.route("/", schemaRouter);
   api.route("/", policyRouter);
   api.route("/", logRouter);
+  api.route("/", sessionRouter);
 
   app.route("/api/v1", api);
 

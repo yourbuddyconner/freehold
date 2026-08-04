@@ -85,8 +85,11 @@ export function VerifyReport({ report, className }: VerifyReportProps) {
   const overallOk = report.ok && degraded.length === 0;
 
   // Derive per-level state.
-  // The API returns a flat ok + degraded list; we map all degraded items
-  // to the "integrity" level since they relate to graph state.
+  // TODO: The API currently returns a flat { ok, degraded[] } with no per-level breakdown.
+  // The mapping below is heuristic-only: all degraded items → Integrity, items whose reason
+  // includes "evidence" → also flagged on Governance, Authorship is never independently
+  // degraded. When the API exposes per-level results, replace these heuristics with the
+  // real values from the response.
   const integrityState = !report.ok ? "degraded" : degraded.length > 0 ? "degraded" : "ok";
 
   return (

@@ -24,6 +24,8 @@ export type RecallResult = Schemas["RecallResult"];
 export type VerifyReport = Schemas["VerifyReport"];
 export type SchemaDescription = Schemas["SchemaDescription"];
 
+export type SessionInfo = Schemas["SessionInfo"];
+
 export type RememberBody = Schemas["RememberBody"];
 export type CreateEntityBody = Schemas["CreateEntityBody"];
 export type UpdateEntityBody = Schemas["UpdateEntityBody"];
@@ -274,6 +276,11 @@ export class FreeholdClient {
   /** GET /api/v1/log */
   async log(): Promise<unknown> {
     return this.fetch<unknown>("GET", "/api/v1/log");
+  }
+
+  /** GET /api/v1/session */
+  async session(): Promise<SessionInfo> {
+    return this.fetch<SessionInfo>("GET", "/api/v1/session");
   }
 
   /** GET /api/v1/openapi.json */
