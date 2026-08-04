@@ -17,6 +17,7 @@ import { Route as SchemaRouteImport } from './routes/schema'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as VerifyRouteImport } from './routes/verify'
 import { Route as MemoryIdRouteImport } from './routes/memory.$id'
+import { Route as MemoryGraphRouteImport } from './routes/memory.graph'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -58,6 +59,11 @@ const MemoryIdRoute = MemoryIdRouteImport.update({
   path: '/$id',
   getParentRoute: () => MemoryRoute,
 } as any)
+const MemoryGraphRoute = MemoryGraphRouteImport.update({
+  id: '/graph',
+  path: '/graph',
+  getParentRoute: () => MemoryRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -68,6 +74,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof SettingsRoute
   '/verify': typeof VerifyRoute
   '/memory/$id': typeof MemoryIdRoute
+  '/memory/graph': typeof MemoryGraphRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -78,6 +85,7 @@ export interface FileRoutesByTo {
   '/settings': typeof SettingsRoute
   '/verify': typeof VerifyRoute
   '/memory/$id': typeof MemoryIdRoute
+  '/memory/graph': typeof MemoryGraphRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -89,6 +97,7 @@ export interface FileRoutesById {
   '/settings': typeof SettingsRoute
   '/verify': typeof VerifyRoute
   '/memory/$id': typeof MemoryIdRoute
+  '/memory/graph': typeof MemoryGraphRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -101,6 +110,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/verify'
     | '/memory/$id'
+    | '/memory/graph'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -111,6 +121,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/verify'
     | '/memory/$id'
+    | '/memory/graph'
   id:
     | '__root__'
     | '/'
@@ -121,6 +132,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/verify'
     | '/memory/$id'
+    | '/memory/graph'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -191,15 +203,24 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MemoryIdRouteImport
       parentRoute: typeof MemoryRoute
     }
+    '/memory/graph': {
+      id: '/memory/graph'
+      path: '/graph'
+      fullPath: '/memory/graph'
+      preLoaderRoute: typeof MemoryGraphRouteImport
+      parentRoute: typeof MemoryRoute
+    }
   }
 }
 
 interface MemoryRouteChildren {
   MemoryIdRoute: typeof MemoryIdRoute
+  MemoryGraphRoute: typeof MemoryGraphRoute
 }
 
 const MemoryRouteChildren: MemoryRouteChildren = {
   MemoryIdRoute: MemoryIdRoute,
+  MemoryGraphRoute: MemoryGraphRoute,
 }
 
 const MemoryRouteWithChildren =

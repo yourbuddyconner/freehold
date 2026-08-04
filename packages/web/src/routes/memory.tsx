@@ -82,6 +82,32 @@ function MemoryLayout() {
       <div className="flex gap-6 items-start">
         {/* Left pane: search + tree, always mounted */}
         <aside className="w-72 shrink-0 border-r border-(--border) pr-4 space-y-3">
+          <div className="flex gap-1" role="tablist" aria-label="Workspace view">
+            <Link
+              to="/memory"
+              role="tab"
+              aria-selected={pathname !== "/memory/graph"}
+              className={`border px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.08em] ${
+                pathname !== "/memory/graph"
+                  ? "border-[var(--color-accent)] bg-[var(--color-accent)] text-[var(--color-accent-fg)]"
+                  : "border-(--border) text-(--fg-muted) hover:text-(--fg)"
+              }`}
+            >
+              Files
+            </Link>
+            <Link
+              to="/memory/graph"
+              role="tab"
+              aria-selected={pathname === "/memory/graph"}
+              className={`border px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.08em] ${
+                pathname === "/memory/graph"
+                  ? "border-[var(--color-accent)] bg-[var(--color-accent)] text-[var(--color-accent-fg)]"
+                  : "border-(--border) text-(--fg-muted) hover:text-(--fg)"
+              }`}
+            >
+              Graph
+            </Link>
+          </div>
           <input
             type="search"
             aria-label="Search memories"
