@@ -96,12 +96,12 @@ evidence chains; add `corp` and they track people and agreements.
 Freehold's tools are generic over whatever the graph's schema says —
 that is the point of building on a real format.
 
-**A known seam:** allod's schema-as-object materialization has not
-shipped (schema currently lives as installed documents). v0 implements
-ontology changes as a governed Freehold flow — proposal, owner decision
-record, then schema-doc install — and migrates to true in-graph schema
-changesets when allod materializes them. The product behavior is
-identical; the substrate underneath improves.
+Schema changes are true in-graph changesets: allod's schema-as-object
+materialization (sub-project 2, see
+`~/code/allod/docs/specs/2026-08-03-schema-materialization-design.md`)
+ships before Freehold, so a proposed entity type is a held changeset
+creating a `meta/EntityType` node, governed, signed, and
+provenance-carrying like every other write.
 
 ### For the owner (the console)
 
@@ -148,10 +148,12 @@ proposed preference.
 
 ## Foundation
 
-Freehold consumes `@allod/core`, the WASM npm package produced by the
-Allod library refactor (see
-`~/code/allod/docs/specs/2026-08-03-library-refactor-wasm-design.md`).
-That sub-project ships first, and its API is generic over the data
+Freehold consumes `@allod/core`, the WASM npm package produced by two
+allod sub-projects that ship first: the library refactor
+(`~/code/allod/docs/specs/2026-08-03-library-refactor-wasm-design.md`)
+and schema-as-object materialization
+(`~/code/allod/docs/specs/2026-08-03-schema-materialization-design.md`).
+The resulting API is generic over the data
 model — object and changeset builders, registry introspection, schema
 install — not memory-specific sugar, which is what makes Freehold's
 generic tool surface possible. Graphs are stored in the native Allod
