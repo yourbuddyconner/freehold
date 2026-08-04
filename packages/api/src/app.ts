@@ -45,15 +45,9 @@ export function createApp(
 
   app.route("/api/v1", api);
 
-  // MCP endpoint — bearer auth then streamable HTTP (stateless, per-request server)
-  app.all("/mcp", async (c) => {
-    const header = c.req.header("Authorization") ?? "";
-    const bearer = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
-    if (bearer !== config.token) {
-      return c.json({ error: { code: "auth", message: "Missing or invalid bearer token" } }, 401);
-    }
-    return handleMcpRequest(freehold, embedder, config, c.req.raw);
-  });
+  // MCP endpoint — bearer auth via shared middleware, then streamable HTTP
+  app.use("/mcp", bearerAuth(config.token));
+  app.all("/mcp", (c) => handleMcpRequest(freehold, embedder, config, c.req.raw));
 
   // Console static serving — F7 will replace this stub
   app.get("/", (c) => {
