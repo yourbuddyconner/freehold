@@ -18,11 +18,12 @@
  *   freehold.vector.tar.gz    — pgvector extension bundle
  *
  * Note on allod_wasm_bg.wasm:
- *   @allod/core's CJS module (allod_wasm.js) loads its wasm via
- *   readFileSync(__dirname + '/allod_wasm_bg.wasm').  Bun's bundler
- *   inlines the CJS module and embeds the adjacent .wasm file into the
- *   virtual /$bunfs filesystem automatically.  AllodGraph loads correctly
- *   from the compiled binary without a sidecar — confirmed by direct testing.
+ *   @allod/core's loader reads its wasm from __dirname, which Bun bakes
+ *   into the BUILD machine's absolute path — the compiled binary only
+ *   works where that path exists.  The loader honors ALLOD_WASM_PATH
+ *   (patched in @allod/core >= 0.1.2), so the wasm ships as the
+ *   freehold.allod.wasm sidecar and cli/bootstrap.ts points the env var
+ *   at it before any @allod/core import.
  *
  * Note on transformers / ONNX wasm:
  *   resolveOrtWasmPaths() in embed.ts returns null when the pnpm store is
@@ -106,11 +107,16 @@ function findPkgDir(packageName) {
 const pgliteDir = resolve(findPkgDir("@electric-sql/pglite"), "dist");
 const pgvectorDir = resolve(findPkgDir("@electric-sql/pglite-pgvector"), "dist");
 
+const allodDir = resolve(findPkgDir("@allod/core"), "pkg");
+
 const SIDECARS = [
   { src: resolve(pgliteDir, "pglite.wasm"), dest: "freehold.pglite.wasm" },
   { src: resolve(pgliteDir, "pglite.data"), dest: "freehold.pglite.data" },
   { src: resolve(pgliteDir, "initdb.wasm"), dest: "freehold.initdb.wasm" },
   { src: resolve(pgvectorDir, "vector.tar.gz"), dest: "freehold.vector.tar.gz" },
+  // @allod/core's loader reads ALLOD_WASM_PATH (set by cli/bootstrap.ts);
+  // bundlers bake the loader's __dirname, so the wasm must ship as a sidecar.
+  { src: resolve(allodDir, "allod_wasm_bg.wasm"), dest: "freehold.allod.wasm" },
 ];
 
 // ─── 1. Validate inputs ───────────────────────────────────────────────────────

@@ -78,6 +78,11 @@ jobs:
           set -euo pipefail
           SMOKE_DIR="$(mktemp -d)"
           tar -xzf "release/freehold-${{ matrix.smoke }}.tar.gz" -C "$SMOKE_DIR"
+
+          # Hide the build tree so a binary with baked build-machine paths
+          # fails here instead of on a user's machine.
+          mv node_modules "$RUNNER_TEMP/node_modules_stash"
+          trap 'mv "$RUNNER_TEMP/node_modules_stash" node_modules 2>/dev/null || true' EXIT
           "$SMOKE_DIR/freehold" --version
 
           export FREEHOLD_HOME=$(mktemp -d)
@@ -87,7 +92,7 @@ jobs:
 
           "$SMOKE_DIR/freehold" serve &
           BIN_PID=$!
-          trap 'kill "$BIN_PID" 2>/dev/null || true' EXIT
+          trap 'kill "$BIN_PID" 2>/dev/null || true; mv "$RUNNER_TEMP/node_modules_stash" node_modules 2>/dev/null || true' EXIT
 
           for i in $(seq 1 60); do
             if curl -sf "http://127.0.0.1:$PORT/health" | grep -q '"status":"ok"'; then
