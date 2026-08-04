@@ -232,9 +232,15 @@ describe("OpenAPI document coverage", () => {
 
   test("mutating routes have requestBody schemas defined", () => {
     const doc = getOpenApiDoc() as {
-      paths: Record<string, Record<string, {
-        requestBody?: { content?: { "application/json"?: { schema?: unknown } } }
-      }>>;
+      paths: Record<
+        string,
+        Record<
+          string,
+          {
+            requestBody?: { content?: { "application/json"?: { schema?: unknown } } };
+          }
+        >
+      >;
     };
 
     const mutatingRoutes: Array<[string, string]> = [
@@ -253,15 +259,24 @@ describe("OpenAPI document coverage", () => {
       const op = doc.paths[path]?.[method];
       expect(op, `Missing operation ${method.toUpperCase()} ${path}`).toBeDefined();
       const schema = op?.requestBody?.content?.["application/json"]?.schema;
-      expect(schema, `Missing requestBody schema for ${method.toUpperCase()} ${path}`).toBeDefined();
+      expect(
+        schema,
+        `Missing requestBody schema for ${method.toUpperCase()} ${path}`
+      ).toBeDefined();
     }
   });
 
   test("typed response schemas exist for key routes", () => {
     const doc = getOpenApiDoc() as {
-      paths: Record<string, Record<string, {
-        responses?: Record<string, { content?: { "application/json"?: { schema?: unknown } } }>
-      }>>;
+      paths: Record<
+        string,
+        Record<
+          string,
+          {
+            responses?: Record<string, { content?: { "application/json"?: { schema?: unknown } } }>;
+          }
+        >
+      >;
     };
 
     const typedRoutes: Array<[string, string]> = [
@@ -277,7 +292,26 @@ describe("OpenAPI document coverage", () => {
       const op = doc.paths[path]?.[method];
       expect(op, `Missing operation ${method.toUpperCase()} ${path}`).toBeDefined();
       const schema = op?.responses?.["200"]?.content?.["application/json"]?.schema;
-      expect(schema, `Missing 200 response schema for ${method.toUpperCase()} ${path}`).toBeDefined();
+      expect(
+        schema,
+        `Missing 200 response schema for ${method.toUpperCase()} ${path}`
+      ).toBeDefined();
     }
+  });
+});
+
+describe("POST /api/v1/policy", () => {
+  test("returns 400 on non-JSON body", async () => {
+    const res = await app.request("/api/v1/policy", {
+      method: "POST",
+      headers: {
+        "Content-Type": "text/plain",
+        Authorization: `Bearer ${token}`,
+      },
+      body: "not json !!",
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect((body as { error?: { code?: string } }).error?.code).toBe("validation");
   });
 });

@@ -18,6 +18,7 @@ retrievalRouter.get("/recall", async (c) => {
   const filters = {
     type: type ?? undefined,
     author: author ?? undefined,
+    // `status` query param maps to `approval` field in RecallFilters/RecallResult
     approval: status ?? undefined,
   };
   const results = await recall(fh, q, embedder, filters);
