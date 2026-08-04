@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Freehold — Governed memory for AI agents</title>
+  <meta name="description" content="A governed memory backend for AI agents. Your agents' knowledge, in a graph you own: append-only, signed, verifiable, and governed by rules you declare.">
+  <link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+
+<!-- Navigation -->
+<nav class="site-nav">
+  <div class="nav-inner">
+    <a href="index.html" class="nav-wordmark">Freehold</a>
+    <button class="nav-mobile-toggle" id="nav-toggle" aria-label="Toggle navigation">MENU</button>
+    <ul class="nav-links" id="nav-links">
+      <li><a href="docs/quickstart.html">Quickstart</a></li>
+      <li><a href="docs/tools.html">Tools</a></li>
+      <li><a href="docs/governance.html">Governance</a></li>
+      <li><a href="docs/architecture.html">Architecture</a></li>
+      <li><a href="https://github.com/yourbuddyconner/freehold" class="nav-github">GitHub ↗</a></li>
+    </ul>
+  </div>
+</nav>
+
+<!-- Main content -->
+<main>
+  <div class="site-wrap">
+
+    <!-- Hero -->
+    <section class="hero">
+      <div class="hero-label reveal reveal-1">
+        v0 — local-first, MIT OR Apache-2.0
+      </div>
+      <h1 class="hero-headline reveal reveal-2">
+        Your agents' memory,<br>in a graph you own.
+      </h1>
+      <p class="hero-subhead reveal reveal-3">
+        Most memory products lease you back your own data. Freehold keeps your agents' accumulated knowledge in an <strong>Allod graph</strong>: an append-only log of signed changes, verifiable from your keys alone, governed by rules you declare. One daemon. Twelve tools. No third party holds the graph.
+      </p>
+      <div class="hero-actions reveal reveal-4">
+        <a href="docs/quickstart.html" class="btn btn-primary">Get started</a>
+        <a href="docs/tools.html" class="btn btn-secondary">Browse the tools</a>
+      </div>
+    </section>
+
+    <!-- The three loops -->
+    <section class="section">
+      <div class="section-header reveal reveal-1">
+        <div class="eyebrow">The founding loops</div>
+        <h2>Memory, schema, and trust — governed end to end</h2>
+        <p>
+          Three loops run through every part of Freehold. Each one is a complete cycle: the agent acts, the system enforces, you decide, the record is signed.
+        </p>
+      </div>
+
+      <div class="loops-grid">
+        <div class="loop-card reg-marks reveal reveal-2">
+          <span class="reg-mark-bl"></span><span class="reg-mark-br"></span>
+          <div class="loop-number">01 — MEMORY LOOP</div>
+          <h3>Write, hold, approve, recall</h3>
+          <p>
+            Scratch notes are admitted immediately — agents can think at full speed. Consequential writes are held as proposals: a preference about you, an entity outside the scratch region. You approve in the Inbox; the approval is a signed decision record. Recall returns every result with its full provenance chain — who wrote it, who approved it, the changeset hash.
+          </p>
+          <div style="margin-top:20px;">
+            <a href="docs/governance.html" class="link-arrow">How governance works</a>
+          </div>
+        </div>
+
+        <div class="loop-card reg-marks reveal reveal-3">
+          <span class="reg-mark-bl"></span><span class="reg-mark-br"></span>
+          <div class="loop-number">02 — SCHEMA LOOP</div>
+          <h3>Typed knowledge, governed evolution</h3>
+          <p>
+            Memory is a typed knowledge graph, not a pile of notes. Entities have types, relationships are typed edges, and the schema lives in the graph itself. An agent reads the schema with <code>describe_schema</code> and, when the graph lacks a type it needs, proposes one with <code>propose_ontology_change</code>. Schema changes are always held — the same inbox, the same approval flow — then installed on approval.
+          </p>
+          <div style="margin-top:20px;">
+            <a href="docs/tools.html" class="link-arrow">Schema tools reference</a>
+          </div>
+        </div>
+
+        <div class="loop-card reg-marks reveal reveal-4">
+          <span class="reg-mark-bl"></span><span class="reg-mark-br"></span>
+          <div class="loop-number">03 — TRUST LOOP</div>
+          <h3>Verify without trusting Freehold</h3>
+          <p>
+            The Rust reference implementation's <code>allod verify</code> passes on graphs Freehold writes. Verification does not depend on Freehold, or on trusting Freehold. The PGlite index is derived data — <code>freehold reindex</code> rebuilds it from the log and must land on identical state. The graph is the truth; the index is a view.
+          </p>
+          <div style="margin-top:20px;">
+            <a href="docs/architecture.html" class="link-arrow">Architecture overview</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 12-tool grid -->
+    <section class="section">
+      <div class="section-header">
+        <div class="eyebrow">MCP tool surface</div>
+        <h2>Twelve tools, grouped by function</h2>
+        <p>
+          Agents connect over streamable HTTP MCP at <code>/mcp</code>. Agents never receive approval, rejection, policy mutation, or key operations — those belong to the owner.
+        </p>
+      </div>
+
+      <div class="tools-grid">
+        <!-- Knowledge -->
+        <div class="tool-cell">
+          <div class="tool-cell-group">Knowledge</div>
+          <div class="tool-cell-name">remember</div>
+          <div class="tool-cell-desc">Fast path for a scratch note. Creates a <code>memory/Note</code> and admits it immediately. Sugar over <code>create_entity</code>.</div>
+        </div>
+        <div class="tool-cell">
+          <div class="tool-cell-group">Knowledge</div>
+          <div class="tool-cell-name">create_entity</div>
+          <div class="tool-cell-desc">Create a typed node with optional classifications and edges in one atomic changeset. The type is any entity type installed in the graph.</div>
+        </div>
+        <div class="tool-cell">
+          <div class="tool-cell-group">Knowledge</div>
+          <div class="tool-cell-name">update_entity</div>
+          <div class="tool-cell-desc">Revise an existing entity's attributes with optimistic concurrency against the entity's current revision.</div>
+        </div>
+        <div class="tool-cell">
+          <div class="tool-cell-group">Knowledge</div>
+          <div class="tool-cell-name">relate</div>
+          <div class="tool-cell-desc">Create a typed edge between two nodes. Time lives on edges (<code>from</code>/<code>until</code>), per the corp-ontology convention.</div>
+        </div>
+        <div class="tool-cell">
+          <div class="tool-cell-group">Knowledge</div>
+          <div class="tool-cell-name">classify</div>
+          <div class="tool-cell-desc">Place a node, edge, or document in the taxonomy. Classification routes policy, so this write can be held.</div>
+        </div>
+        <div class="tool-cell">
+          <div class="tool-cell-group">Knowledge</div>
+          <div class="tool-cell-name">attach_document</div>
+          <div class="tool-cell-desc">Anchor source material by content hash, so claims can cite exact bytes. Returns the document's content-hash address.</div>
+        </div>
+
+        <!-- Retrieval -->
+        <div class="tool-cell">
+          <div class="tool-cell-group">Retrieval</div>
+          <div class="tool-cell-name">recall</div>
+          <div class="tool-cell-desc">Hybrid semantic + full-text search over the PGlite index. Filters by type, region, author, approval status. Every result carries provenance.</div>
+        </div>
+        <div class="tool-cell">
+          <div class="tool-cell-group">Retrieval</div>
+          <div class="tool-cell-name">get_entity</div>
+          <div class="tool-cell-desc">One object in full: attributes, classifications, edges, provenance chain, and revision history.</div>
+        </div>
+        <div class="tool-cell">
+          <div class="tool-cell-group">Retrieval</div>
+          <div class="tool-cell-name">traverse</div>
+          <div class="tool-cell-desc">Walk the typed graph from a starting node: follow edge types in either direction, up to a configurable depth.</div>
+        </div>
+        <div class="tool-cell">
+          <div class="tool-cell-group">Retrieval</div>
+          <div class="tool-cell-name">pending_approvals</div>
+          <div class="tool-cell-desc">The agent's view of its own held writes — proposals awaiting owner approval.</div>
+        </div>
+
+        <!-- Schema -->
+        <div class="tool-cell">
+          <div class="tool-cell-group">Schema</div>
+          <div class="tool-cell-name">describe_schema</div>
+          <div class="tool-cell-desc">Return the graph's installed ontologies as data: entity types, edge types, the taxonomy tree, versions, and import hashes.</div>
+        </div>
+        <div class="tool-cell">
+          <div class="tool-cell-group">Schema</div>
+          <div class="tool-cell-name">propose_ontology_change</div>
+          <div class="tool-cell-desc">Propose a new entity type, edge type, or taxonomy term. Always held — reviewed in the owner's inbox, installed on approval.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Governed-write walkthrough -->
+    <section class="section">
+      <div class="section-header">
+        <div class="eyebrow">Governed write</div>
+        <h2>From write to signed record</h2>
+        <p>
+          A held write is the system working correctly, not an error. Here is the lifecycle of a consequential write from agent call to verified record.
+        </p>
+      </div>
+
+      <div class="walkthrough">
+        <div class="walkthrough-steps">
+
+          <div class="wt-step reg-marks">
+            <span class="reg-mark-bl"></span><span class="reg-mark-br"></span>
+            <div class="wt-step-num">Step 01</div>
+            <h4>Agent writes</h4>
+            <p>
+              Agent calls <code>create_entity</code> with type <code>memory/Preference</code>. The request reaches the admission layer.
+            </p>
+            <div style="margin-top:16px;">
+              <span class="chip chip-scratch">scratch → immediate</span>
+            </div>
+          </div>
+
+          <div class="wt-step held-state reg-marks">
+            <span class="reg-mark-bl"></span><span class="reg-mark-br"></span>
+            <div class="wt-step-num">Step 02</div>
+            <h4>Policy holds the write</h4>
+            <p>
+              The policy engine matches the write against the installed rules. A preference about the owner is consequential. The write is held; the agent receives <code>{ status: "held", proposal, rule }</code>.
+            </p>
+            <div style="margin-top:16px;">
+              <span class="chip chip-held">held</span>
+            </div>
+          </div>
+
+          <div class="wt-step reg-marks">
+            <span class="reg-mark-bl"></span><span class="reg-mark-br"></span>
+            <div class="wt-step-num">Step 03</div>
+            <h4>Owner reviews and approves</h4>
+            <p>
+              The proposal appears in the Inbox: agent identity, stated intent, plain-language summary, the object diff, and the rule that held it. The owner approves.
+            </p>
+            <div style="margin-top:16px;">
+              <span class="chip chip-approved">approved</span>
+            </div>
+          </div>
+
+          <div class="wt-step reg-marks">
+            <span class="reg-mark-bl"></span><span class="reg-mark-br"></span>
+            <div class="wt-step-num">Step 04</div>
+            <h4>Decision record signed</h4>
+            <p>
+              Approval signs a decision record with the owner's key. The write is admitted, indexed, and returned by <code>recall</code> with full provenance — changeset hash, author, approval signature.
+            </p>
+            <div style="margin-top:16px;">
+              <span class="chip chip-verified">verified</span>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- Quickstart snippet -->
+    <section class="section">
+      <div class="section-header">
+        <div class="eyebrow">Quickstart</div>
+        <h2>Up in four commands</h2>
+        <p>
+          Prerequisites: Node ≥ 22, pnpm, and Rust with wasm-pack (for the one-time Allod WASM build). Both repos must be siblings on disk.
+        </p>
+      </div>
+
+      <div class="code-panel reg-marks">
+        <span class="reg-mark-bl"></span><span class="reg-mark-br"></span>
+        <div class="code-panel-header">
+          <span class="code-panel-label">bash</span>
+        </div>
+        <pre><code><span class="code-comment"># 1. Clone both repos as siblings</span>
+git clone https://github.com/yourbuddyconner/allod
+git clone https://github.com/yourbuddyconner/freehold
+
+<span class="code-comment"># 2. Build the Allod wasm package (one time)</span>
+cd allod/crates/allod-wasm &amp;&amp; pnpm install &amp;&amp; pnpm build &amp;&amp; cd ../../..
+
+<span class="code-comment"># 3. Install dependencies and start the daemon</span>
+cd freehold &amp;&amp; pnpm install
+pnpm --dir packages/api exec tsx src/cli/index.ts serve
+<span class="code-comment"># Binds 127.0.0.1:8710 — console at http://127.0.0.1:8710</span>
+
+<span class="code-comment"># 4. Wire an agent</span>
+<span class="code-accent">freehold mcp setup claude-code</span>   <span class="code-comment"># writes the MCP config entry</span>
+freehold mcp setup --print        <span class="code-comment"># or print JSON for any other agent</span></code></pre>
+      </div>
+
+      <div style="margin-top:32px; display:flex; gap:16px; flex-wrap:wrap;">
+        <a href="docs/quickstart.html" class="btn btn-primary">Full quickstart guide</a>
+        <a href="docs/tools.html" class="btn btn-secondary">MCP tools reference</a>
+      </div>
+    </section>
+
+    <!-- Bottom links -->
+    <section class="section" style="border-bottom:none; padding-bottom:48px;">
+      <div class="eyebrow">Documentation</div>
+      <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:32px; margin-top:24px;">
+        <div>
+          <h4 style="margin-bottom:8px;">Quickstart</h4>
+          <p style="font-size:0.875rem; margin-bottom:12px;">Install, configure, and connect an agent in under ten minutes.</p>
+          <a href="docs/quickstart.html" class="link-arrow">Get started</a>
+        </div>
+        <div>
+          <h4 style="margin-bottom:8px;">MCP Tools</h4>
+          <p style="font-size:0.875rem; margin-bottom:12px;">All twelve tools: name, purpose, admission behavior, and parameters.</p>
+          <a href="docs/tools.html" class="link-arrow">Browse tools</a>
+        </div>
+        <div>
+          <h4 style="margin-bottom:8px;">Governance</h4>
+          <p style="font-size:0.875rem; margin-bottom:12px;">The policy model, decision records, the lifecycle from write to verified.</p>
+          <a href="docs/governance.html" class="link-arrow">Read governance</a>
+        </div>
+        <div>
+          <h4 style="margin-bottom:8px;">Architecture</h4>
+          <p style="font-size:0.875rem; margin-bottom:12px;">Package structure, the Allod foundation, and the disposable index.</p>
+          <a href="docs/architecture.html" class="link-arrow">View architecture</a>
+        </div>
+      </div>
+    </section>
+
+  </div><!-- /.site-wrap -->
+</main>
+
+<!-- Footer -->
+<footer class="site-footer">
+  <div class="footer-inner">
+    <div class="footer-left">MIT OR Apache-2.0 — built on <a href="https://github.com/yourbuddyconner/allod">Allod</a></div>
+    <div class="footer-right">
+      <a href="https://github.com/yourbuddyconner/freehold">GitHub</a>
+      <a href="docs/quickstart.html">Quickstart</a>
+      <a href="docs/tools.html">Tools</a>
+      <a href="docs/governance.html">Governance</a>
+      <a href="docs/architecture.html">Architecture</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+  const toggle = document.getElementById('nav-toggle');
+  const links  = document.getElementById('nav-links');
+  if (toggle && links) {
+    toggle.addEventListener('click', () => {
+      const open = links.classList.toggle('open');
+      toggle.textContent = open ? 'CLOSE' : 'MENU';
+    });
+  }
+</script>
+</body>
+</html>

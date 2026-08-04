@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MCP Tools — Freehold</title>
+  <meta name="description" content="The twelve MCP tools Freehold exposes to agents: name, purpose, parameters, and admission behavior.">
+  <link rel="stylesheet" href="../assets/site.css">
+</head>
+<body>
+
+<nav class="site-nav">
+  <div class="nav-inner">
+    <a href="../index.html" class="nav-wordmark">Freehold</a>
+    <button class="nav-mobile-toggle" id="nav-toggle" aria-label="Toggle navigation">MENU</button>
+    <ul class="nav-links" id="nav-links">
+      <li><a href="quickstart.html">Quickstart</a></li>
+      <li><a href="tools.html" class="active">Tools</a></li>
+      <li><a href="governance.html">Governance</a></li>
+      <li><a href="architecture.html">Architecture</a></li>
+      <li><a href="https://github.com/yourbuddyconner/freehold" class="nav-github">GitHub ↗</a></li>
+    </ul>
+  </div>
+</nav>
+
+<div class="docs-layout">
+
+  <aside class="docs-sidebar">
+    <div class="docs-sidebar-section">
+      <div class="docs-sidebar-label">Knowledge</div>
+      <ul class="docs-sidebar-links">
+        <li><a href="#remember">remember</a></li>
+        <li><a href="#create_entity">create_entity</a></li>
+        <li><a href="#update_entity">update_entity</a></li>
+        <li><a href="#relate">relate</a></li>
+        <li><a href="#classify">classify</a></li>
+        <li><a href="#attach_document">attach_document</a></li>
+      </ul>
+    </div>
+    <div class="docs-sidebar-section">
+      <div class="docs-sidebar-label">Retrieval</div>
+      <ul class="docs-sidebar-links">
+        <li><a href="#recall">recall</a></li>
+        <li><a href="#get_entity">get_entity</a></li>
+        <li><a href="#traverse">traverse</a></li>
+        <li><a href="#pending_approvals">pending_approvals</a></li>
+      </ul>
+    </div>
+    <div class="docs-sidebar-section">
+      <div class="docs-sidebar-label">Schema</div>
+      <ul class="docs-sidebar-links">
+        <li><a href="#describe_schema">describe_schema</a></li>
+        <li><a href="#propose_ontology_change">propose_ontology_change</a></li>
+      </ul>
+    </div>
+    <div class="docs-sidebar-section">
+      <div class="docs-sidebar-label">Docs</div>
+      <ul class="docs-sidebar-links">
+        <li><a href="quickstart.html">Quickstart</a></li>
+        <li><a href="governance.html">Governance</a></li>
+        <li><a href="architecture.html">Architecture</a></li>
+      </ul>
+    </div>
+  </aside>
+
+  <article class="docs-content">
+
+    <div class="eyebrow reveal reveal-1">Reference</div>
+    <h1 class="reveal reveal-2">MCP Tools</h1>
+    <p class="lead reveal reveal-3">
+      Agents connect over streamable HTTP MCP at <code>/mcp</code>. The tool surface is a strict subset of the HTTP API: agents never get approval, rejection, policy mutation, or key operations through the tool surface. Every write tool returns either <code>{ status: "admitted", changeset }</code> or <code>{ status: "held", proposal, rule }</code>.
+    </p>
+
+    <blockquote>
+      <p>A held response is a first-class success shape, not an error. The agent received a valid response; the write is in the queue. See <a href="governance.html">Governance</a> for how held writes are reviewed and admitted.</p>
+    </blockquote>
+
+    <h2>Knowledge tools</h2>
+    <p>These tools write to the graph. Each write is an atomic changeset. Scratch-classified writes are admitted immediately; governed writes are held by policy.</p>
+
+    <div class="tool-ref reg-marks" id="remember">
+      <span class="reg-mark-bl"></span><span class="reg-mark-br"></span>
+      <div class="tool-ref-header">
+        <span class="tool-ref-name">remember</span>
+        <span class="chip chip-scratch">admitted immediately</span>
+      </div>
+      <div class="tool-ref-body">
+        <p class="tool-ref-desc">
+          The ergonomic fast path for capturing a thought or observation. Creates a <code>memory/Note</code> entity classified as scratch and admits it immediately. This is sugar over <code>create_entity</code> — it does not accept type overrides or relationship parameters.
+        </p>
+        <strong>Parameters</strong>
+        <ul>
+          <li><code>content</code> (string, required) — the text of the note</li>
+        </ul>
+        <div class="tool-admission">
+          <strong>Admission:</strong> Always admitted. Scratch notes bypass the policy engine. The note is immediately indexed and retrievable via <code>recall</code>.
+        </div>
+      </div>
+    </div>
+
+    <div class="tool-ref reg-marks" id="create_entity">
+      <span class="reg-mark-bl"></span><span class="reg-mark-br"></span>
+      <div class="tool-ref-header">
+        <span class="tool-ref-name">create_entity</span>
+        <span class="chip chip-held">may be held</span>
+      </div>
+      <div class="tool-ref-body">
+        <p class="tool-ref-desc">
+          Create a typed node with optional classifications and edges in one atomic changeset. The entity type is any type installed in the graph's schema — not a fixed menu. The most common path to a held write: creating a <code>memory/Preference</code> or any entity that policy routes as consequential.
+        </p>
+        <strong>Parameters</strong>
+        <ul>
+          <li><code>type</code> (string, required) — a fully-qualified type name from the installed schema, e.g., <code>memory/Preference</code>, <code>core/Person</code></li>
+          <li><code>attributes</code> (object, required) — attribute key-value pairs matching the type's schema</li>
+          <li><code>classify</code> (string[], optional) — taxonomy terms to apply in the same changeset</li>
+          <li><code>relate</code> (object[], optional) — edges to create in the same changeset: <code>{ to, edge_type, attributes? }</code></li>
+        </ul>
+        <div class="tool-admission">
+          <strong>Admission:</strong> Depends on policy. Entities classified as scratch are admitted; governed types (preferences, people, agreements) are held pending owner approval.
+        </div>
+      </div>
+    </div>
+
+    <div class="tool-ref reg-marks" id="update_entity">
+      <span class="reg-mark-bl"></span><span class="reg-mark-br"></span>
+      <div class="tool-ref-header">
+        <span class="tool-ref-name">update_entity</span>
+        <span class="chip chip-held">may be held</span>
+      </div>
+      <div class="tool-ref-body">
+        <p class="tool-ref-desc">
+          Revise an existing entity's attributes. Uses optimistic concurrency: the request includes the entity's current revision identifier, and the server rejects the update if the entity has been modified since. This prevents conflicting updates from silently overwriting each other.
+        </p>
+        <strong>Parameters</strong>
+        <ul>
+          <li><code>id</code> (string, required) — the entity's stable identifier</li>
+          <li><code>attributes</code> (object, required) — attribute fields to set; unspecified fields are unchanged</li>
+          <li><code>revision</code> (string, required) — the entity's current revision, returned by <code>get_entity</code></li>
+        </ul>
+        <div class="tool-admission">
+          <strong>Admission:</strong> Follows the same policy as the entity's type. Updates to governed entities are held.
+        </div>
+      </div>
+    </div>
+
+    <div class="tool-ref reg-marks" id="relate">
+      <span class="reg-mark-bl"></span><span class="reg-mark-br"></span>
+      <div class="tool-ref-header">
+        <span class="tool-ref-name">relate</span>
+        <span class="chip chip-held">may be held</span>
+      </div>
+      <div class="tool-ref-body">
+        <p class="tool-ref-desc">
+          Create a typed edge between two existing nodes. Edge types define the valid domain and range (e.g., a <code>derived_from</code> edge must connect a knowledge entity to its source). Time lives on edges — use <code>from</code> and <code>until</code> attributes following the corp-ontology convention for time-bounded relationships.
+        </p>
+        <strong>Parameters</strong>
+        <ul>
+          <li><code>from</code> (string, required) — source entity identifier</li>
+          <li><code>to</code> (string, required) — target entity identifier</li>
+          <li><code>edge_type</code> (string, required) — a fully-qualified edge type from the installed schema</li>
+          <li><code>attributes</code> (object, optional) — edge attributes, including <code>from</code>/<code>until</code> timestamps</li>
+        </ul>
+        <div class="tool-admission">
+          <strong>Admission:</strong> Policy-dependent. Edges connecting governed entities are typically held.
+        </div>
+      </div>
+    </div>
+
+    <div class="tool-ref reg-marks" id="classify">
+      <span class="reg-mark-bl"></span><span class="reg-mark-br"></span>
+      <div class="tool-ref-header">
+        <span class="tool-ref-name">classify</span>
+        <span class="chip chip-held">may be held</span>
+      </div>
+      <div class="tool-ref-body">
+        <p class="tool-ref-desc">
+          Place a node, edge, or document in the taxonomy. Classification affects policy routing — classifying a node under a governed taxonomy term can change which policy rules apply to it. For this reason, classification can itself be held.
+        </p>
+        <strong>Parameters</strong>
+        <ul>
+          <li><code>subject</code> (string, required) — the identifier of the node, edge, or document to classify</li>
+          <li><code>term</code> (string, required) — the taxonomy term to apply, e.g., <code>life/health</code>, <code>work/project</code></li>
+        </ul>
+        <div class="tool-admission">
+          <strong>Admission:</strong> Depends on the taxonomy term and the target object's type. Classification under a governed term may be held.
+        </div>
+      </div>
+    </div>
+
+    <div class="tool-ref reg-marks" id="attach_document">
+      <span class="reg-mark-bl"></span><span class="reg-mark-br"></span>
+      <div class="tool-ref-header">
+        <span class="tool-ref-name">attach_document</span>
+        <span class="chip chip-scratch">typically admitted</span>
+      </div>
+      <div class="tool-ref-body">
+        <p class="tool-ref-desc">
+          Anchor source material in the graph by content hash. The document is stored and addressed by the hash of its content — other entities can cite exact bytes by referencing the hash. Use this to give claims a durable source reference.
+        </p>
+        <strong>Parameters</strong>
+        <ul>
+          <li><code>content</code> (string, required) — the document text to anchor</li>
+          <li><code>media_type</code> (string, required) — MIME type, e.g., <code>text/plain</code>, <code>text/markdown</code></li>
+        </ul>
+        <div class="tool-admission">
+          <strong>Admission:</strong> Documents in the scratch region are admitted immediately. The content hash is returned for use in subsequent <code>relate</code> calls.
+        </div>
+      </div>
+    </div>
+
+    <h2>Retrieval tools</h2>
+    <p>Read-only. These tools do not create changesets and are never held by policy.</p>
+
+    <div class="tool-ref reg-marks" id="recall">
+      <span class="reg-mark-bl"></span><span class="reg-mark-br"></span>
+      <div class="tool-ref-header">
+        <span class="tool-ref-name">recall</span>
+        <span class="chip chip-approved">read-only</span>
+      </div>
+      <div class="tool-ref-body">
+        <p class="tool-ref-desc">
+          Hybrid search: pgvector cosine similarity (bge-small-en-v1.5, 384-dim) merged with Postgres full-text search, over the PGlite index. Every result carries its provenance: changeset hash, author DID, approval status, and the rule (if any) that governed the write. Memory never leaves the machine — the embedding model runs in-process via transformers.js.
+        </p>
+        <strong>Parameters</strong>
+        <ul>
+          <li><code>query</code> (string, required) — natural language search query</li>
+          <li><code>filters</code> (object, optional):
+            <ul>
+              <li><code>type</code> — restrict to a specific entity type</li>
+              <li><code>region</code> — restrict to a graph region (e.g., <code>scratch</code>, <code>governed</code>)</li>
+              <li><code>author</code> — restrict to a specific author DID</li>
+              <li><code>approval_status</code> — one of <code>admitted</code>, <code>held</code>, <code>rejected</code></li>
+            </ul>
+          </li>
+        </ul>
+        <div class="tool-admission">
+          <strong>Note:</strong> When running from the compiled binary, semantic (cosine similarity) recall is unavailable and the search falls back to BM25 full-text + hash vectors. Run from source for full hybrid recall.
+        </div>
+      </div>
+    </div>
+
+    <div class="tool-ref reg-marks" id="get_entity">
+      <span class="reg-mark-bl"></span><span class="reg-mark-br"></span>
+      <div class="tool-ref-header">
+        <span class="tool-ref-name">get_entity</span>
+        <span class="chip chip-approved">read-only</span>
+      </div>
+      <div class="tool-ref-body">
+        <p class="tool-ref-desc">
+          Retrieve one object in full: its current attributes, classifications, all typed edges (with their edge types, direction, and attributes), the full provenance chain (who wrote it, who approved it, the changeset hash), and revision history.
+        </p>
+        <strong>Parameters</strong>
+        <ul>
+          <li><code>id</code> (string, required) — the entity's stable identifier</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="tool-ref reg-marks" id="traverse">
+      <span class="reg-mark-bl"></span><span class="reg-mark-br"></span>
+      <div class="tool-ref-header">
+        <span class="tool-ref-name">traverse</span>
+        <span class="chip chip-approved">read-only</span>
+      </div>
+      <div class="tool-ref-body">
+        <p class="tool-ref-desc">
+          Walk the typed graph from a starting node. Follow specific edge types in either direction (outbound, inbound, or both) up to a configurable depth. Useful for answering questions like "what does this preference derive from?" or "who else relates to this document?"
+        </p>
+        <strong>Parameters</strong>
+        <ul>
+          <li><code>from</code> (string, required) — starting entity identifier</li>
+          <li><code>edge_types</code> (string[], optional) — restrict traversal to these edge types; if omitted, follows all edges</li>
+          <li><code>direction</code> (string, optional) — <code>outbound</code> (default), <code>inbound</code>, or <code>both</code></li>
+          <li><code>depth</code> (number, optional) — maximum traversal depth, default 2</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="tool-ref reg-marks" id="pending_approvals">
+      <span class="reg-mark-bl"></span><span class="reg-mark-br"></span>
+      <div class="tool-ref-header">
+        <span class="tool-ref-name">pending_approvals</span>
+        <span class="chip chip-approved">read-only</span>
+      </div>
+      <div class="tool-ref-body">
+        <p class="tool-ref-desc">
+          Return the agent's own held proposals — writes that have been submitted but not yet approved or rejected by the owner. The agent can use this to check whether a previous write is still pending, approved, or rejected before deciding to re-attempt or proceed.
+        </p>
+        <strong>Parameters</strong>
+        <ul>
+          <li>None. The result is scoped to the calling agent's identity.</li>
+        </ul>
+      </div>
+    </div>
+
+    <h2>Schema tools</h2>
+    <p>These tools let agents read and evolve the graph's ontology. Schema changes follow the same governance lifecycle as knowledge writes — they are always held and require owner approval.</p>
+
+    <div class="tool-ref reg-marks" id="describe_schema">
+      <span class="reg-mark-bl"></span><span class="reg-mark-br"></span>
+      <div class="tool-ref-header">
+        <span class="tool-ref-name">describe_schema</span>
+        <span class="chip chip-approved">read-only</span>
+      </div>
+      <div class="tool-ref-body">
+        <p class="tool-ref-desc">
+          Return the graph's installed ontologies as structured data. An agent calls this to learn what types the graph currently holds before deciding whether to create an entity or propose a new type. The schema is read from the graph itself — not from documentation — so what the agent sees is what is actually installed.
+        </p>
+        <strong>Returns</strong>
+        <ul>
+          <li>Entity types with attribute schemas (name, type expression, required flag) and inheritance chains</li>
+          <li>Edge types with domain, range, cardinality, and attributes</li>
+          <li>The full taxonomy tree</li>
+          <li>Installed package versions and import hashes</li>
+        </ul>
+        <div class="tool-admission">
+          <strong>Design note:</strong> This is how an agent learns what the graph can hold — not from documentation, but from the graph itself. It is the entry point to the schema loop.
+        </div>
+      </div>
+    </div>
+
+    <div class="tool-ref reg-marks" id="propose_ontology_change">
+      <span class="reg-mark-bl"></span><span class="reg-mark-br"></span>
+      <div class="tool-ref-header">
+        <span class="tool-ref-name">propose_ontology_change</span>
+        <span class="chip chip-held">always held</span>
+      </div>
+      <div class="tool-ref-body">
+        <p class="tool-ref-desc">
+          Propose a change to the graph's installed schema: add an entity type, add an edge type, or add a taxonomy term. Schema proposals are always held — the <code>schema-changes-are-serious</code> policy rule applies unconditionally. The proposal appears in the owner's Inbox alongside knowledge proposals, reviewed and installed on approval. This is the agent's path to evolving its world-model under governance.
+        </p>
+        <strong>Parameters</strong>
+        <ul>
+          <li><code>change</code> (object, required):
+            <ul>
+              <li><code>kind</code> — <code>add_entity_type</code>, <code>add_edge_type</code>, or <code>add_taxonomy_term</code></li>
+              <li><code>name</code> — the proposed type or term name</li>
+              <li><code>extends</code> (for entity types) — parent type, e.g., <code>core/Person</code></li>
+              <li><code>attributes</code> (for entity types) — array of <code>{ name, type, required }</code></li>
+              <li><code>domain</code> / <code>range</code> (for edge types)</li>
+              <li><code>parent</code> (for taxonomy terms)</li>
+            </ul>
+          </li>
+        </ul>
+        <div class="tool-admission">
+          <strong>Admission:</strong> Always held. Schema changes are in-graph changesets — a proposed entity type is a held changeset that creates a <code>meta/EntityType</code> node, governed, signed, and provenance-carrying like every other write.
+        </div>
+      </div>
+    </div>
+
+  </article>
+</div>
+
+<footer class="site-footer">
+  <div class="footer-inner">
+    <div class="footer-left">MIT OR Apache-2.0 — built on <a href="https://github.com/yourbuddyconner/allod">Allod</a></div>
+    <div class="footer-right">
+      <a href="https://github.com/yourbuddyconner/freehold">GitHub</a>
+      <a href="quickstart.html">Quickstart</a>
+      <a href="tools.html">Tools</a>
+      <a href="governance.html">Governance</a>
+      <a href="architecture.html">Architecture</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+  const toggle = document.getElementById('nav-toggle');
+  const links  = document.getElementById('nav-links');
+  if (toggle && links) {
+    toggle.addEventListener('click', () => {
+      const open = links.classList.toggle('open');
+      toggle.textContent = open ? 'CLOSE' : 'MENU';
+    });
+  }
+</script>
+</body>
+</html>

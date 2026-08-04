@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Quickstart — Freehold</title>
+  <meta name="description" content="Install Freehold, start the daemon, and connect an agent in under ten minutes.">
+  <link rel="stylesheet" href="../assets/site.css">
+</head>
+<body>
+
+<!-- Navigation -->
+<nav class="site-nav">
+  <div class="nav-inner">
+    <a href="../index.html" class="nav-wordmark">Freehold</a>
+    <button class="nav-mobile-toggle" id="nav-toggle" aria-label="Toggle navigation">MENU</button>
+    <ul class="nav-links" id="nav-links">
+      <li><a href="quickstart.html" class="active">Quickstart</a></li>
+      <li><a href="tools.html">Tools</a></li>
+      <li><a href="governance.html">Governance</a></li>
+      <li><a href="architecture.html">Architecture</a></li>
+      <li><a href="https://github.com/yourbuddyconner/freehold" class="nav-github">GitHub ↗</a></li>
+    </ul>
+  </div>
+</nav>
+
+<div class="docs-layout">
+
+  <!-- Sidebar -->
+  <aside class="docs-sidebar">
+    <div class="docs-sidebar-section">
+      <div class="docs-sidebar-label">On this page</div>
+      <ul class="docs-sidebar-links">
+        <li><a href="#prerequisites" class="active">Prerequisites</a></li>
+        <li><a href="#install">Install and build</a></li>
+        <li><a href="#serve">Start the daemon</a></li>
+        <li><a href="#wire-agent">Wire an agent</a></li>
+        <li><a href="#cli">CLI reference</a></li>
+        <li><a href="#limitations">Known limitations</a></li>
+      </ul>
+    </div>
+    <div class="docs-sidebar-section">
+      <div class="docs-sidebar-label">Docs</div>
+      <ul class="docs-sidebar-links">
+        <li><a href="tools.html">MCP Tools</a></li>
+        <li><a href="governance.html">Governance</a></li>
+        <li><a href="architecture.html">Architecture</a></li>
+      </ul>
+    </div>
+  </aside>
+
+  <!-- Content -->
+  <article class="docs-content">
+
+    <div class="eyebrow reveal reveal-1">Documentation</div>
+    <h1 class="reveal reveal-2">Quickstart</h1>
+    <p class="lead reveal reveal-3">
+      This guide walks from a clean machine to a running Freehold daemon with an agent connected. The two prerequisites — a sibling Allod checkout and a one-time WASM build — are the main things to get right before anything else.
+    </p>
+
+    <h2 id="prerequisites">Prerequisites</h2>
+
+    <p>Freehold consumes <code>@allod/core</code>, a WASM npm package built from the Allod source. The package is not yet published to npm; it is consumed from a sibling checkout on disk. This means you need both repos.</p>
+
+    <ul>
+      <li><strong>Node ≥ 22</strong> — the daemon uses Node for the runtime</li>
+      <li><strong>pnpm</strong> — the workspace package manager (<a href="https://pnpm.io">pnpm.io</a>)</li>
+      <li><strong>Rust + wasm-pack</strong> — required once to build the Allod WASM package; not needed after that unless you update Allod</li>
+    </ul>
+
+    <p>Install wasm-pack if you do not already have it:</p>
+
+    <pre><code>cargo install wasm-pack</code></pre>
+
+    <h2 id="install">Install and build</h2>
+
+    <p>Both repositories must be siblings in the same parent directory. The name matters: Freehold's workspace configuration resolves <code>@allod/core</code> as <code>../allod/crates/allod-wasm/pkg</code>.</p>
+
+    <pre><code><span class="code-comment"># 1. Clone both repos as siblings — order does not matter</span>
+git clone https://github.com/yourbuddyconner/allod
+git clone https://github.com/yourbuddyconner/freehold
+
+<span class="code-comment"># Your directory should look like:</span>
+<span class="code-comment">#   some-parent/</span>
+<span class="code-comment">#     allod/</span>
+<span class="code-comment">#     freehold/</span>
+
+<span class="code-comment"># 2. Build the Allod wasm package (one time)</span>
+cd allod/crates/allod-wasm
+pnpm install
+pnpm build
+cd ../../..
+
+<span class="code-comment"># 3. Install Freehold dependencies</span>
+cd freehold
+pnpm install</code></pre>
+
+    <h2 id="serve">Start the daemon</h2>
+
+    <pre><code>pnpm --dir packages/api exec tsx src/cli/index.ts serve</code></pre>
+
+    <p>The daemon binds <code>127.0.0.1:8710</code>, creates <code>~/.freehold/</code> on first run (config, the PGlite index directory, and your graph in native Allod layout), and serves the owner console at <a href="http://127.0.0.1:8710">http://127.0.0.1:8710</a>.</p>
+
+    <p>A bearer token is auto-minted into <code>~/.freehold/config.json</code> (mode 0600) at first boot. The CLI and the MCP config use this token automatically.</p>
+
+    <div class="notice">
+      <p><strong>Run from source for semantic recall.</strong> The compiled binary ships with a hash embedder only — semantic recall (bge-small cosine similarity) is unavailable in the binary build. For development and dogfood use, run from source via <code>tsx</code> as shown above. Recall still functions with the hash embedder (BM25 full-text + hash vectors), but semantic similarity is not available.</p>
+    </div>
+
+    <h2 id="wire-agent">Wire an agent</h2>
+
+    <p>With the daemon running, wire an agent from a second terminal:</p>
+
+    <pre><code><span class="code-comment"># Write the MCP config entry for Claude Code</span>
+freehold mcp setup claude-code
+
+<span class="code-comment"># Or print config JSON for any other agent</span>
+freehold mcp setup --print</code></pre>
+
+    <p>The config points the agent at <code>http://127.0.0.1:8710/mcp</code> (streamable HTTP MCP) with the bearer token from <code>~/.freehold/config.json</code>.</p>
+
+    <p>Then open the console in your browser at <a href="http://127.0.0.1:8710">http://127.0.0.1:8710</a> and watch the Inbox as the agent works. Scratch notes appear in Memory immediately. Consequential writes — preferences about you, entities outside the scratch region — appear in the Inbox as proposals for you to approve or reject.</p>
+
+    <h3>Try the memory loop</h3>
+
+    <p>From your agent (Claude Code or any MCP client):</p>
+
+    <pre><code><span class="code-comment"># Fast scratch note — admitted immediately</span>
+remember("Meeting with design team at 2pm")
+
+<span class="code-comment"># Governed write — will be held for approval</span>
+create_entity("memory/Preference", {
+  content: "prefers morning meetings",
+  strength: "strong"
+})</code></pre>
+
+    <p>The second call returns <code>{ status: "held", proposal, rule }</code>. The proposal appears in your Inbox with the agent's identity, the diff, and the rule that held it. Approve it to admit the write and sign a decision record.</p>
+
+    <h3>Try the schema loop</h3>
+
+    <pre><code><span class="code-comment"># Read what the graph already knows</span>
+describe_schema()
+
+<span class="code-comment"># Propose a new type when the graph lacks one</span>
+propose_ontology_change({
+  kind: "add_entity_type",
+  name: "Colleague",
+  extends: "core/Person",
+  attributes: [{ name: "slack_id", type: "string", required: false }]
+})</code></pre>
+
+    <p>Schema proposals are always held. Approve the proposal in the Inbox to install the type. The Schema viewer in the console will show the new type with its provenance — which agent proposed it, which changeset added it, your signature on the approval.</p>
+
+    <h2 id="cli">CLI reference</h2>
+
+    <p><code>freehold serve</code> runs the product. Every other subcommand is a client of the running daemon over its public HTTP API:</p>
+
+    <table class="arch-table">
+      <thead>
+        <tr>
+          <th>Command</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>freehold status</td><td>Check if the daemon is running and report its state</td></tr>
+        <tr><td>freehold remember &lt;text&gt;</td><td>Write a scratch note from the command line</td></tr>
+        <tr><td>freehold recall &lt;query&gt;</td><td>Search memory and print results</td></tr>
+        <tr><td>freehold pending</td><td>List proposals awaiting approval</td></tr>
+        <tr><td>freehold approve &lt;hash&gt;</td><td>Approve a proposal by its changeset hash</td></tr>
+        <tr><td>freehold reject &lt;hash&gt;</td><td>Reject a proposal; records a signed rejection</td></tr>
+        <tr><td>freehold verify</td><td>Run three-level graph verification</td></tr>
+        <tr><td>freehold reindex</td><td>Rebuild the PGlite index from the graph log</td></tr>
+        <tr><td>freehold mcp setup &lt;agent&gt;</td><td>Write the MCP config entry for a named agent</td></tr>
+        <tr><td>freehold mcp setup --print</td><td>Print MCP config JSON for any agent</td></tr>
+      </tbody>
+    </table>
+
+    <p>All commands accept <code>--json</code> for machine-readable output. Exit codes: <code>0</code> ok, <code>2</code> held, <code>3</code> policy-rejected, <code>4</code> auth, <code>5</code> daemon unreachable.</p>
+
+    <h2 id="limitations">Known limitations (v0)</h2>
+
+    <ul>
+      <li><strong>Semantic recall unavailable in the compiled binary.</strong> The binary ships with hash-embedder only. Run from source via <code>tsx</code> for semantic (cosine similarity) search over bge-small embeddings. See <a href="https://github.com/yourbuddyconner/freehold/blob/main/docs/notes/F10-deferred.md">F10-deferred</a> for the technical details and planned resolution.</li>
+      <li><strong>Sidecar files required for the compiled binary.</strong> The binary requires four sidecar files in the same directory (PGlite WASM engine, FS bundle, initdb WASM, pgvector extension bundle). The <code>compile-binary.mjs</code> script copies these automatically.</li>
+      <li><strong>Single-user, local-only.</strong> The daemon binds <code>127.0.0.1</code>. Multi-user, remote instances, and federation between Freehold instances are out of scope for v0.</li>
+      <li><strong>No memory graph visualization.</strong> The force-directed graph view is deferred to v0.1.</li>
+    </ul>
+
+  </article>
+</div>
+
+<footer class="site-footer">
+  <div class="footer-inner">
+    <div class="footer-left">MIT OR Apache-2.0 — built on <a href="https://github.com/yourbuddyconner/allod">Allod</a></div>
+    <div class="footer-right">
+      <a href="https://github.com/yourbuddyconner/freehold">GitHub</a>
+      <a href="quickstart.html">Quickstart</a>
+      <a href="tools.html">Tools</a>
+      <a href="governance.html">Governance</a>
+      <a href="architecture.html">Architecture</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+  const toggle = document.getElementById('nav-toggle');
+  const links  = document.getElementById('nav-links');
+  if (toggle && links) {
+    toggle.addEventListener('click', () => {
+      const open = links.classList.toggle('open');
+      toggle.textContent = open ? 'CLOSE' : 'MENU';
+    });
+  }
+</script>
+</body>
+</html>
