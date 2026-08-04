@@ -1,0 +1,24 @@
+{
+  "name": "@freehold/client",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/client.ts",
+      "default": "./src/client.ts"
+    }
+  },
+  "scripts": {
+    "build": "pnpm check:drift",
+    "check:drift": "tsx generate.ts --check",
+    "generate": "tsx generate.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "openapi-typescript": "^7.8.0",
+    "tsx": "^4.19.4",
+    "typescript": "^5.3.3"
+  }
+}
