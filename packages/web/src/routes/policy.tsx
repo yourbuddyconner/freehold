@@ -141,7 +141,7 @@ function EditDrawer({ open, onClose, rule, allRules }: EditDrawerProps) {
               onChange={(e) => setYaml(e.target.value)}
               rows={14}
               spellCheck={false}
-              className="w-full rounded border border-[--border] bg-white dark:bg-neutral-900 p-3 font-mono text-xs text-[--fg] resize-y focus:outline-none focus:ring-2 focus:ring-[--fg]/20"
+              className="w-full border border-[--border] bg-white dark:bg-neutral-900 p-3 font-mono text-xs text-[--fg] resize-y focus:outline-none focus:ring-2 focus:ring-[--fg]/20"
               aria-label="Policy YAML"
             />
 
@@ -157,7 +157,7 @@ function EditDrawer({ open, onClose, rule, allRules }: EditDrawerProps) {
                   {diffVisible ? "Hide diff" : "Show diff preview"}
                 </button>
                 {diffVisible && (
-                  <div className="mt-2 rounded border border-[--border] bg-[--bg-subtle] p-3 font-mono text-[11px] space-y-1">
+                  <div className="mt-2 border border-[--border] bg-[--bg-subtle] p-3 font-mono text-[11px] space-y-1">
                     <div className="text-[--fg-muted] text-xs mb-1">Before → After</div>
                     <div className="line-through text-[--fg-muted] whitespace-pre-wrap">
                       {initialYaml}
@@ -182,7 +182,7 @@ function EditDrawer({ open, onClose, rule, allRules }: EditDrawerProps) {
             <Dialog.Close asChild>
               <button
                 type="button"
-                className="rounded border border-[--border] px-4 py-1.5 text-xs font-medium text-[--fg-muted] hover:text-[--fg] hover:bg-[--bg-subtle] transition-colors"
+                className="border border-[--border] px-4 py-1.5 text-xs font-medium text-[--fg-muted] hover:text-[--fg] hover:bg-[--bg-subtle] transition-colors"
               >
                 Cancel
               </button>
@@ -192,7 +192,7 @@ function EditDrawer({ open, onClose, rule, allRules }: EditDrawerProps) {
               onClick={() => submitMutation.mutate()}
               disabled={!changed || submitMutation.isPending}
               className={cn(
-                "rounded px-4 py-1.5 text-xs font-medium text-white transition-colors",
+                "px-4 py-1.5 text-xs font-medium text-white transition-colors",
                 changed && !submitMutation.isPending
                   ? "bg-[--fg] hover:opacity-80"
                   : "bg-[--fg-muted] opacity-50 cursor-not-allowed"
@@ -219,12 +219,26 @@ function PolicyPage() {
 
   return (
     <div className="space-y-4">
-      <h2 className="font-serif text-2xl font-semibold">Policy</h2>
+      <div className="flex items-center gap-1.5 mb-1">
+        <span
+          style={{
+            display: "inline-block",
+            width: 10,
+            height: 3,
+            background: "var(--color-accent)",
+          }}
+          aria-hidden
+        />
+        <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-[--fg-muted]">
+          POLICY RULES
+        </span>
+      </div>
+      <h2 className="text-2xl font-semibold tracking-tight">Policy</h2>
 
       {isLoading && <p className="text-[--fg-muted] text-sm">Loading policy…</p>}
 
       {!isLoading && rules.length === 0 && (
-        <div className="rounded-lg border border-[--border] bg-[--bg-subtle] p-6 space-y-3 max-w-xl">
+        <div className="border border-[--border] bg-[--bg-subtle] p-6 space-y-3 max-w-xl">
           <p className="text-sm text-[--fg-muted]">
             No policy rules loaded. Rules govern which agent writes require your approval before
             they are admitted to your memory graph.

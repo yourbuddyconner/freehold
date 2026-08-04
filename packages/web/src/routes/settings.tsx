@@ -75,7 +75,7 @@ function ApiTokenSection() {
       {token ? (
         <div className="relative">
           <code
-            className="block rounded border border-[--border] bg-[--bg-subtle] px-3 py-2 font-mono text-xs text-[--fg] overflow-auto break-all pr-16"
+            className="block border border-[--border] bg-[--bg-subtle] px-3 py-2 font-mono text-xs text-[--fg] overflow-auto break-all pr-16"
             data-testid="api-token"
           >
             {token}
@@ -84,7 +84,7 @@ function ApiTokenSection() {
             type="button"
             onClick={handleCopy}
             aria-label="Copy API token"
-            className="absolute top-1.5 right-2 flex items-center gap-1 rounded border border-[--border] bg-white dark:bg-neutral-900 px-2 py-1 text-[10px] text-[--fg-muted] hover:text-[--fg] transition-colors"
+            className="absolute top-1.5 right-2 flex items-center gap-1 border border-[--border] bg-white dark:bg-neutral-900 px-2 py-1 text-[10px] text-[--fg-muted] hover:text-[--fg] transition-colors"
           >
             {copied ? (
               <Check className="h-3 w-3 text-green-600" aria-hidden />
@@ -116,7 +116,7 @@ function EmbedderSection() {
       <h3 className="text-sm font-semibold text-[--fg]">Embedder configuration</h3>
       {isLoading && <p className="text-xs text-[--fg-muted]">Loading…</p>}
       {data && (
-        <dl className="rounded border border-[--border] bg-[--bg-subtle] p-3 space-y-2 text-xs">
+        <dl className="border border-[--border] bg-[--bg-subtle] p-3 space-y-2 text-xs">
           <div className="flex gap-4">
             <dt className="text-[--fg-muted] w-28 shrink-0">Backend</dt>
             <dd className="font-mono text-[--fg]" data-testid="embedder-backend">
@@ -200,7 +200,7 @@ function RegisterAgentSection() {
           </p>
           <div className="relative">
             <pre
-              className="rounded border border-[--border] bg-[--bg-subtle] p-3 font-mono text-xs text-[--fg] overflow-auto"
+              className="border border-[--border] bg-[--bg-subtle] p-3 font-mono text-xs text-[--fg] overflow-auto"
               data-testid="mcp-snippet"
             >
               {snippet}
@@ -209,7 +209,7 @@ function RegisterAgentSection() {
               type="button"
               onClick={() => handleCopy(snippet)}
               aria-label="Copy MCP snippet"
-              className="absolute top-2 right-2 flex items-center gap-1 rounded border border-[--border] bg-white dark:bg-neutral-900 px-2 py-1 text-[10px] text-[--fg-muted] hover:text-[--fg] transition-colors"
+              className="absolute top-2 right-2 flex items-center gap-1 border border-[--border] bg-white dark:bg-neutral-900 px-2 py-1 text-[10px] text-[--fg-muted] hover:text-[--fg] transition-colors"
             >
               {copied ? (
                 <Check className="h-3 w-3 text-green-600" aria-hidden />
@@ -234,7 +234,7 @@ function RegisterAgentSection() {
             value={agentName}
             onChange={(e) => setAgentName(e.target.value)}
             placeholder="Agent name (e.g. claude-code)"
-            className="flex-1 rounded border border-[--border] bg-white dark:bg-neutral-900 px-3 py-1.5 text-xs text-[--fg] placeholder:text-[--fg-muted] focus:outline-none focus:ring-2 focus:ring-[--fg]/20"
+            className="flex-1 border border-[--border] bg-white dark:bg-neutral-900 px-3 py-1.5 text-xs text-[--fg] placeholder:text-[--fg-muted] focus:outline-none focus:ring-2 focus:ring-[--fg]/20"
             data-testid="agent-name-input"
             onKeyDown={(e) => {
               if (e.key === "Enter" && agentName.trim()) registerMutation.mutate();
@@ -244,7 +244,7 @@ function RegisterAgentSection() {
             type="button"
             onClick={() => registerMutation.mutate()}
             disabled={!agentName.trim() || registerMutation.isPending}
-            className="rounded bg-[--fg] px-3 py-1.5 text-xs font-medium text-white hover:opacity-80 disabled:opacity-50 transition-opacity"
+            className="bg-[--fg] text-white font-mono text-[12px] uppercase tracking-wide px-3 py-1.5 disabled:opacity-50 transition-opacity"
             data-testid="register-agent-btn"
           >
             {registerMutation.isPending ? "Registering…" : "Register"}
@@ -310,7 +310,7 @@ function OntologyInstallSection() {
         rows={6}
         placeholder="# Paste ontology YAML here…"
         spellCheck={false}
-        className="w-full rounded border border-[--border] bg-white dark:bg-neutral-900 p-3 font-mono text-xs text-[--fg] placeholder:text-[--fg-muted] resize-y focus:outline-none focus:ring-2 focus:ring-[--fg]/20"
+        className="w-full border border-[--border] bg-white dark:bg-neutral-900 p-3 font-mono text-xs text-[--fg] placeholder:text-[--fg-muted] resize-y focus:outline-none focus:ring-2 focus:ring-[--fg]/20"
         data-testid="ontology-yaml"
       />
 
@@ -318,13 +318,13 @@ function OntologyInstallSection() {
         type="button"
         onClick={() => previewMutation.mutate()}
         disabled={!docsYaml.trim() || previewMutation.isPending}
-        className="rounded border border-[--border] px-3 py-1.5 text-xs font-medium text-[--fg-muted] hover:text-[--fg] hover:bg-[--bg-subtle] disabled:opacity-50 transition-colors"
+        className="border border-[--border] px-3 py-1.5 text-xs font-medium text-[--fg-muted] hover:text-[--fg] hover:bg-[--bg-subtle] disabled:opacity-50 transition-colors"
       >
         Preview
       </button>
 
       {confirmOpen && preview && (
-        <div className="rounded-lg border border-[--border] bg-[--bg-subtle] p-4 space-y-3">
+        <div className="border border-[--border] bg-[--bg-subtle] p-4 space-y-3">
           <p className="text-xs font-medium text-[--fg]">Schema preview</p>
           <p className="text-xs text-[--fg-muted]">
             No preview available without a server round-trip. Proceed to install?
@@ -334,7 +334,7 @@ function OntologyInstallSection() {
               type="button"
               onClick={() => installMutation.mutate()}
               disabled={installMutation.isPending}
-              className="rounded bg-[--fg] px-3 py-1.5 text-xs font-medium text-white hover:opacity-80 disabled:opacity-50 transition-opacity"
+              className="bg-[--fg] text-white font-mono text-[12px] uppercase tracking-wide px-3 py-1.5 disabled:opacity-50 transition-opacity"
               data-testid="confirm-install"
             >
               {installMutation.isPending ? "Installing…" : "Install"}
@@ -342,7 +342,7 @@ function OntologyInstallSection() {
             <button
               type="button"
               onClick={() => setConfirmOpen(false)}
-              className="rounded border border-[--border] px-3 py-1.5 text-xs font-medium text-[--fg-muted] hover:text-[--fg] transition-colors"
+              className="border border-[--border] px-3 py-1.5 text-xs font-medium text-[--fg-muted] hover:text-[--fg] transition-colors"
             >
               Cancel
             </button>
@@ -392,7 +392,7 @@ function ThemeSection() {
             onClick={() => handleChange(value)}
             aria-pressed={current === value}
             className={cn(
-              "rounded border px-3 py-1.5 text-xs font-medium transition-colors",
+              "border px-3 py-1.5 text-xs font-medium transition-colors",
               current === value
                 ? "border-[--fg] text-[--fg] bg-[--border]"
                 : "border-[--border] text-[--fg-muted] hover:text-[--fg] hover:bg-[--bg-subtle]"
@@ -444,7 +444,21 @@ function SettingsPage() {
 
   return (
     <div className="space-y-8 max-w-2xl">
-      <h2 className="font-serif text-2xl font-semibold">Settings</h2>
+      <div className="flex items-center gap-1.5 mb-1">
+        <span
+          style={{
+            display: "inline-block",
+            width: 10,
+            height: 3,
+            background: "var(--color-accent)",
+          }}
+          aria-hidden
+        />
+        <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-[--fg-muted]">
+          SETTINGS
+        </span>
+      </div>
+      <h2 className="text-2xl font-semibold tracking-tight">Settings</h2>
 
       {/* Principals */}
       <section className="space-y-3">
@@ -470,7 +484,7 @@ function SettingsPage() {
       {/* Revocation confirmation dialog */}
       {revokeError && (
         <div
-          className="rounded border border-red-300 bg-red-50 dark:bg-red-950 dark:border-red-800 px-3 py-2 text-xs text-red-600 dark:text-red-400"
+          className="border border-red-300 bg-red-50 dark:bg-red-950 dark:border-red-800 px-3 py-2 text-xs text-red-600 dark:text-red-400"
           role="alert"
         >
           Revocation failed: {revokeError}
@@ -488,7 +502,7 @@ function SettingsPage() {
       >
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 bg-black/40 z-40" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 w-full max-w-sm rounded-lg bg-white dark:bg-neutral-900 border border-[--border] p-6 shadow-xl space-y-4">
+          <Dialog.Content className="fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 w-full max-w-sm bg-white dark:bg-neutral-900 border border-[--border] p-6 shadow-xl space-y-4">
             <Dialog.Title className="text-base font-semibold text-[--fg]">
               Revoke principal
             </Dialog.Title>
@@ -499,7 +513,7 @@ function SettingsPage() {
               <Dialog.Close asChild>
                 <button
                   type="button"
-                  className="rounded border border-[--border] px-3 py-1.5 text-xs font-medium text-[--fg] hover:bg-[--bg-subtle] transition-colors"
+                  className="border border-[--border] px-3 py-1.5 text-xs font-medium text-[--fg] hover:bg-[--bg-subtle] transition-colors"
                 >
                   Cancel
                 </button>
@@ -507,7 +521,7 @@ function SettingsPage() {
               <button
                 type="button"
                 onClick={confirmRevoke}
-                className="rounded bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700 transition-colors"
+                className="border border-[var(--color-status-rejected)] text-[var(--color-status-rejected)] font-mono text-[12px] uppercase px-3 py-1.5"
                 data-testid="confirm-revoke"
               >
                 Revoke

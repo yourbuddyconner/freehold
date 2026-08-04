@@ -46,15 +46,37 @@ function ChangesetTimeline({ entries }: { entries: ChangesetEntry[] }) {
 
   return (
     <div className="mt-6">
-      <h3 className="text-sm font-medium text-[--fg] mb-3">Changeset timeline</h3>
-      <div className="rounded-lg border border-[--border] overflow-hidden">
+      <div className="flex items-center gap-1.5 mb-1">
+        <span
+          style={{
+            display: "inline-block",
+            width: 10,
+            height: 3,
+            background: "var(--color-accent)",
+          }}
+          aria-hidden
+        />
+        <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-[--fg-muted]">
+          CHANGESET TIMELINE
+        </span>
+      </div>
+      <h3 className="text-sm font-semibold tracking-tight text-[--fg] mb-3">Changeset timeline</h3>
+      <div className="border border-[--border] overflow-hidden">
         <table className="w-full text-xs border-collapse">
           <thead className="bg-[--bg-subtle]">
             <tr className="border-b border-[--border]">
-              <th className="text-left px-3 py-2 font-medium text-[--fg-muted]">Hash</th>
-              <th className="text-left px-3 py-2 font-medium text-[--fg-muted]">Author</th>
-              <th className="text-left px-3 py-2 font-medium text-[--fg-muted]">Intent</th>
-              <th className="text-right px-3 py-2 font-medium text-[--fg-muted]">Ops</th>
+              <th className="text-left px-3 py-2 font-mono text-[10px] uppercase tracking-[0.08em] text-[--fg-muted] font-normal">
+                Hash
+              </th>
+              <th className="text-left px-3 py-2 font-mono text-[10px] uppercase tracking-[0.08em] text-[--fg-muted] font-normal">
+                Author
+              </th>
+              <th className="text-left px-3 py-2 font-mono text-[10px] uppercase tracking-[0.08em] text-[--fg-muted] font-normal">
+                Intent
+              </th>
+              <th className="text-right px-3 py-2 font-mono text-[10px] uppercase tracking-[0.08em] text-[--fg-muted] font-normal">
+                Ops
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -97,13 +119,27 @@ function VerifyPage() {
 
   return (
     <div className="space-y-4 max-w-2xl">
+      <div className="flex items-center gap-1.5 mb-1">
+        <span
+          style={{
+            display: "inline-block",
+            width: 10,
+            height: 3,
+            background: "var(--color-accent)",
+          }}
+          aria-hidden
+        />
+        <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-[--fg-muted]">
+          VERIFICATION
+        </span>
+      </div>
       <div className="flex items-center justify-between">
-        <h2 className="font-serif text-2xl font-semibold">Verify</h2>
+        <h2 className="text-2xl font-semibold tracking-tight">Verify</h2>
         <button
           type="button"
           onClick={() => verifyMutation.mutate()}
           disabled={verifyMutation.isPending}
-          className="rounded bg-[--fg] px-4 py-1.5 text-xs font-medium text-white hover:opacity-80 disabled:opacity-50 transition-opacity"
+          className="bg-[--fg] px-4 py-1.5 text-xs font-mono uppercase tracking-wide font-medium text-white hover:opacity-80 disabled:opacity-50 transition-opacity"
           data-testid="verify-run"
         >
           {verifyMutation.isPending ? "Running…" : "Run verification"}
@@ -122,7 +158,7 @@ function VerifyPage() {
           {["Integrity", "Authorship", "Governance"].map((level) => (
             <div
               key={level}
-              className="rounded-lg border border-[--border] bg-[--bg-subtle] p-4 animate-pulse"
+              className="border border-[--border] bg-[--bg-subtle] p-4 animate-pulse"
             >
               <p className="text-sm text-[--fg-muted]">{level}…</p>
             </div>

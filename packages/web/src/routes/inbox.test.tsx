@@ -163,7 +163,7 @@ describe("Inbox", () => {
 
   it("reject button fires apiClient.reject with hash", async () => {
     await renderInbox([normalProposal]);
-    const rejectBtn = screen.getByRole("button", { name: /^reject$/i });
+    const rejectBtn = screen.getByRole("button", { name: /reject/i });
     await act(async () => {
       fireEvent.click(rejectBtn);
     });

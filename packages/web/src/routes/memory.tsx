@@ -57,7 +57,21 @@ function MemoryPage() {
 
   return (
     <div>
-      <h2 className="font-serif text-2xl font-semibold mb-4">Memory</h2>
+      <div className="flex items-center gap-1.5 mb-1">
+        <span
+          style={{
+            display: "inline-block",
+            width: 10,
+            height: 3,
+            background: "var(--color-accent)",
+          }}
+          aria-hidden
+        />
+        <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-[--fg-muted]">
+          MEMORY BROWSER
+        </span>
+      </div>
+      <h2 className="text-2xl font-semibold tracking-tight mb-4">Memory</h2>
 
       {/* Search */}
       <div className="mb-4 max-w-xl">
@@ -67,7 +81,7 @@ function MemoryPage() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search memories…"
-          className="w-full rounded border border-[--border] bg-[--bg-subtle] px-3 py-2 text-sm text-[--fg] placeholder:text-[--fg-muted] focus:outline-none focus:ring-1 focus:ring-[--border]"
+          className="w-full border border-[--border] bg-[--bg-subtle] px-3 py-2 text-sm text-[--fg] placeholder:text-[--fg-muted] focus:outline-none focus:ring-1 focus:ring-[--border]"
         />
       </div>
 
@@ -79,9 +93,9 @@ function MemoryPage() {
             key={f}
             type="button"
             onClick={() => toggleFilter(typeFilter, f, setTypeFilter)}
-            className={`rounded border px-2 py-0.5 text-xs font-medium transition-colors ${
+            className={`border px-2 py-0.5 font-mono text-[11px] uppercase ${
               typeFilter === f
-                ? "border-[--fg] bg-[--fg] text-white dark:text-black"
+                ? "border-[var(--color-accent)] bg-[var(--color-accent)] text-[var(--color-accent-fg)]"
                 : "border-[--border] text-[--fg-muted] hover:text-[--fg]"
             }`}
           >
@@ -94,9 +108,9 @@ function MemoryPage() {
             key={f}
             type="button"
             onClick={() => toggleFilter(statusFilter, f, setStatusFilter)}
-            className={`rounded border px-2 py-0.5 text-xs font-medium transition-colors ${
+            className={`border px-2 py-0.5 font-mono text-[11px] uppercase ${
               statusFilter === f
-                ? "border-[--fg] bg-[--fg] text-white dark:text-black"
+                ? "border-[var(--color-accent)] bg-[var(--color-accent)] text-[var(--color-accent-fg)]"
                 : "border-[--border] text-[--fg-muted] hover:text-[--fg]"
             }`}
           >
@@ -110,9 +124,9 @@ function MemoryPage() {
             type="button"
             data-testid={`author-filter-${f}`}
             onClick={() => toggleFilter(authorFilter, f, setAuthorFilter)}
-            className={`rounded border px-2 py-0.5 text-xs font-medium transition-colors ${
+            className={`border px-2 py-0.5 font-mono text-[11px] uppercase ${
               authorFilter === f
-                ? "border-[--fg] bg-[--fg] text-white dark:text-black"
+                ? "border-[var(--color-accent)] bg-[var(--color-accent)] text-[var(--color-accent-fg)]"
                 : "border-[--border] text-[--fg-muted] hover:text-[--fg]"
             }`}
           >
@@ -134,14 +148,14 @@ function MemoryPage() {
         {/* Results */}
         <div className="flex-1 min-w-0">
           {query.length === 0 && (
-            <div className="rounded-lg border border-[--border] bg-[--bg-subtle] p-6 space-y-3 max-w-xl">
+            <div className="border border-[--border] bg-[--bg-subtle] p-6 space-y-3 max-w-xl">
               <p className="text-sm text-[--fg-muted]">
                 Search memories above. Agents will surface entities, documents, and events here as
                 they work.
               </p>
               <p className="text-sm text-[--fg-muted]">
                 Connect an agent via{" "}
-                <code className="font-mono text-xs bg-neutral-100 dark:bg-neutral-800 rounded px-1 py-0.5">
+                <code className="border border-[--border] bg-[--bg-subtle] px-1 py-0.5 font-mono text-[11px]">
                   freehold mcp setup claude-code
                 </code>
               </p>
@@ -156,8 +170,8 @@ function MemoryPage() {
 
           {results.length > 0 && (
             <ul className="space-y-4 max-w-2xl">
-              {results.map((result) => (
-                <li key={result.id}>
+              {results.map((result, index) => (
+                <li key={result.id} className={`reveal reveal-${(index % 6) + 1}`}>
                   <MemoryCard result={result} />
                 </li>
               ))}

@@ -120,13 +120,13 @@ describe("Memory browser", () => {
     expect(screen.getByRole("button", { name: "rejected" })).toBeInTheDocument();
   });
 
-  it("clicking type filter toggles active state (adds bg-[--fg] class)", async () => {
+  it("clicking type filter toggles active state (adds bg-[var(--color-accent)] class)", async () => {
     await renderMemory();
     const entityBtn = screen.getByRole("button", { name: "entity" });
     await act(async () => {
       fireEvent.click(entityBtn);
     });
-    expect(entityBtn.className).toContain("bg-[--fg]");
+    expect(entityBtn.className).toContain("bg-[var(--color-accent)]");
   });
 
   it("clicking type filter again deselects it", async () => {
@@ -135,11 +135,11 @@ describe("Memory browser", () => {
     await act(async () => {
       fireEvent.click(entityBtn);
     });
-    expect(entityBtn.className).toContain("bg-[--fg]");
+    expect(entityBtn.className).toContain("bg-[var(--color-accent)]");
     await act(async () => {
       fireEvent.click(entityBtn);
     });
-    expect(entityBtn.className).not.toContain("bg-[--fg]");
+    expect(entityBtn.className).not.toContain("bg-[var(--color-accent)]");
   });
 
   it("memory cards render with content and provenance when results present and query non-empty", async () => {
@@ -166,13 +166,13 @@ describe("Memory browser", () => {
     expect(screen.getByTestId("author-filter-claude-code")).toBeInTheDocument();
   });
 
-  it("clicking author filter toggles active state (adds bg-[--fg] class)", async () => {
+  it("clicking author filter toggles active state (adds bg-[var(--color-accent)] class)", async () => {
     await renderMemory();
     const authorBtn = screen.getByTestId("author-filter-claude-code");
     await act(async () => {
       fireEvent.click(authorBtn);
     });
-    expect(authorBtn.className).toContain("bg-[--fg]");
+    expect(authorBtn.className).toContain("bg-[var(--color-accent)]");
   });
 
   it("toggling author filter composes the query", async () => {

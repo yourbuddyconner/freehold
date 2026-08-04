@@ -74,11 +74,25 @@ export function MemoryDetailPage({ entityId }: MemoryDetailPageProps) {
   }
 
   return (
-    <div className="max-w-2xl space-y-8">
+    <div className="max-w-2xl space-y-8 reg-marks relative">
       <div>
-        <h2 className="font-serif text-2xl font-semibold mb-1">Entity detail</h2>
+        <div className="flex items-center gap-1.5 mb-1">
+          <span
+            style={{
+              display: "inline-block",
+              width: 10,
+              height: 3,
+              background: "var(--color-accent)",
+            }}
+            aria-hidden
+          />
+          <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-[--fg-muted]">
+            ENTITY DETAIL
+          </span>
+        </div>
+        <h2 className="text-2xl font-semibold tracking-tight mb-1">Entity detail</h2>
         {entity.type && (
-          <span className="inline-flex items-center rounded border border-[--border] px-1.5 py-0.5 text-[11px] font-mono text-[--fg-muted]">
+          <span className="inline-flex items-center border border-[--border] px-1.5 py-0.5 text-[11px] font-mono text-[--fg-muted]">
             {entity.type}
           </span>
         )}
@@ -91,8 +105,12 @@ export function MemoryDetailPage({ entityId }: MemoryDetailPageProps) {
           <table className="w-full text-xs border-collapse">
             <thead>
               <tr className="border-b border-[--border]">
-                <th className="text-left py-1 pr-4 font-medium text-[--fg-muted] w-1/3">Key</th>
-                <th className="text-left py-1 font-medium text-[--fg-muted]">Value</th>
+                <th className="text-left py-1 pr-4 font-mono text-[10px] uppercase tracking-[0.08em] text-[--fg-muted] font-normal w-1/3">
+                  Key
+                </th>
+                <th className="text-left py-1 font-mono text-[10px] uppercase tracking-[0.08em] text-[--fg-muted] font-normal">
+                  Value
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -117,7 +135,7 @@ export function MemoryDetailPage({ entityId }: MemoryDetailPageProps) {
             {classifications.map((c) => (
               <span
                 key={c}
-                className="inline-flex items-center rounded border border-[--border] bg-[--bg-subtle] px-1.5 py-0.5 text-[11px] font-mono text-[--fg-muted]"
+                className="inline-flex items-center border border-[--border] bg-[--bg-subtle] px-1.5 py-0.5 text-[11px] font-mono text-[--fg-muted]"
               >
                 {c}
               </span>
@@ -141,7 +159,7 @@ export function MemoryDetailPage({ entityId }: MemoryDetailPageProps) {
                         key={`${edge.direction}-${edge.targetId}`}
                         className="flex items-center gap-2 text-xs"
                       >
-                        <span className="rounded bg-neutral-100 dark:bg-neutral-800 px-1 py-0.5 text-[10px] font-medium">
+                        <span className="bg-neutral-100 dark:bg-neutral-800 px-1 py-0.5 text-[10px] font-medium">
                           {edge.direction}
                         </span>
                         <Link
@@ -193,6 +211,8 @@ export function MemoryDetailPage({ entityId }: MemoryDetailPageProps) {
             />
           );
         })()}
+      <span className="reg-mark-bl" aria-hidden />
+      <span className="reg-mark-br" aria-hidden />
     </div>
   );
 }

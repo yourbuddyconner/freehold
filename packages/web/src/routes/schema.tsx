@@ -30,7 +30,21 @@ function SchemaPage() {
 
   return (
     <div className="space-y-4">
-      <h2 className="font-serif text-2xl font-semibold">Schema</h2>
+      <div className="flex items-center gap-1.5 mb-1">
+        <span
+          style={{
+            display: "inline-block",
+            width: 10,
+            height: 3,
+            background: "var(--color-accent)",
+          }}
+          aria-hidden
+        />
+        <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-[--fg-muted]">
+          SCHEMA VIEWER
+        </span>
+      </div>
+      <h2 className="text-2xl font-semibold tracking-tight">Schema</h2>
 
       {/* Tab bar */}
       <div className="flex gap-1 border-b border-[--border]">
@@ -42,15 +56,15 @@ function SchemaPage() {
             aria-selected={tab === t}
             onClick={() => setTab(t)}
             className={cn(
-              "px-4 py-2 text-sm capitalize transition-colors border-b-2 -mb-px",
+              "px-4 py-2 border-b-2 -mb-px font-mono text-[11px] uppercase tracking-[0.06em] transition-colors",
               tab === t
-                ? "border-[--fg] text-[--fg] font-medium"
+                ? "border-[var(--color-accent)] text-[--fg] font-medium"
                 : "border-transparent text-[--fg-muted] hover:text-[--fg]"
             )}
           >
             {t}
             {t === "types" && pendingTypeNames.size > 0 && (
-              <span className="ml-1.5 rounded-full bg-amber-500 text-white text-[10px] px-1.5 py-0.5 font-bold">
+              <span className="ml-1.5 bg-amber-500 text-white text-[10px] px-1.5 py-0.5 font-bold">
                 {pendingTypeNames.size}
               </span>
             )}
@@ -118,10 +132,10 @@ function normalizeAttributes(raw: Record<string, unknown> | undefined) {
 function TypesTab({ entityTypes, pendingTypeNames, pendingProposals }: TypesTabProps) {
   if (entityTypes.length === 0 && pendingTypeNames.size === 0) {
     return (
-      <div className="rounded-lg border border-[--border] bg-[--bg-subtle] p-6 space-y-3 max-w-xl">
+      <div className="border border-[--border] bg-[--bg-subtle] p-6 space-y-3 max-w-xl">
         <p className="text-sm text-[--fg-muted]">
           No entity types yet. Agents can propose new types via{" "}
-          <code className="font-mono text-xs bg-neutral-100 dark:bg-neutral-800 rounded px-1 py-0.5">
+          <code className="border border-[--border] bg-[--bg-subtle] px-1 py-0.5 font-mono text-[11px]">
             propose_ontology_change
           </code>
           ; proposals appear in the Inbox for your approval.
@@ -132,15 +146,16 @@ function TypesTab({ entityTypes, pendingTypeNames, pendingProposals }: TypesTabP
 
   return (
     <div className="space-y-3 max-w-2xl">
-      {entityTypes.map((et) => (
-        <TypeCard
-          key={et.name}
-          name={et.name}
-          pkg={et.package}
-          extends={et.extends}
-          attributes={normalizeAttributes(et.attributes)}
-          pending={pendingTypeNames.has(et.name)}
-        />
+      {entityTypes.map((et, index) => (
+        <div key={et.name} className={`reveal reveal-${(index % 6) + 1}`}>
+          <TypeCard
+            name={et.name}
+            pkg={et.package}
+            extends={et.extends}
+            attributes={normalizeAttributes(et.attributes)}
+            pending={pendingTypeNames.has(et.name)}
+          />
+        </div>
       ))}
 
       {/* Render pending proposals that aren't yet in the schema */}

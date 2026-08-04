@@ -43,21 +43,35 @@ function InboxPage() {
 
   return (
     <div>
-      <h2 className="font-serif text-2xl font-semibold mb-6">
+      <div className="flex items-center gap-1.5 mb-1">
+        <span
+          style={{
+            display: "inline-block",
+            width: 10,
+            height: 3,
+            background: "var(--color-accent)",
+          }}
+          aria-hidden
+        />
+        <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-[--fg-muted]">
+          PENDING PROPOSALS
+        </span>
+      </div>
+      <h2 className="text-2xl font-semibold tracking-tight mb-6">
         Inbox{proposals.length > 0 ? ` (${proposals.length})` : ""}
       </h2>
 
       {isLoading && <p className="text-[--fg-muted] text-sm">Loading proposals…</p>}
 
       {!isLoading && proposals.length === 0 && (
-        <div className="rounded-lg border border-[--border] bg-[--bg-subtle] p-6 space-y-3 max-w-xl">
+        <div className="border border-[--border] bg-[--bg-subtle] p-6 space-y-3 max-w-xl">
           <p className="text-sm text-[--fg-muted]">
             No pending proposals. When agents make governed writes — creating entities, proposing
             schema changes — they appear here for your approval.
           </p>
           <p className="text-sm text-[--fg-muted]">
             Get started with{" "}
-            <code className="font-mono text-xs bg-neutral-100 dark:bg-neutral-800 rounded px-1 py-0.5">
+            <code className="border border-[--border] bg-[--bg-subtle] px-1 py-0.5 font-mono text-[11px]">
               freehold mcp setup claude-code
             </code>
           </p>
@@ -66,8 +80,8 @@ function InboxPage() {
 
       {!isLoading && proposals.length > 0 && (
         <ul className="space-y-4 max-w-2xl">
-          {proposals.map((proposal) => (
-            <li key={proposal.hash}>
+          {proposals.map((proposal, index) => (
+            <li key={proposal.hash} className={`reveal reveal-${(index % 6) + 1}`}>
               <ProposalCard
                 proposal={proposal}
                 onApprove={() => approveMut.mutate(proposal.hash)}
