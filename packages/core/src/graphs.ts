@@ -25,7 +25,8 @@ export class Freehold {
     if (existsSync(join(graphDir, ".allod", "log"))) {
       graph = await openGraph(graphDir);
     } else {
-      // Create new graph — owner is derived from config or a default
+      // Create new graph — owner defaults to "owner" until F5 (user identity setup)
+      // wires the config's owner name (or interactive first-run) into this path.
       graph = await createGraph(graphDir, "owner");
     }
     return new Freehold(graph, h, graphName);

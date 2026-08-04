@@ -4,7 +4,7 @@ import { join } from "node:path";
 import type { AllodGraph } from "@allod/core";
 import { beforeEach, describe, expect, test } from "vitest";
 import { createGraph } from "../src/allod.js";
-import { describeSchema, proposeOntologyChange } from "../src/schema.js";
+import { describeSchema, installOntology, proposeOntologyChange } from "../src/schema.js";
 
 describe("schema", () => {
   let graph: AllodGraph;
@@ -59,5 +59,26 @@ entity_types:
     expect(["admitted", "held"]).toContain(result.status);
     // Hash should be a non-empty string
     expect(typeof result.hash).toBe("string");
+  });
+
+  test("installOntology() installs as owner and returns Admission-shaped result", async () => {
+    // installOntology uses the owner principal (first core/User node in state)
+    const ontologyYaml = `ontology: gadgets
+entity_types:
+  Gadget:
+    attributes:
+      name:
+        type: string
+        required: true`;
+
+    const result = await installOntology(graph, ontologyYaml);
+    // installOntology resolves the owner from graph state and signs as the owner.
+    // Under the memory policy, schema changes still require a decision record even
+    // for the owner, so this may be Held — or Admitted if the policy is trivially met.
+    expect(["admitted", "held"]).toContain(result.status);
+    expect(typeof result.hash).toBe("string");
+    // The result is Admission-shaped
+    expect(result).toHaveProperty("status");
+    expect(result).toHaveProperty("hash");
   });
 });

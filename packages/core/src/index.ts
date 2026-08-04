@@ -60,8 +60,7 @@ export type { ApproveResult, RejectResult } from "./governance.js";
 
 // Retrieval operations
 export { getEntity, traverse, entitiesOfType } from "./retrieval.js";
-export type { TraverseResult } from "./retrieval.js";
 
 // Schema operations
-export { describeSchema, proposeOntologyChange } from "./schema.js";
+export { describeSchema, proposeOntologyChange, installOntology } from "./schema.js";
 export type { OntologyProposalResult } from "./schema.js";

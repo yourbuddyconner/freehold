@@ -5,7 +5,13 @@
  */
 
 import type { AllodGraph } from "@allod/core";
-import type { EdgeTypeView, EntityTypeView, SchemaDescription, TermView } from "./types.js";
+import type {
+  Admission,
+  EdgeTypeView,
+  EntityTypeView,
+  SchemaDescription,
+  TermView,
+} from "./types.js";
 
 // ---- Raw Allod shapes ----
 
@@ -80,10 +86,67 @@ export function describeSchema(graph: AllodGraph): SchemaDescription {
   return { entityTypes, edgeTypes, terms };
 }
 
-export interface OntologyProposalResult {
-  status: "admitted" | "held";
-  hash: string;
+export type OntologyProposalResult = Admission;
+
+// ---- Internal helpers ----
+
+interface RawStateNode {
+  type_ref: string;
+  label: string;
+  derived_by: string | null;
 }
+
+interface RawStateView {
+  state_hash: string;
+  nodes: RawStateNode[];
+}
+
+/**
+ * Resolve the graph owner name (display_name of the first live core/User node).
+ * Returns "owner" as a fallback if no user node is found.
+ */
+function resolveOwner(graph: AllodGraph): string {
+  const raw = graph.state() as RawStateView;
+  const userNode = (raw.nodes ?? []).find((n) => (n.type_ref ?? "").split("@")[0] === "core/User");
+  return userNode?.label ?? "owner";
+}
+
+/**
+ * Normalise a raw Allod install_package admission result into an Admission object.
+ */
+function parseInstallAdmission(raw: unknown): OntologyProposalResult {
+  if (raw && typeof raw === "object") {
+    if ("Admitted" in (raw as object)) {
+      const r = raw as { Admitted: { hash: string; matched_rules: string[] } };
+      return { status: "admitted", hash: r.Admitted.hash };
+    }
+    if ("Held" in (raw as object)) {
+      const r = raw as { Held: { hash: string; checklist: unknown } };
+      return { status: "held", hash: r.Held.hash };
+    }
+  }
+  return { status: "admitted", hash: "" };
+}
+
+/**
+ * Build the `docs_yaml` wrapper expected by `install_package`:
+ *   `{packageName}:\n  {indented ontologyYaml}`
+ *
+ * Ensures the document has the `ontology:` header required by compile_schema_ops.
+ */
+function wrapDocsYaml(packageName: string, ontologyYaml: string): string {
+  let docYaml = ontologyYaml.trimStart();
+  if (!docYaml.startsWith("ontology:")) {
+    docYaml = `ontology: ${packageName}\n${docYaml}`;
+  }
+  const indented = docYaml
+    .split("\n")
+    .map((l) => `  ${l}`)
+    .join("\n");
+  return `${packageName}:\n${indented}`;
+}
+
+// ---- Public API ----
 
 /**
  * Propose a schema/ontology change by installing a YAML ontology document.
@@ -91,10 +154,7 @@ export interface OntologyProposalResult {
  * `ontologyYaml` should be a YAML string in ontology projection form:
  * must have `ontology: <name>` at the top level, with optional `entity_types:`,
  * `edge_types:`, etc. It is submitted via `install_package` as a named doc.
- *
- * If `ontologyYaml` does not start with `ontology:`, a minimal wrapper is
- * applied so the compiler recognises it. The `packageName` is used as the
- * doc name key in the outer mapping.
+ * Under the memory policy, schema changes require owner review and will be Held.
  */
 export async function proposeOntologyChange(
   graph: AllodGraph,
@@ -102,32 +162,44 @@ export async function proposeOntologyChange(
   packageName: string,
   ontologyYaml: string
 ): Promise<OntologyProposalResult> {
-  // Ensure the document has the `ontology:` header that compile_schema_ops requires.
-  let docYaml = ontologyYaml.trimStart();
-  if (!docYaml.startsWith("ontology:")) {
-    docYaml = `ontology: ${packageName}\n${docYaml}`;
-  }
-
-  // install_package expects a YAML mapping of {name: doc} pairs
-  const indented = docYaml
-    .split("\n")
-    .map((l) => `  ${l}`)
-    .join("\n");
-  const docsYaml = `${packageName}:\n${indented}`;
-
+  const docsYaml = wrapDocsYaml(packageName, ontologyYaml);
   const raw = await graph.install_package(docsYaml, by);
+  return parseInstallAdmission(raw);
+}
 
-  if (raw && typeof raw === "object") {
-    if ("Admitted" in (raw as object)) {
-      const r = raw as { Admitted: { hash: string } };
-      return { status: "admitted", hash: r.Admitted.hash };
-    }
-    if ("Held" in (raw as object)) {
-      const r = raw as { Held: { hash: string } };
-      return { status: "held", hash: r.Held.hash };
-    }
+/**
+ * Install an ontology package as the graph owner (owner-signed path).
+ *
+ * This is the privileged path for admins: the owner principal signs the
+ * changeset, so it may be admitted immediately if the policy allows owner
+ * self-approval. Under the reference memory policy, schema changes still
+ * require a decision record even for the owner, so the result may be Held.
+ *
+ * The owner name is resolved from the graph's state (first core/User node).
+ * This is the same principal used by `approve()` — the graph root authority.
+ *
+ * @param graph  - The open graph.
+ * @param docsYaml - YAML ontology document (or a YAML mapping `{name: doc}`).
+ */
+export async function installOntology(
+  graph: AllodGraph,
+  docsYaml: string
+): Promise<OntologyProposalResult> {
+  const owner = resolveOwner(graph);
+  // Check if docsYaml is already a mapping (contains `:` on the first non-blank line
+  // and the first key is not `ontology:`). If it looks like a bare ontology doc,
+  // wrap it under a default package name.
+  const trimmed = docsYaml.trimStart();
+  let wrappedYaml: string;
+  if (trimmed.startsWith("ontology:")) {
+    // Bare ontology doc — extract the ontology name for the key
+    const nameMatch = trimmed.match(/^ontology:\s*(\S+)/);
+    const pkgName = nameMatch?.[1] ?? "custom";
+    wrappedYaml = wrapDocsYaml(pkgName, docsYaml);
+  } else {
+    // Assume it's already a `{name: doc}` mapping
+    wrappedYaml = docsYaml;
   }
-
-  // Fallback — treat as admitted if no known variant
-  return { status: "admitted", hash: "" };
+  const raw = await graph.install_package(wrappedYaml, owner);
+  return parseInstallAdmission(raw);
 }

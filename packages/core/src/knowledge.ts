@@ -258,7 +258,12 @@ export interface AttachDocumentResult {
 
 /**
  * Attach a text document to an entity.
- * Creates a memory/Document node and links it to `entityId`.
+ *
+ * Creates a `memory/Note@1` node and links it to `entityId` via a
+ * `memory/relates_to@1` edge. We use `memory/Note@1` because the memory
+ * ontology does not define a dedicated Document type — Note is the closest
+ * fit for unstructured text content. If a `memory/Document@1` type is added
+ * in a future ontology update, this function should be updated to use it.
  */
 export async function attachDocument(
   graph: AllodGraph,
