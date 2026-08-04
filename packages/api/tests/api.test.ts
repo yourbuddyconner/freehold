@@ -161,7 +161,10 @@ describe("Founding loop", () => {
     const rejectHash = entityB.changeset;
 
     // Reject the proposal
-    const { status: rejectStatus, body: rejectBody } = await req("POST", `/api/v1/proposals/${rejectHash}/reject`);
+    const { status: rejectStatus, body: rejectBody } = await req(
+      "POST",
+      `/api/v1/proposals/${rejectHash}/reject`
+    );
     expect(rejectStatus).toBe(200);
     const rejectB = rejectBody as { status: string; hash: string };
     expect(rejectB.status).toBe("rejected");

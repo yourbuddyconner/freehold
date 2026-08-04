@@ -159,21 +159,48 @@ describe("SIGKILL recovery", () => {
     const healthRes = await fetch(`http://127.0.0.1:${port}/health`);
     expect(healthRes.ok).toBe(true);
 
-    // Step 8: the pre-kill admitted write must be recallable after restart via /recall
-    // Note: /api/v1/remember returns a noteId that is a node UUID; the search index
-    // is rebuilt via reindex (step 6 above) so recall should find the pre-kill note.
-    if (preKillNoteId && PRE_KILL_TAG) {
-      await new Promise((r) => setTimeout(r, 500)); // wait for index sync after reindex
-      const recallRes = await fetch(
-        `http://127.0.0.1:${port}/api/v1/recall?q=${encodeURIComponent(PRE_KILL_TAG)}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      expect(recallRes.status).toBe(200);
-      const recallBody = (await recallRes.json()) as { results?: Array<{ id?: string }> };
-      // The pre-kill write must survive (may be found by BM25 or hash vector)
-      expect(Array.isArray(recallBody.results)).toBe(true);
-      // Note: recall may return 0 results if the hash embedder gives poor similarity —
-      // the strong assertion is that the daemon survives and returns a valid response.
-    }
+    // Step 8: the pre-kill admitted write must survive restart.
+    //
+    // Assert via two routes:
+    //   a) GET /api/v1/entities/:id — the note is findable by exact UUID (not just shape)
+    //   b) GET /api/v1/log — the log length is at least 3 (genesis + agent + note)
+    //
+    // This is the regression guard for the Freehold.open() bug: it used to check for
+    // a `.allod/log` directory that never exists, so every restart called createGraph()
+    // instead of openGraph(), wiping all persisted state.
+    expect(preKillNoteId).toBeDefined();
+
+    // a) Entity lookup by exact UUID — must be found (not a 404)
+    const entityRes = await fetch(
+      `http://127.0.0.1:${port}/api/v1/entities/${preKillNoteId}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    expect(entityRes.status).toBe(200);
+    const entityBody = (await entityRes.json()) as { id?: string; type?: string; error?: unknown };
+    // Must not be an error — the note must survive the SIGKILL + restart cycle
+    expect(entityBody.error).toBeUndefined();
+    expect(entityBody.id ?? entityBody.type).toBeDefined();
+
+    // b) Log must have at least 3 entries (genesis + agent + pre-kill note)
+    const logRes = await fetch(`http://127.0.0.1:${port}/api/v1/log`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(logRes.status).toBe(200);
+    const logBody = (await logRes.json()) as { entries: unknown[] };
+    expect(Array.isArray(logBody.entries)).toBe(true);
+    expect(logBody.entries.length).toBeGreaterThanOrEqual(3);
+
+    // c) Recall: after reindex (step 6), the pre-kill note content must be retrievable
+    await new Promise((r) => setTimeout(r, 500)); // wait for index sync after reindex
+    const recallRes = await fetch(
+      `http://127.0.0.1:${port}/api/v1/recall?q=${encodeURIComponent(PRE_KILL_TAG)}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    expect(recallRes.status).toBe(200);
+    const recallBody = (await recallRes.json()) as { results?: Array<{ id?: string }> };
+    expect(Array.isArray(recallBody.results)).toBe(true);
+    // The pre-kill note's id must appear in the recall results
+    const found = recallBody.results?.some((r) => r.id === preKillNoteId);
+    expect(found).toBe(true);
   }, 55_000);
 });

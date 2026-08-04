@@ -18,13 +18,21 @@ import type { AppEnv } from "../types.js";
  * and API error code.  The error is a plain JS Error whose message is the
  * AllodError Display string produced by Rust (e.g. "proposal not found: …").
  */
-function classifyDecideError(err: unknown): { status: 400 | 404 | 409 | 500; code: typeof ERROR_CODES[keyof typeof ERROR_CODES]; message: string } {
+function classifyDecideError(err: unknown): {
+  status: 400 | 404 | 409 | 500;
+  code: (typeof ERROR_CODES)[keyof typeof ERROR_CODES];
+  message: string;
+} {
   const msg = err instanceof Error ? err.message : String(err);
   if (msg.startsWith("proposal not found:")) {
     return { status: 404, code: ERROR_CODES.NOT_FOUND, message: "Proposal not found" };
   }
   if (msg.startsWith("already decided:")) {
-    return { status: 409, code: ERROR_CODES.ALREADY_DECIDED, message: "Proposal has already been decided" };
+    return {
+      status: 409,
+      code: ERROR_CODES.ALREADY_DECIDED,
+      message: "Proposal has already been decided",
+    };
   }
   console.error("[freehold] decide error:", msg);
   return { status: 500, code: ERROR_CODES.INTERNAL, message: "Internal error" };

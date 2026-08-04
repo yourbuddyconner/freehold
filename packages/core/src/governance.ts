@@ -242,7 +242,11 @@ export interface ApproveResult {
  *   - Object {Admitted:{degraded:[...]}} → {status:"admitted", degraded}
  *   - Object {StillUnmet:{unmet:[...]}} → {status:"still-unmet", unmet}
  */
-function parseDecisionOutcome(raw: unknown): { status: "admitted" | "rejected" | "still-unmet"; degraded?: string[]; unmet?: string[] } {
+function parseDecisionOutcome(raw: unknown): {
+  status: "admitted" | "rejected" | "still-unmet";
+  degraded?: string[];
+  unmet?: string[];
+} {
   // Handle bare string "Rejected"
   if (raw === "Rejected") {
     return { status: "rejected" };

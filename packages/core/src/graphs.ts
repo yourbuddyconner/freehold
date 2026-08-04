@@ -26,7 +26,7 @@ export class Freehold {
     const graphName = config.graph ?? "main";
     const graphDir = join(h, "graphs", graphName);
     let graph: AllodGraph;
-    if (existsSync(join(graphDir, ".allod", "log"))) {
+    if (existsSync(join(graphDir, ".allod", "graph.yaml"))) {
       graph = await openGraph(graphDir);
     } else {
       // Create new graph — owner defaults to "owner" until F5 (user identity setup)

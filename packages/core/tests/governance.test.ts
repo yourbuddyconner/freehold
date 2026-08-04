@@ -4,7 +4,14 @@ import { join } from "node:path";
 import type { AllodGraph } from "@allod/core";
 import { beforeEach, describe, expect, test } from "vitest";
 import { createGraph } from "../src/allod.js";
-import { approve, pending, principals, registerAgent, reject, verifyGraph } from "../src/governance.js";
+import {
+  approve,
+  pending,
+  principals,
+  registerAgent,
+  reject,
+  verifyGraph,
+} from "../src/governance.js";
 import { createEntity, remember } from "../src/knowledge.js";
 
 describe("governance", () => {
