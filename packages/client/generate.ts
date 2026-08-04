@@ -8,7 +8,8 @@
  */
 
 import { execSync } from "node:child_process";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -40,14 +41,20 @@ if (checkMode) {
     console.error(
       "ERROR: src/types.ts is out of date with openapi.json. Run `pnpm generate` to update."
     );
-    // Show a brief diff
+    // Show a brief diff using temp files
+    const tmpDir = mkdtempSync(join(tmpdir(), "freehold-gen-"));
     try {
-      execSync(`diff <(echo ${JSON.stringify(existing)}) <(echo ${JSON.stringify(generated)})`, {
-        shell: "/bin/bash",
+      const existingPath = join(tmpDir, "existing.ts");
+      const generatedPath = join(tmpDir, "generated.ts");
+      writeFileSync(existingPath, existing, "utf-8");
+      writeFileSync(generatedPath, generated, "utf-8");
+      execSync(`diff "${existingPath}" "${generatedPath}"`, {
         stdio: "inherit",
       });
     } catch {
-      // diff exits non-zero when files differ
+      // diff exits non-zero when files differ; we already printed the error message above
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true });
     }
     process.exit(1);
   }

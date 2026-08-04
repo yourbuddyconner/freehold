@@ -39,6 +39,8 @@ Commands:
   status                      Check daemon health
   remember <content>          Store a memory note
     --agent <name>            Agent name (default: "cli")
+    --type <type>             Entity type, e.g. memory/Preference@1 (default: memory/Note@1)
+    --classify <term>         Classification term, e.g. workspace/personal@1
   recall <query>              Recall memories by semantic search
   pending                     List pending proposals
   approve <hash>              Approve a pending proposal
@@ -85,9 +87,17 @@ async function main() {
     case "remember": {
       const contentParts: string[] = [];
       let agent = "cli";
+      let type: string | undefined;
+      let classify: string | undefined;
       for (let i = 0; i < rest.length; i++) {
         if (rest[i] === "--agent" && rest[i + 1]) {
           agent = rest[i + 1];
+          i++;
+        } else if (rest[i] === "--type" && rest[i + 1]) {
+          type = rest[i + 1];
+          i++;
+        } else if (rest[i] === "--classify" && rest[i + 1]) {
+          classify = rest[i + 1];
           i++;
         } else {
           contentParts.push(rest[i]);
@@ -98,7 +108,7 @@ async function main() {
         console.error("Error: `remember` requires a <content> argument");
         process.exit(1);
       }
-      await runRemember({ baseUrl, token, json: jsonMode, content, agent });
+      await runRemember({ baseUrl, token, json: jsonMode, content, agent, type, classify });
       break;
     }
 

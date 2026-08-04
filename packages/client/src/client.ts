@@ -3,6 +3,11 @@
  *
  * Generated types come from src/types.ts (auto-generated, never hand-edit).
  * This file IS hand-edited.
+ *
+ * NOTE: This source is exported from packages/client/src/client.ts as-is.
+ * Before F10 bundling is implemented, consuming code must run within the
+ * monorepo workspace; bare npm consumption will encounter ".js" import paths
+ * that assume pnpm workspaces. Revisit export strategy post-F10.
  */
 
 import type { components, paths } from "./types.js";
