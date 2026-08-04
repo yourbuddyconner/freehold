@@ -1,5 +1,9 @@
 /**
- * Deterministic force layout for the memory graph.
+ * Deterministic force layout for the memory graph, with drill-down groups.
+ *
+ * Every type group renders as a folder node. Expanding a group replaces the
+ * folder with an anchor plus its member nodes; edges re-attach to whichever
+ * representative is visible (the member when expanded, the folder when not).
  *
  * Positions are computed synchronously with d3-force: seeded initial
  * positions derived from node ids (no randomness), a fixed tick count,
@@ -26,16 +30,18 @@ export interface GraphEdgeInput {
 export interface PositionedNode extends GraphNodeInput {
   x: number;
   y: number;
-  /** Icon diameter in px, scaled by incoming degree */
+  /** Icon diameter in px */
   size: number;
-  /** True for synthetic type-hub nodes */
-  hub: boolean;
+  /** "group" folders toggle expansion; "member" nodes navigate */
+  kind: "group" | "member";
   /** Display group (the tree folder name), drives color */
   group: string;
   /** Truncated title rendered under the icon; the full title lives in the hover card */
   label: string;
   /** Half-width in px of the icon + label footprint — what collision reserved */
   footprint: number;
+  /** Member count, set on group nodes */
+  count?: number;
 }
 
 export interface LayoutResult {
@@ -52,7 +58,7 @@ function hash(s: string): number {
   return h >>> 0;
 }
 
-const TICKS = 200;
+const TICKS = 250;
 const LABEL_MAX_CHARS = 22;
 /** Approximate px per character at the node label's 10px size. */
 const LABEL_CHAR_W = 6.1;
@@ -79,100 +85,138 @@ interface SimNode extends PositionedNode {
   fy?: number | null;
 }
 
+function seededPosition(id: string, width: number, height: number, spread: number) {
+  const seed = hash(id);
+  const angle = ((seed % 3600) / 3600) * 2 * Math.PI;
+  const radius = 60 + (seed % spread);
+  return {
+    x: width / 2 + Math.cos(angle) * radius,
+    y: height / 2 + Math.sin(angle) * radius,
+  };
+}
+
+export function groupNodeId(group: string): string {
+  return `group:${group}`;
+}
+
 /**
- * Compute positions for the graph. With `hubs`, a synthetic node per type
- * group is added with containment edges so sparse graphs still cluster.
+ * Compute the visible graph for the given expansion state and lay it out.
+ * Collapsed groups appear as one folder node sized by member count; edges
+ * into a collapsed group attach to the folder.
  */
 export function layoutGraph(
   nodes: GraphNodeInput[],
   edges: GraphEdgeInput[],
-  opts: { hubs?: boolean; width?: number; height?: number } = {}
+  opts: { expanded?: Set<string>; width?: number; height?: number } = {}
 ): LayoutResult {
-  const { hubs = true, width = 900, height = 620 } = opts;
+  const { expanded = new Set<string>(), width = 900, height = 620 } = opts;
+
+  const groups = new Map<string, GraphNodeInput[]>();
+  for (const n of nodes) {
+    const group = displayTypeName(n.type);
+    const list = groups.get(group) ?? [];
+    list.push(n);
+    groups.set(group, list);
+  }
 
   const inDegree = new Map<string, number>();
   for (const e of edges) {
     inDegree.set(e.to, (inDegree.get(e.to) ?? 0) + 1);
-    inDegree.set(e.from, inDegree.get(e.from) ?? 0);
   }
 
-  const simNodes: SimNode[] = nodes.map((n) => {
-    const deg = inDegree.get(n.id) ?? 0;
-    const seed = hash(n.id);
-    const angle = ((seed % 3600) / 3600) * 2 * Math.PI;
-    const radius = 60 + (seed % 240);
-    const size = Math.min(40, Math.round(22 + 4 * Math.sqrt(deg)));
-    const label = nodeLabel(n.title);
-    return {
-      ...n,
-      group: displayTypeName(n.type),
-      hub: false,
-      size,
-      label,
-      footprint: nodeFootprint(label, size),
-      x: width / 2 + Math.cos(angle) * radius,
-      y: height / 2 + Math.sin(angle) * radius,
-    };
-  });
+  const simNodes: SimNode[] = [];
+  const visibleEdges: GraphEdgeInput[] = [];
+  /** Node id → the id that represents it on screen. */
+  const rep = new Map<string, string>();
 
-  const simEdges: Array<{ source: string; target: string }> = edges.map((e) => ({
-    source: e.from,
-    target: e.to,
-  }));
-  const allEdges: GraphEdgeInput[] = [...edges];
-
-  if (hubs) {
-    const groups = new Map<string, SimNode[]>();
-    for (const n of simNodes) {
-      const list = groups.get(n.group) ?? [];
-      list.push(n);
-      groups.set(n.group, list);
-    }
-    for (const [group, members] of groups) {
-      if (members.length < 2) continue;
-      const hubId = `hub:${group}`;
-      const seed = hash(hubId);
-      const angle = ((seed % 3600) / 3600) * 2 * Math.PI;
+  for (const [group, members] of [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+    const gid = groupNodeId(group);
+    if (expanded.has(group)) {
+      // Anchor folder + members around it
+      const anchorSize = 26;
       simNodes.push({
-        id: hubId,
-        type: "hub",
+        id: gid,
+        type: "group",
         title: group,
         approval: "saved",
         group,
-        hub: true,
-        size: 26,
+        kind: "group",
+        count: members.length,
+        size: anchorSize,
         label: group,
-        footprint: nodeFootprint(group, 26),
-        x: width / 2 + Math.cos(angle) * 150,
-        y: height / 2 + Math.sin(angle) * 150,
+        footprint: nodeFootprint(group, anchorSize),
+        ...seededPosition(gid, width, height, 180),
       });
-      for (const member of members) {
-        simEdges.push({ source: hubId, target: member.id });
-        allEdges.push({
-          id: `${hubId}->${member.id}`,
-          type: "containment",
-          from: hubId,
-          to: member.id,
+      for (const m of members) {
+        rep.set(m.id, m.id);
+        const size = Math.min(40, Math.round(22 + 4 * Math.sqrt(inDegree.get(m.id) ?? 0)));
+        const label = nodeLabel(m.title);
+        simNodes.push({
+          ...m,
+          group,
+          kind: "member",
+          size,
+          label,
+          footprint: nodeFootprint(label, size),
+          ...seededPosition(m.id, width, height, 240),
         });
+        visibleEdges.push({ id: `${gid}->${m.id}`, type: "containment", from: gid, to: m.id });
+      }
+    } else {
+      const size = Math.min(48, 30 + members.length * 2);
+      simNodes.push({
+        id: gid,
+        type: "group",
+        title: `${group} — ${members.length} item${members.length === 1 ? "" : "s"}`,
+        approval: "saved",
+        group,
+        kind: "group",
+        count: members.length,
+        size,
+        label: group,
+        footprint: nodeFootprint(group, size),
+        ...seededPosition(gid, width, height, 180),
+      });
+      for (const m of members) {
+        rep.set(m.id, gid);
       }
     }
   }
+
+  // Real edges re-attached to visible representatives; edges collapsing into
+  // the same node disappear (they are inside a folder).
+  const seen = new Set<string>();
+  for (const e of edges) {
+    const from = rep.get(e.from);
+    const to = rep.get(e.to);
+    if (!from || !to || from === to) continue;
+    const key = `${from}->${to}:${e.type}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    visibleEdges.push({ id: e.id, type: e.type, from, to });
+  }
+
+  const simEdges = visibleEdges.map((e) => ({ source: e.from, target: e.to }));
 
   const sim = forceSimulation(simNodes)
     .force(
       "link",
       forceLink(simEdges)
         .id((d) => (d as SimNode).id)
-        .distance(110)
-        .strength(0.4)
+        .distance((l) => {
+          const t = l as unknown as { source: SimNode; target: SimNode };
+          // Containment links stay tight; cross links stretch
+          return t.source.kind === "group" || t.target.kind === "group" ? 90 : 130;
+        })
+        .strength(0.5)
     )
-    .force("charge", forceManyBody().strength(-220))
-    .force("x", forceX(width / 2).strength(0.05))
-    .force("y", forceY(height / 2).strength(0.05))
+    .force("charge", forceManyBody().strength(-260))
+    .force("x", forceX(width / 2).strength(0.06))
+    .force("y", forceY(height / 2).strength(0.06))
     .force(
       "collide",
       forceCollide<SimNode>()
-        .radius((d) => d.footprint + 14)
+        .radius((d) => d.footprint + 12)
         .strength(0.9)
         .iterations(2)
     )
@@ -189,13 +233,14 @@ export function layoutGraph(
       title: n.title,
       approval: n.approval,
       group: n.group,
-      hub: n.hub,
+      kind: n.kind,
+      count: n.count,
       size: n.size,
       label: n.label,
       footprint: n.footprint,
       x: Math.round(n.x * 100) / 100,
       y: Math.round(n.y * 100) / 100,
     })),
-    edges: allEdges,
+    edges: visibleEdges,
   };
 }

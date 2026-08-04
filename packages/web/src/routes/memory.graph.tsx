@@ -7,6 +7,7 @@ import {
   CalendarDays,
   FileText,
   Folder,
+  FolderOpen,
   SlidersHorizontal,
   StickyNote,
   User,
@@ -49,7 +50,9 @@ interface MemoryNodeData {
   type: string;
   group: string;
   approval: string;
-  hub: boolean;
+  kind: "group" | "member";
+  expanded: boolean;
+  count?: number;
   size: number;
   footprint: number;
   [key: string]: unknown;
@@ -58,12 +61,13 @@ interface MemoryNodeData {
 /** Icon node with its title beneath and a detail card on hover. */
 function MemoryNode({ data }: { data: MemoryNodeData }) {
   const [hovered, setHovered] = useState(false);
-  const Icon = data.hub ? Folder : (GROUP_ICONS[data.group] ?? Box);
+  const isGroup = data.kind === "group";
+  const Icon = isGroup ? (data.expanded ? FolderOpen : Folder) : (GROUP_ICONS[data.group] ?? Box);
   const pending = data.approval === "pending";
 
   return (
     <div
-      className="flex flex-col items-center"
+      className="graph-node-pop flex flex-col items-center"
       style={{ width: data.footprint * 2 }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
@@ -71,17 +75,26 @@ function MemoryNode({ data }: { data: MemoryNodeData }) {
       <Handle type="target" position={Position.Top} style={{ opacity: 0 }} />
       <Handle type="source" position={Position.Bottom} style={{ opacity: 0 }} />
       <span
-        className="flex items-center justify-center"
+        className="relative flex items-center justify-center"
         style={{
           width: data.size,
           height: data.size,
-          background: data.hub ? "var(--bg-subtle)" : groupColor(data.group),
+          background: isGroup && data.expanded ? "var(--bg-subtle)" : groupColor(data.group),
           border: pending ? "1.5px dashed var(--color-status-pending)" : "1px solid var(--border)",
           opacity: pending ? 0.75 : 1,
-          color: data.hub ? "var(--fg-muted)" : "#0e0e0c",
+          color: isGroup && data.expanded ? "var(--fg-muted)" : "#0e0e0c",
+          cursor: "pointer",
         }}
       >
-        <Icon size={Math.max(12, data.size - 12)} strokeWidth={1.75} aria-hidden />
+        <Icon size={Math.max(12, data.size - 14)} strokeWidth={1.75} aria-hidden />
+        {isGroup && !data.expanded && data.count !== undefined && (
+          <span
+            className="absolute -top-1.5 -right-1.5 flex items-center justify-center border border-(--border) bg-(--bg) font-mono"
+            style={{ minWidth: 15, height: 15, fontSize: 9, padding: "0 3px" }}
+          >
+            {data.count}
+          </span>
+        )}
       </span>
       <span
         className="mt-1 text-center leading-tight"
@@ -90,6 +103,9 @@ function MemoryNode({ data }: { data: MemoryNodeData }) {
           color: "var(--fg)",
           whiteSpace: "nowrap",
           opacity: pending ? 0.75 : 1,
+          fontFamily: isGroup ? "'IBM Plex Mono', monospace" : undefined,
+          textTransform: isGroup ? ("uppercase" as const) : undefined,
+          letterSpacing: isGroup ? "0.06em" : undefined,
         }}
       >
         {data.label}
@@ -113,9 +129,13 @@ function MemoryNode({ data }: { data: MemoryNodeData }) {
           <p className="text-xs text-(--fg) leading-snug">{data.title}</p>
           <div className="flex items-center gap-1.5">
             <span className="font-mono text-[10px] uppercase tracking-[0.06em] text-(--fg-muted)">
-              {data.hub ? "type group" : data.type.split("@")[0]}
+              {isGroup
+                ? data.expanded
+                  ? "click to collapse"
+                  : "click to expand"
+                : data.type.split("@")[0]}
             </span>
-            {!data.hub && (
+            {!isGroup && (
               <StatusChip
                 status={pending ? "pending" : "approved"}
                 label={pending ? "Pending" : "Saved"}
@@ -132,13 +152,13 @@ const nodeTypes = { memory: MemoryNode };
 
 export function MemoryGraphPage() {
   const { data, isLoading } = useMemoryGraph();
-  const [hubs, setHubs] = useState(true);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const navigate = useNavigate();
 
   const layout = useMemo(() => {
     if (!data) return { nodes: [], edges: [] };
-    return layoutGraph(data.nodes, data.edges, { hubs });
-  }, [data, hubs]);
+    return layoutGraph(data.nodes, data.edges, { expanded });
+  }, [data, expanded]);
 
   const flowNodes = useMemo(
     () =>
@@ -153,12 +173,14 @@ export function MemoryGraphPage() {
           type: n.type,
           group: n.group,
           approval: n.approval,
-          hub: n.hub,
+          kind: n.kind,
+          expanded: expanded.has(n.group),
+          count: n.count,
           size: n.size,
           footprint: n.footprint,
         },
       })),
-    [layout]
+    [layout, expanded]
   );
 
   const flowEdges = useMemo(
@@ -167,6 +189,7 @@ export function MemoryGraphPage() {
         id: e.id,
         source: e.from,
         target: e.to,
+        type: "straight" as const,
         style:
           e.type === "containment"
             ? { stroke: "var(--border)", strokeDasharray: "3 3" }
@@ -192,22 +215,15 @@ export function MemoryGraphPage() {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-4">
-        <label className="flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-[0.08em] text-(--fg-muted)">
-          <input
-            type="checkbox"
-            checked={hubs}
-            onChange={(e) => setHubs(e.target.checked)}
-            data-testid="hub-toggle"
-          />
-          Type hubs
-        </label>
+      <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-(--fg-muted)">
+        Click a folder to expand its group; click an item to open it.
         {data.truncated && (
-          <span className="font-mono text-[11px] text-(--fg-muted)" data-testid="truncation-notice">
+          <span data-testid="truncation-notice">
+            {" "}
             Showing the {data.nodes.length} most recent nodes — the rest are omitted.
           </span>
         )}
-      </div>
+      </p>
       <div
         className="border border-(--border) bg-(--bg)"
         style={{ height: "calc(100vh - 260px)", minHeight: 420 }}
@@ -223,7 +239,18 @@ export function MemoryGraphPage() {
           nodesConnectable={false}
           proOptions={{ hideAttribution: true }}
           onNodeClick={(_e, node) => {
-            if (!node.id.startsWith("hub:")) {
+            if (node.id.startsWith("group:")) {
+              const group = node.id.slice("group:".length);
+              setExpanded((prev) => {
+                const next = new Set(prev);
+                if (next.has(group)) {
+                  next.delete(group);
+                } else {
+                  next.add(group);
+                }
+                return next;
+              });
+            } else {
               navigate({ to: "/memory/$id", params: { id: node.id } });
             }
           }}
