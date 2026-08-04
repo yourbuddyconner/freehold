@@ -166,6 +166,35 @@ describe("Founding loop", () => {
     const rejectB = rejectBody as { status: string; hash: string };
     expect(rejectB.status).toBe("rejected");
     expect(rejectB.hash).toBe(rejectHash);
+
+    // After rejection the proposal must no longer appear in the pending inbox.
+    const { body: pendingAfter } = await req("GET", "/api/v1/proposals");
+    const afterList = (pendingAfter as { proposals: { hash: string }[] }).proposals;
+    expect(afterList.every((p) => p.hash !== rejectHash)).toBe(true);
+
+    // A second reject of the same hash must return 409, not 500.
+    const { status: rejectAgain } = await req("POST", `/api/v1/proposals/${rejectHash}/reject`);
+    expect(rejectAgain).toBe(409);
+  });
+
+  test("POST /api/v1/proposals/:hash/reject — returns 404 for unknown hash", async () => {
+    const { status, body } = await req(
+      "POST",
+      "/api/v1/proposals/sha256:0000000000000000000000000000000000000000000000000000000000000000/reject"
+    );
+    expect(status).toBe(404);
+    const b = body as { error: { code: string } };
+    expect(b.error.code).toBe("not_found");
+  });
+
+  test("POST /api/v1/proposals/:hash/approve — returns 404 for unknown hash", async () => {
+    const { status, body } = await req(
+      "POST",
+      "/api/v1/proposals/sha256:0000000000000000000000000000000000000000000000000000000000000000/approve"
+    );
+    expect(status).toBe(404);
+    const b = body as { error: { code: string } };
+    expect(b.error.code).toBe("not_found");
   });
 
   test("GET /api/v1/recall — returns results array", async () => {

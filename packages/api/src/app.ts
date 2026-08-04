@@ -24,6 +24,13 @@ export function createApp(
 ): Hono<AppEnv> {
   const app = new Hono<AppEnv>();
 
+  // Global error handler — ensures any unhandled route error returns JSON
+  // instead of an empty 500 body (Hono's default for Node adapter).
+  app.onError((err, c) => {
+    console.error("[freehold] unhandled error:", err);
+    return c.json({ error: { code: "internal", message: "Internal server error" } }, 500);
+  });
+
   // Inject context variables for all routes
   app.use("*", async (c, next) => {
     c.set("freehold", freehold);

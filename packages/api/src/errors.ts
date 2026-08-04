@@ -5,6 +5,7 @@ export const ERROR_CODES = {
   NOT_FOUND: "not_found",
   POLICY_REJECTED: "policy_rejected",
   VALIDATION: "validation",
+  ALREADY_DECIDED: "already_decided",
   INTERNAL: "internal",
 } as const;
 
