@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MCP Tools — Freehold</title>
-  <meta name="description" content="The twelve MCP tools Freehold exposes to agents: name, purpose, parameters, and admission behavior.">
+  <meta name="description" content="The twelve MCP tools Freehold exposes to agents: name, purpose, parameters, and approval behavior.">
   <link rel="stylesheet" href="../assets/site.css">
 </head>
 <body>
@@ -68,25 +68,25 @@
     <div class="eyebrow reveal reveal-1">Reference</div>
     <h1 class="reveal reveal-2">MCP Tools</h1>
     <p class="lead reveal reveal-3">
-      Agents connect over streamable HTTP MCP at <code>/mcp</code> and get exactly these twelve tools. There are no tools for approving, rejecting, changing policy, or touching keys; those operations exist only in the owner's API. Every write tool returns either <code>{ status: "admitted", changeset }</code> or <code>{ status: "held", proposal, rule }</code>.
+      Agents connect over streamable HTTP MCP at <code>/mcp</code> and get exactly these twelve tools. There are no tools for approving, rejecting, changing policy, or touching keys; those actions belong to you. Every write tool returns either <code>{ status: "saved", changeset }</code> or <code>{ status: "pending", proposal, rule }</code>.
     </p>
 
     <blockquote>
-      <p>A held response is a success shape, not an error. The agent received a valid response, and the write is queued for review. See <a href="governance.html">Governance</a> for how held writes are reviewed and admitted.</p>
+      <p>A pending response is a success, not an error. The write is stored as a proposal and waits for your decision. See <a href="governance.html">Governance</a> for what happens next.</p>
     </blockquote>
 
     <h2>Knowledge tools</h2>
-    <p>These tools write to the graph. Each write is an atomic changeset. Scratch writes are admitted immediately, and governed writes are held by policy.</p>
+    <p>These tools write to the graph. Each write is an atomic changeset. Quick scratch notes save instantly; writes the policy rules cover become pending proposals.</p>
 
     <div class="tool-ref reg-marks" id="remember">
       <span class="reg-mark-bl"></span><span class="reg-mark-br"></span>
       <div class="tool-ref-header">
         <span class="tool-ref-name">remember</span>
-        <span class="chip chip-scratch">admitted immediately</span>
+        <span class="chip chip-scratch">saves instantly</span>
       </div>
       <div class="tool-ref-body">
         <p class="tool-ref-desc">
-          The fast path for capturing a thought. Creates a <code>memory/Note</code> entity classified as scratch and admits it immediately. This is sugar over <code>create_entity</code> and does not accept type overrides or relationships.
+          The fast path for capturing a thought. Creates a <code>memory/Note</code> entity classified as scratch and saves it instantly. This is sugar over <code>create_entity</code> and does not accept type overrides or relationships.
         </p>
         <strong>Parameters</strong>
         <ul>
@@ -94,7 +94,7 @@
           <li><code>agent</code> (string, optional) — agent principal name; defaults to the configured agent</li>
         </ul>
         <div class="tool-admission">
-          <strong>Admission:</strong> Admitted immediately under the <code>scratch-is-free</code> policy rule. The note is indexed and retrievable via <code>recall</code>.
+          <strong>Approval:</strong> None needed. The note saves instantly under the <code>scratch-is-free</code> rule and is retrievable via <code>recall</code> right away.
         </div>
       </div>
     </div>
@@ -103,22 +103,22 @@
       <span class="reg-mark-bl"></span><span class="reg-mark-br"></span>
       <div class="tool-ref-header">
         <span class="tool-ref-name">create_entity</span>
-        <span class="chip chip-held">may be held</span>
+        <span class="chip chip-pending">may need approval</span>
       </div>
       <div class="tool-ref-body">
         <p class="tool-ref-desc">
-          Create a typed node with optional classifications and edges in one atomic changeset. The entity type can be any type installed in the graph's schema. Creating a <code>memory/Preference</code>, or any other entity the policy treats as consequential, is the most common way to produce a held write.
+          Create a typed entity with optional classifications and edges in one atomic changeset. The entity type can be any type installed in the graph's schema. Creating a <code>memory/Preference</code>, or anything else the policy rules cover, is the most common way to end up with a pending write.
         </p>
         <strong>Parameters</strong>
         <ul>
           <li><code>type</code> (string, required) — a type ref from the installed schema, e.g. <code>memory/Preference@1</code></li>
           <li><code>attributes</code> (object, required) — key/value pairs matching the type's schema</li>
           <li><code>classify</code> (string, optional) — a taxonomy term to apply in the same changeset, e.g. <code>workspace/scratch@1</code></li>
-          <li><code>relate</code> (object, optional) — an edge to create after the entity: <code>{ to, edge_type, attributes? }</code>. The edge is a second changeset; if the entity is held, the edge is skipped.</li>
+          <li><code>relate</code> (object, optional) — an edge to create after the entity: <code>{ to, edge_type, attributes? }</code>. The edge is a second changeset; if the entity write is pending, the edge is skipped.</li>
           <li><code>agent</code> (string, optional) — agent principal name</li>
         </ul>
         <div class="tool-admission">
-          <strong>Admission:</strong> Depends on policy. Entities classified as scratch are admitted; governed types (preferences, people, agreements) are held pending owner approval.
+          <strong>Approval:</strong> Depends on policy. Scratch-classified entities save instantly; preferences, people, and agreements wait for your approval.
         </div>
       </div>
     </div>
@@ -127,7 +127,7 @@
       <span class="reg-mark-bl"></span><span class="reg-mark-br"></span>
       <div class="tool-ref-header">
         <span class="tool-ref-name">update_entity</span>
-        <span class="chip chip-held">may be held</span>
+        <span class="chip chip-pending">may need approval</span>
       </div>
       <div class="tool-ref-body">
         <p class="tool-ref-desc">
@@ -141,7 +141,7 @@
           <li><code>agent</code> (string, optional) — agent principal name</li>
         </ul>
         <div class="tool-admission">
-          <strong>Admission:</strong> Follows the same policy as the entity's type. Updates to governed entities are held.
+          <strong>Approval:</strong> Follows the same policy as the entity's type. An entity that needed your approval to create needs it to change.
         </div>
       </div>
     </div>
@@ -150,7 +150,7 @@
       <span class="reg-mark-bl"></span><span class="reg-mark-br"></span>
       <div class="tool-ref-header">
         <span class="tool-ref-name">relate</span>
-        <span class="chip chip-held">may be held</span>
+        <span class="chip chip-pending">may need approval</span>
       </div>
       <div class="tool-ref-body">
         <p class="tool-ref-desc">
@@ -162,11 +162,11 @@
           <li><code>to</code> (string, required) — target node identifier (bare UUID)</li>
           <li><code>edge_type</code> (string, required) — an edge type ref, e.g. <code>memory/relates_to@1</code></li>
           <li><code>attributes</code> (object, optional) — edge attributes</li>
-          <li><code>scratch</code> (boolean, optional, default true) — classify the edge as scratch so it admits immediately; pass <code>false</code> to route it through governance</li>
+          <li><code>scratch</code> (boolean, optional, default true) — classify the edge as scratch so it saves instantly; pass <code>false</code> to send it through the policy rules</li>
           <li><code>agent</code> (string, optional) — agent principal name</li>
         </ul>
         <div class="tool-admission">
-          <strong>Admission:</strong> Admitted immediately by default (scratch). With <code>scratch: false</code>, policy decides.
+          <strong>Approval:</strong> Saves instantly by default (scratch). With <code>scratch: false</code>, the policy rules decide.
         </div>
       </div>
     </div>
@@ -175,11 +175,11 @@
       <span class="reg-mark-bl"></span><span class="reg-mark-br"></span>
       <div class="tool-ref-header">
         <span class="tool-ref-name">classify</span>
-        <span class="chip chip-held">may be held</span>
+        <span class="chip chip-pending">may need approval</span>
       </div>
       <div class="tool-ref-body">
         <p class="tool-ref-desc">
-          Place a node in the taxonomy. Classification routes policy: the terms on an object decide which rules apply to changes of it. For that reason a classification write can itself be held.
+          Place a node in the taxonomy. Classification decides which policy rules apply: the terms on an object determine what its changes must satisfy. Because of that, a classification write can itself need approval.
         </p>
         <strong>Parameters</strong>
         <ul>
@@ -188,7 +188,7 @@
           <li><code>agent</code> (string, optional) — agent principal name</li>
         </ul>
         <div class="tool-admission">
-          <strong>Admission:</strong> Depends on the taxonomy term and the target object's type. Classification under a governed term may be held.
+          <strong>Approval:</strong> Depends on the taxonomy term and the target object's type. Classifying something under a governed term can require your approval.
         </div>
       </div>
     </div>
@@ -197,7 +197,7 @@
       <span class="reg-mark-bl"></span><span class="reg-mark-br"></span>
       <div class="tool-ref-header">
         <span class="tool-ref-name">attach_document</span>
-        <span class="chip chip-scratch">typically admitted</span>
+        <span class="chip chip-scratch">usually instant</span>
       </div>
       <div class="tool-ref-body">
         <p class="tool-ref-desc">
@@ -212,13 +212,13 @@
           <li><code>agent</code> (string, optional) — agent principal name</li>
         </ul>
         <div class="tool-admission">
-          <strong>Admission:</strong> Admitted under the scratch rule. The response includes the document's content hash.
+          <strong>Approval:</strong> None needed — documents save under the scratch rule. The response includes the document's content hash.
         </div>
       </div>
     </div>
 
     <h2>Retrieval tools</h2>
-    <p>Read-only. These tools do not create changesets and are never held by policy.</p>
+    <p>Read-only. These tools do not create changesets and never need approval.</p>
 
     <div class="tool-ref reg-marks" id="recall">
       <span class="reg-mark-bl"></span><span class="reg-mark-br"></span>
@@ -228,7 +228,7 @@
       </div>
       <div class="tool-ref-body">
         <p class="tool-ref-desc">
-          Hybrid search: pgvector cosine similarity (bge-small-en-v1.5, 384 dimensions) merged with Postgres full-text search over the PGlite index. Every result carries its provenance: changeset hash, author principal, method, and approval status. The embedding model runs in-process via transformers.js, so memory never leaves the machine.
+          Hybrid search: pgvector cosine similarity (bge-small-en-v1.5, 384 dimensions) merged with Postgres full-text search over the PGlite index. Every result says who wrote it, who approved it, and which changeset it came from. The embedding model runs in-process via transformers.js, so memory never leaves the machine.
         </p>
         <strong>Parameters</strong>
         <ul>
@@ -237,7 +237,7 @@
             <ul>
               <li><code>type</code> — restrict to an entity type ref</li>
               <li><code>author</code> — restrict to an author principal name</li>
-              <li><code>approval</code> — restrict by approval status</li>
+              <li><code>approval</code> — restrict by approval status (saved/pending)</li>
             </ul>
           </li>
           <li><code>limit</code> (number, optional) — maximum results, default 10</li>
@@ -256,7 +256,7 @@
       </div>
       <div class="tool-ref-body">
         <p class="tool-ref-desc">
-          Retrieve one object in full: its current attributes, classifications, all typed edges (with their edge types, direction, and attributes), the full provenance chain (who wrote it, who approved it, the changeset hash), and revision history.
+          Retrieve one object in full: its current attributes, classifications, all typed edges (with their edge types, direction, and attributes), the full history of who wrote and approved it, and its revision history.
         </p>
         <strong>Parameters</strong>
         <ul>
@@ -293,7 +293,7 @@
       </div>
       <div class="tool-ref-body">
         <p class="tool-ref-desc">
-          Return the agent's own held proposals: writes submitted but not yet decided by the owner. An agent uses this to check on a previous write before retrying or proceeding.
+          Return the agent's own pending writes: proposals submitted but not yet decided. An agent uses this to check on a previous write before retrying or proceeding.
         </p>
         <strong>Parameters</strong>
         <ul>
@@ -303,7 +303,7 @@
     </div>
 
     <h2>Schema tools</h2>
-    <p>These tools let agents read and evolve the graph's ontology. Schema changes follow the same governance lifecycle as knowledge writes — they are always held and require owner approval.</p>
+    <p>These tools let agents read and extend the graph's schema. Schema changes go through the same approval flow as knowledge writes — they always wait for your decision.</p>
 
     <div class="tool-ref reg-marks" id="describe_schema">
       <span class="reg-mark-bl"></span><span class="reg-mark-br"></span>
@@ -328,11 +328,11 @@
       <span class="reg-mark-bl"></span><span class="reg-mark-br"></span>
       <div class="tool-ref-header">
         <span class="tool-ref-name">propose_ontology_change</span>
-        <span class="chip chip-held">always held</span>
+        <span class="chip chip-pending">needs approval</span>
       </div>
       <div class="tool-ref-body">
         <p class="tool-ref-desc">
-          Propose a change to the graph's installed schema: new entity types, edge types, or taxonomy terms, written as an ontology package in YAML. The proposal is held under the <code>schema-changes-are-serious</code> rule, appears in the owner's Inbox alongside knowledge proposals, and is installed on approval.
+          Propose a change to the graph's installed schema: new entity types, edge types, or taxonomy terms, written as an ontology package in YAML. The proposal is created under the <code>schema-changes-are-serious</code> rule, appears in your inbox alongside knowledge proposals, and is installed when you approve it.
         </p>
         <strong>Parameters</strong>
         <ul>
@@ -341,7 +341,7 @@
           <li><code>agent</code> (string, optional) — agent principal name</li>
         </ul>
         <div class="tool-admission">
-          <strong>Admission:</strong> Always held. A schema change is an ordinary in-graph changeset: the proposal creates <code>meta/EntityType</code> and related nodes, signed and provenance-carrying like every other write.
+          <strong>Approval:</strong> Always required. A schema change is an ordinary in-graph changeset: the proposal creates <code>meta/EntityType</code> and related nodes, signed and carrying provenance like every other write.
         </div>
       </div>
     </div>

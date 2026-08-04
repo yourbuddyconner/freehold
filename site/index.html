@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Freehold — Governed memory for AI agents</title>
-  <meta name="description" content="A governed memory backend for AI agents. Your agents' knowledge, in a graph you own: append-only, signed, verifiable, and governed by rules you declare.">
+  <title>Freehold — Memory for AI agents, on your machine</title>
+  <meta name="description" content="Freehold is a memory server for AI agents that runs on your machine. Quick notes save instantly, important writes wait for your approval, and every decision is signed and verifiable.">
   <link rel="stylesheet" href="assets/site.css">
 </head>
 <body>
@@ -37,149 +37,67 @@
         Your agents' memory,<br>in a graph you own.
       </h1>
       <p class="hero-subhead reveal reveal-3">
-        Most memory products lease you back your own data. Freehold keeps your agents' accumulated knowledge in an <strong>Allod graph</strong>: an append-only log of signed changes, verifiable from your keys alone, governed by rules you declare. It runs on your machine, your agents connect over MCP, and nothing consequential becomes memory without your approval.
+        Freehold is a memory server for AI agents that runs on your machine. Agents connect over MCP and save what they learn as they work. Quick notes save instantly. Anything important — a preference about you, a change to how memory is organized — waits in your inbox until you approve it. Every decision is signed with your key, and the whole history can be verified with open tools.
       </p>
       <div class="hero-actions reveal reveal-4">
         <a href="docs/quickstart.html" class="btn btn-primary">Get started</a>
-        <a href="docs/tools.html" class="btn btn-secondary">Browse the tools</a>
+        <a href="https://github.com/yourbuddyconner/freehold" class="btn btn-secondary">View on GitHub</a>
       </div>
     </section>
 
-    <!-- The three loops -->
+    <!-- Value props -->
     <section class="section">
       <div class="section-header reveal reveal-1">
-        <div class="eyebrow">The founding loops</div>
-        <h2>Three loops: memory, schema, and trust</h2>
-        <p>
-          Everything Freehold does falls into one of three loops, and each ends in a signed record you can verify.
-        </p>
+        <div class="eyebrow">Why Freehold</div>
+        <h2>What you get</h2>
       </div>
 
       <div class="loops-grid">
         <div class="loop-card reg-marks reveal reveal-2">
           <span class="reg-mark-bl"></span><span class="reg-mark-br"></span>
-          <div class="loop-number">01 — MEMORY LOOP</div>
-          <h3>Write, hold, approve, recall</h3>
+          <div class="loop-number">01</div>
+          <h3>It runs on your machine</h3>
           <p>
-            Scratch notes are admitted immediately, so agents can think at full speed. Consequential writes are held as proposals: a preference about you, an entity outside the scratch region. You approve in the Inbox, and the approval is a signed decision record. Recall returns every result with its provenance: who wrote it, who approved it, the changeset hash.
+            Freehold is a single daemon on your laptop. Memory lives in <code>~/.freehold</code> as an append-only log of signed changes in the open <a href="https://github.com/yourbuddyconner/allod">Allod</a> format, and the console, the API, and the MCP endpoint all serve from one local port. There is no cloud service and no account.
           </p>
           <div style="margin-top:20px;">
-            <a href="docs/governance.html" class="link-arrow">How governance works</a>
+            <a href="docs/architecture.html" class="link-arrow">How it's built</a>
           </div>
         </div>
 
         <div class="loop-card reg-marks reveal reveal-3">
           <span class="reg-mark-bl"></span><span class="reg-mark-br"></span>
-          <div class="loop-number">02 — SCHEMA LOOP</div>
-          <h3>The agent can extend its own schema</h3>
+          <div class="loop-number">02</div>
+          <h3>You approve what matters</h3>
           <p>
-            Memory is a typed knowledge graph, not a pile of notes. Entities have types, relationships are typed edges, and the schema lives in the graph itself. An agent reads the schema with <code>describe_schema</code> and, when the graph lacks a type it needs, proposes one with <code>propose_ontology_change</code>. Schema changes are always held, reviewed in the same Inbox as everything else, and installed when you approve them.
+            Agents save quick notes instantly, so they can work at full speed. Writes that change what memory says about you — preferences, facts about people, new entity types — show up in your inbox as proposals. Nothing important lands until you approve it, and agents can even propose changes to memory's own schema through the same inbox.
           </p>
           <div style="margin-top:20px;">
-            <a href="docs/tools.html" class="link-arrow">Schema tools reference</a>
+            <a href="docs/governance.html" class="link-arrow">How approval works</a>
           </div>
         </div>
 
         <div class="loop-card reg-marks reveal reveal-4">
           <span class="reg-mark-bl"></span><span class="reg-mark-br"></span>
-          <div class="loop-number">03 — TRUST LOOP</div>
-          <h3>Verify without trusting Freehold</h3>
+          <div class="loop-number">03</div>
+          <h3>You can check everything</h3>
           <p>
-            The Rust reference implementation's <code>allod verify</code> passes on graphs Freehold writes, so verification never depends on trusting Freehold. The PGlite search index is derived data: <code>freehold reindex</code> rebuilds it from the log and must land on identical state.
+            Approvals and rejections are records signed with your key, stored in the same log as the memory itself. The independent <code>allod verify</code> command checks the whole history — hashes, signatures, and decisions — without running Freehold at all, so you never have to take Freehold's word for it.
           </p>
           <div style="margin-top:20px;">
-            <a href="docs/architecture.html" class="link-arrow">Architecture overview</a>
+            <a href="docs/architecture.html#verification" class="link-arrow">How verification works</a>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- 12-tool grid -->
+    <!-- How it works -->
     <section class="section">
       <div class="section-header">
-        <div class="eyebrow">MCP tool surface</div>
-        <h2>Twelve tools, grouped by function</h2>
+        <div class="eyebrow">How it works</div>
+        <h2>From agent write to signed record</h2>
         <p>
-          Agents connect over streamable HTTP MCP at <code>/mcp</code>. There are no tools for approving, rejecting, or changing policy. Those actions belong to you.
-        </p>
-      </div>
-
-      <div class="tools-grid">
-        <!-- Knowledge -->
-        <div class="tool-cell">
-          <div class="tool-cell-group">Knowledge</div>
-          <div class="tool-cell-name">remember</div>
-          <div class="tool-cell-desc">Fast path for a scratch note. Creates a <code>memory/Note</code> and admits it immediately. Sugar over <code>create_entity</code>.</div>
-        </div>
-        <div class="tool-cell">
-          <div class="tool-cell-group">Knowledge</div>
-          <div class="tool-cell-name">create_entity</div>
-          <div class="tool-cell-desc">Create a typed node with optional classifications and edges in one atomic changeset. The type is any entity type installed in the graph.</div>
-        </div>
-        <div class="tool-cell">
-          <div class="tool-cell-group">Knowledge</div>
-          <div class="tool-cell-name">update_entity</div>
-          <div class="tool-cell-desc">Revise an existing entity's attributes with optimistic concurrency against the entity's current revision.</div>
-        </div>
-        <div class="tool-cell">
-          <div class="tool-cell-group">Knowledge</div>
-          <div class="tool-cell-name">relate</div>
-          <div class="tool-cell-desc">Create a typed edge between two nodes. Time lives on edges (<code>from</code>/<code>until</code>), per the corp-ontology convention.</div>
-        </div>
-        <div class="tool-cell">
-          <div class="tool-cell-group">Knowledge</div>
-          <div class="tool-cell-name">classify</div>
-          <div class="tool-cell-desc">Place a node, edge, or document in the taxonomy. Classification routes policy, so this write can be held.</div>
-        </div>
-        <div class="tool-cell">
-          <div class="tool-cell-group">Knowledge</div>
-          <div class="tool-cell-name">attach_document</div>
-          <div class="tool-cell-desc">Anchor source material by content hash, so claims can cite exact bytes. Returns the document's content-hash address.</div>
-        </div>
-
-        <!-- Retrieval -->
-        <div class="tool-cell">
-          <div class="tool-cell-group">Retrieval</div>
-          <div class="tool-cell-name">recall</div>
-          <div class="tool-cell-desc">Hybrid semantic + full-text search over the PGlite index. Filters by type, region, author, approval status. Every result carries provenance.</div>
-        </div>
-        <div class="tool-cell">
-          <div class="tool-cell-group">Retrieval</div>
-          <div class="tool-cell-name">get_entity</div>
-          <div class="tool-cell-desc">One object in full: attributes, classifications, edges, provenance chain, and revision history.</div>
-        </div>
-        <div class="tool-cell">
-          <div class="tool-cell-group">Retrieval</div>
-          <div class="tool-cell-name">traverse</div>
-          <div class="tool-cell-desc">Walk the typed graph from a starting node: follow edge types in either direction, up to a configurable depth.</div>
-        </div>
-        <div class="tool-cell">
-          <div class="tool-cell-group">Retrieval</div>
-          <div class="tool-cell-name">pending_approvals</div>
-          <div class="tool-cell-desc">The agent's view of its own held writes — proposals awaiting owner approval.</div>
-        </div>
-
-        <!-- Schema -->
-        <div class="tool-cell">
-          <div class="tool-cell-group">Schema</div>
-          <div class="tool-cell-name">describe_schema</div>
-          <div class="tool-cell-desc">Return the graph's installed ontologies as data: entity types, edge types, the taxonomy tree, versions, and import hashes.</div>
-        </div>
-        <div class="tool-cell">
-          <div class="tool-cell-group">Schema</div>
-          <div class="tool-cell-name">propose_ontology_change</div>
-          <div class="tool-cell-desc">Propose a new entity type, edge type, or taxonomy term. Always held — reviewed in the owner's inbox, installed on approval.</div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Governed-write walkthrough -->
-    <section class="section">
-      <div class="section-header">
-        <div class="eyebrow">Governed write</div>
-        <h2>From write to signed record</h2>
-        <p>
-          A held write is the system working correctly, not an error. Here is what happens to a consequential write, start to finish.
+          Here is what happens when an agent tries to save something important.
         </p>
       </div>
 
@@ -189,33 +107,33 @@
           <div class="wt-step reg-marks">
             <span class="reg-mark-bl"></span><span class="reg-mark-br"></span>
             <div class="wt-step-num">Step 01</div>
-            <h4>Agent writes</h4>
+            <h4>The agent writes</h4>
             <p>
-              Agent calls <code>create_entity</code> with type <code>memory/Preference</code>. The request reaches the admission layer.
+              The agent calls <code>create_entity</code> with a <code>memory/Preference</code>: "prefers morning meetings". A quick note would save instantly; a preference goes through the policy rules first.
             </p>
             <div style="margin-top:16px;">
-              <span class="chip chip-scratch">scratch → immediate</span>
+              <span class="chip chip-scratch">note → saves instantly</span>
             </div>
           </div>
 
-          <div class="wt-step held-state reg-marks">
+          <div class="wt-step pending-state reg-marks">
             <span class="reg-mark-bl"></span><span class="reg-mark-br"></span>
             <div class="wt-step-num">Step 02</div>
-            <h4>Policy holds the write</h4>
+            <h4>Policy pauses it</h4>
             <p>
-              The policy engine matches the write against the installed rules. A preference about the owner needs the owner's approval, so the write is held and the agent receives <code>{ status: "held", proposal, rule }</code>.
+              The write matches a rule — preferences about you need your approval — so it becomes a proposal. The agent gets <code>{ status: "pending", proposal, rule }</code> and keeps working. Nothing is lost and nothing is blocked.
             </p>
             <div style="margin-top:16px;">
-              <span class="chip chip-held">held</span>
+              <span class="chip chip-pending">pending</span>
             </div>
           </div>
 
           <div class="wt-step reg-marks">
             <span class="reg-mark-bl"></span><span class="reg-mark-br"></span>
             <div class="wt-step-num">Step 03</div>
-            <h4>Owner reviews and approves</h4>
+            <h4>You decide</h4>
             <p>
-              The proposal appears in the Inbox: agent identity, stated intent, plain-language summary, the object diff, and the rule that held it. The owner approves.
+              The proposal appears in your inbox with the agent's name, what it wants to save, the diff, and the rule that stopped it. You approve or reject it in one click.
             </p>
             <div style="margin-top:16px;">
               <span class="chip chip-approved">approved</span>
@@ -225,9 +143,9 @@
           <div class="wt-step reg-marks">
             <span class="reg-mark-bl"></span><span class="reg-mark-br"></span>
             <div class="wt-step-num">Step 04</div>
-            <h4>Decision record signed</h4>
+            <h4>The decision is signed</h4>
             <p>
-              Approval signs a decision record with the owner's key. The write is admitted, indexed, and returned by <code>recall</code> with its provenance: changeset hash, author, approval signature.
+              Approving signs a decision record with your key and saves the write. From then on it comes back in <code>recall</code> with its history attached: who wrote it, who approved it, and the changeset hash.
             </p>
             <div style="margin-top:16px;">
               <span class="chip chip-verified">verified</span>
@@ -272,7 +190,86 @@ freehold mcp setup --print        <span class="code-comment"># or print JSON for
 
       <div style="margin-top:32px; display:flex; gap:16px; flex-wrap:wrap;">
         <a href="docs/quickstart.html" class="btn btn-primary">Full quickstart guide</a>
-        <a href="docs/tools.html" class="btn btn-secondary">MCP tools reference</a>
+        <a href="docs/governance.html" class="btn btn-secondary">How approval works</a>
+      </div>
+    </section>
+
+    <!-- Tools -->
+    <section class="section">
+      <div class="section-header">
+        <div class="eyebrow">MCP tools</div>
+        <h2>Twelve tools for agents</h2>
+        <p>
+          Agents get exactly these tools over MCP. Approving, rejecting, and policy changes are not agent tools — those happen in your console and CLI.
+        </p>
+      </div>
+
+      <div class="tools-grid">
+        <!-- Knowledge -->
+        <div class="tool-cell">
+          <div class="tool-cell-group">Knowledge</div>
+          <div class="tool-cell-name">remember</div>
+          <div class="tool-cell-desc">Save a quick note. Creates a <code>memory/Note</code> and saves it instantly. Sugar over <code>create_entity</code>.</div>
+        </div>
+        <div class="tool-cell">
+          <div class="tool-cell-group">Knowledge</div>
+          <div class="tool-cell-name">create_entity</div>
+          <div class="tool-cell-desc">Create a typed entity, with optional classifications and edges, in one atomic change.</div>
+        </div>
+        <div class="tool-cell">
+          <div class="tool-cell-group">Knowledge</div>
+          <div class="tool-cell-name">update_entity</div>
+          <div class="tool-cell-desc">Revise an entity's attributes, checked against its current revision so updates can't silently collide.</div>
+        </div>
+        <div class="tool-cell">
+          <div class="tool-cell-group">Knowledge</div>
+          <div class="tool-cell-name">relate</div>
+          <div class="tool-cell-desc">Create a typed edge between two entities. Time lives on the edge (<code>from</code>/<code>until</code>).</div>
+        </div>
+        <div class="tool-cell">
+          <div class="tool-cell-group">Knowledge</div>
+          <div class="tool-cell-name">classify</div>
+          <div class="tool-cell-desc">Place an entity in the taxonomy. Classification decides which policy rules apply, so this write can end up pending.</div>
+        </div>
+        <div class="tool-cell">
+          <div class="tool-cell-group">Knowledge</div>
+          <div class="tool-cell-name">attach_document</div>
+          <div class="tool-cell-desc">Store source material by content hash, so claims can cite the exact bytes they came from.</div>
+        </div>
+
+        <!-- Retrieval -->
+        <div class="tool-cell">
+          <div class="tool-cell-group">Retrieval</div>
+          <div class="tool-cell-name">recall</div>
+          <div class="tool-cell-desc">Semantic plus full-text search. Filter by type, author, or approval status. Every result says who wrote it and who approved it.</div>
+        </div>
+        <div class="tool-cell">
+          <div class="tool-cell-group">Retrieval</div>
+          <div class="tool-cell-name">get_entity</div>
+          <div class="tool-cell-desc">One entity in full: attributes, classifications, edges, revision history, and who approved what.</div>
+        </div>
+        <div class="tool-cell">
+          <div class="tool-cell-group">Retrieval</div>
+          <div class="tool-cell-name">traverse</div>
+          <div class="tool-cell-desc">Walk the graph from a starting entity, following typed edges up to a chosen depth.</div>
+        </div>
+        <div class="tool-cell">
+          <div class="tool-cell-group">Retrieval</div>
+          <div class="tool-cell-name">pending_approvals</div>
+          <div class="tool-cell-desc">The agent's own writes that are waiting for your approval.</div>
+        </div>
+
+        <!-- Schema -->
+        <div class="tool-cell">
+          <div class="tool-cell-group">Schema</div>
+          <div class="tool-cell-name">describe_schema</div>
+          <div class="tool-cell-desc">Read the installed entity types, edge types, and taxonomy — straight from the graph.</div>
+        </div>
+        <div class="tool-cell">
+          <div class="tool-cell-group">Schema</div>
+          <div class="tool-cell-name">propose_ontology_change</div>
+          <div class="tool-cell-desc">Propose a new type or term. Always needs your approval before it is installed.</div>
+        </div>
       </div>
     </section>
 
@@ -287,12 +284,12 @@ freehold mcp setup --print        <span class="code-comment"># or print JSON for
         </div>
         <div>
           <h4 style="margin-bottom:8px;">MCP Tools</h4>
-          <p style="font-size:0.875rem; margin-bottom:12px;">All twelve tools: name, purpose, admission behavior, and parameters.</p>
+          <p style="font-size:0.875rem; margin-bottom:12px;">All twelve tools: name, purpose, parameters, and approval behavior.</p>
           <a href="docs/tools.html" class="link-arrow">Browse tools</a>
         </div>
         <div>
           <h4 style="margin-bottom:8px;">Governance</h4>
-          <p style="font-size:0.875rem; margin-bottom:12px;">The policy model, decision records, and the write lifecycle.</p>
+          <p style="font-size:0.875rem; margin-bottom:12px;">Policy rules, decision records, and what happens to a pending write.</p>
           <a href="docs/governance.html" class="link-arrow">Read governance</a>
         </div>
         <div>

@@ -299,7 +299,7 @@ p + p {
   border: 1px solid currentColor;
 }
 
-.chip-held   { color: var(--amber); background: #fffbeb; border-style: dashed; }
+.chip-pending   { color: var(--amber); background: #fffbeb; border-style: dashed; }
 .chip-approved { color: var(--green); background: #f0fdf4; }
 .chip-scratch  { color: var(--muted); background: transparent; }
 .chip-verified { color: var(--green); background: #f0fdf4; }
@@ -447,7 +447,7 @@ p + p {
   font-size: 1.0625rem;
 }
 
-/* ── Three loops ─────────────────────────────────────────────────── */
+/* ── Value props ─────────────────────────────────────────────────── */
 .loops-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -576,14 +576,14 @@ p + p {
   max-width: none;
 }
 
-.wt-step.held-state {
+.wt-step.pending-state {
   background: #fffbeb;
 }
 
-.wt-step.held-state .reg-marks::before,
-.wt-step.held-state .reg-marks::after,
-.wt-step.held-state .reg-marks .reg-mark-bl,
-.wt-step.held-state .reg-marks .reg-mark-br {
+.wt-step.pending-state .reg-marks::before,
+.wt-step.pending-state .reg-marks::after,
+.wt-step.pending-state .reg-marks .reg-mark-bl,
+.wt-step.pending-state .reg-marks .reg-mark-br {
   border-color: var(--amber);
 }
 
@@ -925,7 +925,7 @@ p + p {
 }
 
 .lf-label .lf-badge.scratch   { color: var(--muted); }
-.lf-label .lf-badge.held      { color: var(--amber); border-style: dashed; }
+.lf-label .lf-badge.pending      { color: var(--amber); border-style: dashed; }
 .lf-label .lf-badge.approved  { color: var(--green); }
 .lf-label .lf-badge.indexed   { color: var(--green); }
 .lf-label .lf-badge.recalled  { color: var(--ink);   }

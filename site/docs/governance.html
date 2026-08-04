@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Governance — Freehold</title>
-  <meta name="description" content="The Freehold governance model: scratch writes, held proposals, decision records, policy rules, and schema governance.">
+  <meta name="description" content="The Freehold governance model: instant scratch writes, pending proposals, decision records, policy rules, and schema approval.">
   <link rel="stylesheet" href="../assets/site.css">
 </head>
 <body>
@@ -32,10 +32,10 @@
         <li><a href="#model">The governance model</a></li>
         <li><a href="#lifecycle">Write lifecycle</a></li>
         <li><a href="#scratch">Scratch writes</a></li>
-        <li><a href="#held">Held writes</a></li>
+        <li><a href="#pending">Pending writes</a></li>
         <li><a href="#decision-records">Decision records</a></li>
         <li><a href="#policy-rules">Policy rules</a></li>
-        <li><a href="#schema-governance">Schema governance</a></li>
+        <li><a href="#schema-governance">Schema changes</a></li>
         <li><a href="#status-vocab">Status vocabulary</a></li>
       </ul>
     </div>
@@ -54,16 +54,16 @@
     <div class="eyebrow reveal reveal-1">Documentation</div>
     <h1 class="reveal reveal-2">Governance</h1>
     <p class="lead reveal reveal-3">
-      Freehold governs writes with declared policy rules and signed decisions. Every admitted write produces a changeset in the graph, and every approval or rejection produces a decision record signed with your key. The rules decide what is admitted immediately and what waits for you.
+      Freehold governs writes with declared policy rules and signed decisions. Every saved write is a changeset in the graph, and every approval or rejection is a decision record signed with your key. The rules decide what saves instantly and what waits for you.
     </p>
 
     <h2 id="model">The governance model</h2>
 
-    <p>The central principle: <strong>a held write is the system working correctly, not an error.</strong> When an agent writes something consequential, such as a preference about you or a new entity type, the system holds the write instead of admitting it silently. You review it and decide, and the decision is signed.</p>
+    <p>The central idea: <strong>a pending write is the system working correctly, not an error.</strong> When an agent writes something important, such as a preference about you or a new entity type, Freehold turns the write into a proposal instead of saving it silently. You review it and decide, and your decision is signed.</p>
 
-    <p>This is distinct from an approval gate that blocks the agent. The agent receives a well-formed response (<code>{ status: "held", proposal, rule }</code>) and can continue working. The write is queued, not lost. The agent can call <code>pending_approvals</code> to check its status.</p>
+    <p>The agent is not blocked. It receives a well-formed response (<code>{ status: "pending", proposal, rule }</code>) and can keep working. The write is stored, not lost, and the agent can call <code>pending_approvals</code> to check on it later.</p>
 
-    <p>The policy rules in force are declared in the graph. The owner can read them in the Policy page of the console and, when a rule needs to change, edit it. That edit is itself a governed change that routes through the Inbox.</p>
+    <p>The policy rules in force are declared in the graph. You can read them in the Policy page of the console and, when a rule needs to change, edit it. That edit is itself a governed change that goes through your Inbox.</p>
 
     <h2 id="lifecycle">Write lifecycle</h2>
 
@@ -74,31 +74,31 @@
         <div class="lf-label">
           <span class="lf-badge scratch">scratch</span>
         </div>
-        <div class="lf-desc">The agent writes a scratch note or another scratch-classified entity. The policy engine matches it against the <code>scratch-is-free</code> rule and admits it immediately.</div>
+        <div class="lf-desc">The agent writes a scratch note or another scratch-classified entity. The <code>scratch-is-free</code> rule matches it and it saves instantly.</div>
       </div>
       <div class="lf-step">
         <div class="lf-label">
-          <span class="lf-badge held">held</span>
+          <span class="lf-badge pending">pending</span>
         </div>
-        <div class="lf-desc">The agent writes a governed entity, such as a preference or a schema change. The policy engine matches the write against installed rules and holds it as a proposal. The agent receives <code>{ status: "held", proposal, rule }</code>.</div>
+        <div class="lf-desc">The agent writes something the rules cover, such as a preference or a schema change. The write becomes a pending proposal and the agent receives <code>{ status: "pending", proposal, rule }</code>.</div>
       </div>
       <div class="lf-step">
         <div class="lf-label">
           <span class="lf-badge approved">approved</span>
         </div>
-        <div class="lf-desc">The owner reviews the proposal in the Inbox: agent identity, stated intent, diff, and the rule that held it. The owner approves. The approval signs a decision record with the owner's key.</div>
+        <div class="lf-desc">You review the proposal in the Inbox — the agent's identity, its stated intent, the diff, and the rule that stopped it — and approve. The approval signs a decision record with your key.</div>
       </div>
       <div class="lf-step">
         <div class="lf-label">
           <span class="lf-badge indexed">indexed</span>
         </div>
-        <div class="lf-desc">On admission (whether immediate or after approval), the core layer folds the new objects into the PGlite index: one row per object plus a locally-computed embedding. The index is derived data and can be rebuilt from the log.</div>
+        <div class="lf-desc">Once a write is saved (instantly or after approval), Freehold folds the new objects into the PGlite index: one row per object plus a locally computed embedding. The index is derived data and can be rebuilt from the log.</div>
       </div>
       <div class="lf-step">
         <div class="lf-label">
           <span class="lf-badge recalled">recalled</span>
         </div>
-        <div class="lf-desc">The write is now searchable via <code>recall</code>. Every result carries its provenance: changeset hash, author principal, approval status, and the decision record if approval was required.</div>
+        <div class="lf-desc">The write is now searchable via <code>recall</code>. Every result carries its changeset hash, author, approval status, and the decision record if one exists.</div>
       </div>
       <div class="lf-step">
         <div class="lf-label">
@@ -110,20 +110,20 @@
 
     <h2 id="scratch">Scratch writes</h2>
 
-    <p>Scratch writes are admitted immediately. The <code>scratch-is-free</code> policy rule, installed on every new graph, admits agent writes classified under <code>workspace/scratch</code> without review. Scratch writes are:</p>
+    <p>Scratch writes save instantly. The <code>scratch-is-free</code> rule, installed on every new graph, saves agent writes classified under <code>workspace/scratch</code> without review. Scratch writes are:</p>
 
     <ul>
       <li>Entities created with <code>remember</code>, which are always scratch-classified</li>
       <li>Entities and edges explicitly classified under <code>workspace/scratch</code></li>
     </ul>
 
-    <p>Scratch exists so agents can work at full speed without every step requiring approval. Scratch notes are searchable, provenance-carrying, and versioned. They are simply not held for review.</p>
+    <p>Scratch exists so agents can work at full speed without every step requiring approval. Scratch notes are searchable, versioned, and carry their author and changeset like everything else. They just never need approval.</p>
 
-    <p>To promote a scratch note, an agent creates a governed entity that derives from it. That promotion is held by policy.</p>
+    <p>To promote a scratch note, an agent creates a governed entity that derives from it. That promotion needs your approval.</p>
 
-    <h2 id="held">Held writes</h2>
+    <h2 id="pending">Pending writes</h2>
 
-    <p>A write is held when the admission layer, after running it through the policy engine, determines that it requires owner approval before it can be admitted to the graph. The write is stored as a proposal. It is not lost, and the agent is not blocked.</p>
+    <p>A write becomes pending when the policy rules say it needs your approval before it can be saved. The write is stored as a proposal. It is not lost, and the agent is not blocked.</p>
 
     <p>The Inbox in the console shows each pending proposal with:</p>
 
@@ -132,25 +132,25 @@
       <li><strong>Stated intent</strong> — the intent the agent declared in its call</li>
       <li><strong>Plain-language summary</strong> — what the write would do in ordinary terms</li>
       <li><strong>The diff</strong> — added attributes in green, changed in amber, presented in YAML shape</li>
-      <li><strong>The rule that held it</strong> — which policy rule triggered the hold and its exact selector</li>
+      <li><strong>The rule that stopped it</strong> — which policy rule made the write pending, and its exact selector</li>
     </ul>
 
     <p>You approve or reject, and either way the outcome is a signed record.</p>
 
     <h2 id="decision-records">Decision records</h2>
 
-    <p>Every approval and every rejection produces a decision record, signed with the owner's key and stored as a changeset in the graph. The decision record contains:</p>
+    <p>Every approval and every rejection produces a decision record, signed with your key and stored as a changeset in the graph. The decision record contains:</p>
 
     <ul>
       <li>The proposal being decided on (referenced by changeset hash)</li>
       <li>The outcome — <code>approved</code> or <code>rejected</code></li>
-      <li>The owner's key fingerprint and the signature</li>
+      <li>Your key fingerprint and the signature</li>
       <li>A timestamp</li>
     </ul>
 
-    <p>Decision records are auditable independently of Freehold. The Rust <code>allod verify</code> command checks that every governed write in the graph has a corresponding signed decision record. This is the third level of the trust loop.</p>
+    <p>Decision records are auditable independently of Freehold. The Rust <code>allod verify</code> command checks that every governed write in the graph has a corresponding signed decision record. This is the third level of verification.</p>
 
-    <p>Rejection records are stored alongside approval records. A rejected write is not deleted from the graph: the proposal and its rejection are both part of the permanent record. This lets you audit what an agent attempted, not just what was admitted.</p>
+    <p>Rejection records are stored alongside approval records. A rejected write is not deleted from the graph: the proposal and its rejection are both part of the permanent record. This lets you audit what an agent attempted, not just what was saved.</p>
 
     <h2 id="policy-rules">Policy rules</h2>
 
@@ -159,27 +159,27 @@
     <ul>
       <li>A <strong>plain-language title</strong> — what the rule does in ordinary terms</li>
       <li>A <strong>selector</strong> — which writes the rule matches (entity types, taxonomy terms, attribute patterns)</li>
-      <li><strong>Requirements</strong> — what the write must satisfy to be admitted without a hold, or the hold condition</li>
-      <li><strong>Recent applications</strong> — which writes the rule held or admitted, viewable in the Policy page</li>
+      <li><strong>Requirements</strong> — what the write must satisfy to save without approval, or the condition that makes it pending</li>
+      <li><strong>Recent applications</strong> — which writes the rule stopped or let through, viewable in the Policy page</li>
     </ul>
 
     <p>The rules installed with a new graph include:</p>
 
     <ul>
-      <li><code>scratch-is-free</code> — agent writes classified as scratch are admitted immediately</li>
-      <li><code>agent-writes-are-proposals</code> — any non-scratch agent write is held for owner review</li>
-      <li><code>preferences-are-owner-business</code> — a <code>memory/Preference</code> becomes true only with the owner's signature</li>
+      <li><code>scratch-is-free</code> — agent writes classified as scratch save instantly</li>
+      <li><code>agent-writes-are-proposals</code> — any non-scratch agent write waits for your approval</li>
+      <li><code>preferences-are-owner-business</code> — a <code>memory/Preference</code> becomes true only with your signature</li>
       <li><code>model-assisted-needs-signed-envelope</code> — model-assisted writes must carry a signed attestation envelope</li>
-      <li><code>schema-changes-are-serious</code> — schema mutations are held for owner review</li>
+      <li><code>schema-changes-are-serious</code> — schema changes wait for your approval</li>
     </ul>
 
-    <p>Editing a policy rule is itself a governed change. The console's Policy editor opens a YAML draft. Submitting it creates a proposal and routes it to the Inbox, where the owner approves their own change through the same flow agents use.</p>
+    <p>Editing a policy rule is itself a governed change. The console's Policy editor opens a YAML draft. Submitting it creates a proposal and sends it to the Inbox, where you approve your own change through the same flow agents use.</p>
 
-    <h2 id="schema-governance">Schema governance</h2>
+    <h2 id="schema-governance">Schema changes</h2>
 
-    <p>Schema changes ride the same lifecycle as knowledge writes. When an agent calls <code>propose_ontology_change</code>, the system creates a held changeset that adds a <code>meta/EntityType</code>, <code>meta/EdgeType</code>, or <code>meta/TaxonomyTerm</code> node to the graph. The proposal appears in the Inbox with a preview of what the type would look like in the Schema viewer.</p>
+    <p>Schema changes ride the same lifecycle as knowledge writes. When an agent calls <code>propose_ontology_change</code>, Freehold creates a pending changeset that adds a <code>meta/EntityType</code>, <code>meta/EdgeType</code>, or <code>meta/TaxonomyTerm</code> node to the graph. The proposal appears in the Inbox with a preview of what the type would look like in the Schema viewer.</p>
 
-    <p>On approval, the type is installed in the graph's schema and becomes available for use in subsequent writes. The Schema viewer shows every agent-proposed type with its provenance: which agent proposed it, the changeset hash, and your signature on the approval. Schema proposals that are held appear inline in the Schema viewer in amber, where they would land if approved.</p>
+    <p>On approval, the type is installed in the graph's schema and becomes available for use in subsequent writes. The Schema viewer shows every agent-proposed type with its history: which agent proposed it, the changeset hash, and your signature on the approval. Pending schema proposals appear inline in the Schema viewer in amber, where they would land if approved.</p>
 
     <p>Schema changes cannot be made silently. Policy requirements are conjunctive: when several rules match a write, all of their requirements apply, so no other rule can loosen what <code>schema-changes-are-serious</code> demands. Removing the rule is a policy change, which is itself governed.</p>
 
@@ -197,19 +197,19 @@
       <tbody>
         <tr>
           <td><span class="chip chip-scratch">scratch</span></td>
-          <td>Admitted immediately; not subject to governance approval. The agent's working memory.</td>
+          <td>Saves instantly; never needs approval. The agent's working memory.</td>
         </tr>
         <tr>
-          <td><span class="chip chip-held">held</span></td>
-          <td>Submitted, awaiting owner approval. The write is stored as a proposal; the agent received a valid response.</td>
+          <td><span class="chip chip-pending">pending</span></td>
+          <td>Submitted and waiting for your decision. The write is stored as a proposal; the agent received a valid response.</td>
         </tr>
         <tr>
           <td><span class="chip chip-approved">approved</span></td>
-          <td>Owner approved; decision record signed; write admitted to the graph and indexed.</td>
+          <td>You approved it. The decision record is signed, and the write is saved and indexed.</td>
         </tr>
         <tr>
           <td><span class="chip chip-rejected">rejected</span></td>
-          <td>Owner rejected; signed rejection record stored; write not admitted. The proposal remains auditable.</td>
+          <td>You rejected it. The signed rejection is stored and the write is not saved; the proposal remains auditable.</td>
         </tr>
         <tr>
           <td><span class="chip chip-verified">verified</span></td>

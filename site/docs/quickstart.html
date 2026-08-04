@@ -119,24 +119,24 @@ freehold mcp setup --print</code></pre>
 
     <p>The config points the agent at <code>http://127.0.0.1:8710/mcp</code> (streamable HTTP MCP) with the bearer token from <code>~/.freehold/config.json</code>.</p>
 
-    <p>Then open the console at <a href="http://127.0.0.1:8710">http://127.0.0.1:8710</a> and watch the Inbox as the agent works. Scratch notes appear in Memory immediately. Consequential writes, such as preferences about you, appear in the Inbox as proposals for you to approve or reject.</p>
+    <p>Then open the console at <a href="http://127.0.0.1:8710">http://127.0.0.1:8710</a> and watch the Inbox as the agent works. Quick notes appear in Memory immediately. Important writes, such as preferences about you, appear in the Inbox as proposals for you to approve or reject.</p>
 
-    <h3>Try the memory loop</h3>
+    <h3>Try it: save a note, approve a preference</h3>
 
     <p>From your agent (Claude Code or any MCP client):</p>
 
-    <pre><code><span class="code-comment"># Fast scratch note — admitted immediately</span>
+    <pre><code><span class="code-comment"># Quick note — saves instantly</span>
 remember("Meeting with design team at 2pm")
 
-<span class="code-comment"># Governed write — held for approval</span>
+<span class="code-comment"># A preference — waits for your approval</span>
 create_entity(type: "memory/Preference@1", attributes: {
   statement: "prefers morning meetings",
   strength: "hard"
 })</code></pre>
 
-    <p>The second call returns <code>{ status: "held", proposal, rule }</code>. The proposal appears in your Inbox with the agent's identity, the diff, and the rule that held it. Approve it to admit the write and sign a decision record.</p>
+    <p>The second call returns <code>{ status: "pending", proposal, rule }</code>. The proposal appears in your Inbox with the agent's identity, the diff, and the rule that stopped it. Approving saves the write and signs a decision record.</p>
 
-    <h3>Try the schema loop</h3>
+    <h3>Try it: propose a schema change</h3>
 
     <pre><code><span class="code-comment"># Read what the graph already knows</span>
 describe_schema()
@@ -153,7 +153,7 @@ entity_types:
         type: string
 ")</code></pre>
 
-    <p>Schema proposals are always held. Approve the proposal in the Inbox to install the type. The Schema viewer then shows the new type with its provenance: which agent proposed it, which changeset added it, and your signature on the approval.</p>
+    <p>Schema proposals always wait for your approval. Approve one in the Inbox to install the type. The Schema viewer then shows the new type with its history: which agent proposed it, which changeset added it, and your signature on the approval.</p>
 
     <h2 id="cli">CLI reference</h2>
 
@@ -170,7 +170,7 @@ entity_types:
         <tr><td>freehold status</td><td>Check if the daemon is running and report its state</td></tr>
         <tr><td>freehold remember &lt;text&gt;</td><td>Write a scratch note from the command line</td></tr>
         <tr><td>freehold recall &lt;query&gt;</td><td>Search memory and print results</td></tr>
-        <tr><td>freehold pending</td><td>List proposals awaiting approval</td></tr>
+        <tr><td>freehold pending</td><td>List writes pending your approval</td></tr>
         <tr><td>freehold approve &lt;hash&gt;</td><td>Approve a proposal by its changeset hash</td></tr>
         <tr><td>freehold reject &lt;hash&gt;</td><td>Reject a proposal; records a signed rejection</td></tr>
         <tr><td>freehold verify</td><td>Run three-level graph verification</td></tr>
@@ -180,7 +180,7 @@ entity_types:
       </tbody>
     </table>
 
-    <p>All commands accept <code>--json</code> for machine-readable output. Exit codes: <code>0</code> ok, <code>2</code> held, <code>3</code> policy-rejected, <code>4</code> auth, <code>5</code> daemon unreachable.</p>
+    <p>All commands accept <code>--json</code> for machine-readable output. Exit codes: <code>0</code> ok, <code>2</code> pending approval, <code>3</code> policy-rejected, <code>4</code> auth, <code>5</code> daemon unreachable.</p>
 
     <h2 id="limitations">Known limitations (v0)</h2>
 

@@ -21,11 +21,11 @@ they can read and write, and gives you control over what they write:
   `classify`, `attach_document`, `recall`, `get_entity`, `traverse`,
   `pending_approvals`, `describe_schema`, and
   `propose_ontology_change`. Agents never get approval or policy tools.
-- **Writes are governed.** Scratch notes are admitted immediately, so an
-  agent can think at full speed. Consequential writes — a preference
-  about you, anything outside the scratch area — are **held** as
+- **You approve what matters.** Quick notes save instantly, so an
+  agent can think at full speed. Important writes — a preference
+  about you, anything outside the scratch area — become **pending**
   proposals until you approve them. Approval signs a decision record
-  with your key. A held write is the system working, not an error.
+  with your key. A pending write is the system working, not an error.
 - **Memory is typed knowledge, not a pile of notes.** Entities have
   types, relationships are typed edges, and the schema itself lives in
   the graph. An agent can read the schema with `describe_schema` and,
@@ -38,7 +38,7 @@ they can read and write, and gives you control over what they write:
   changeset hash. The index is disposable: `freehold reindex` rebuilds
   it from the log.
 - **The console** (served at the daemon's port) has six areas: Inbox
-  (pending proposals with diffs and the rules that held them), Memory
+  (pending proposals with diffs and the rules that stopped them), Memory
   (search, browse, entity detail with provenance), Schema (the ontology
   viewer, including agent-added types), Policy, Verify (the changeset
   timeline and verification), and Settings.
@@ -85,7 +85,8 @@ agent works, and approve what deserves to be true.
 the running daemon over its public HTTP API: `status`, `remember`,
 `recall`, `pending`, `approve <hash>`, `reject <hash>`, `verify`,
 `reindex`, `mcp setup`. All commands take `--json`; exit codes are
-`0` ok, `2` held, `3` policy-rejected, `4` auth, `5` daemon unreachable.
+`0` ok, `2` pending approval, `3` policy-rejected, `4` auth, `5` daemon
+unreachable.
 
 ## How it's built
 
@@ -98,15 +99,15 @@ the running daemon over its public HTTP API: `status`, `remember`,
 
 Design documents live in [docs/specs/](docs/specs/) and implementation
 plans in [docs/plans/](docs/plans/). The product decisions — one binary,
-held-as-success, the disposable index, local-first auth, no native
+pending-as-success, the disposable index, local-first auth, no native
 modules — are recorded there with their reasoning.
 
 ## Status
 
-v0, working end to end locally: the memory loop (write → held → approve
-→ recall with provenance), the schema loop (agent-proposed types and
-edge types through governance), and the trust loop (three-level
-verification, cross-checked by the Rust `allod` CLI) all pass live.
+v0, working end to end locally: agents write and recall memory with
+full provenance, propose new entity and edge types through the same
+approval flow, and the resulting graphs pass three-level verification
+cross-checked by the Rust `allod` CLI.
 
 Known limitations, tracked in
 [docs/notes/F10-deferred.md](docs/notes/F10-deferred.md): the compiled

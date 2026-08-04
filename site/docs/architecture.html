@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Architecture — Freehold</title>
-  <meta name="description" content="Freehold's package structure, the Allod foundation, the disposable index, and key design decisions.">
+  <meta name="description" content="How Freehold works: one local daemon, an append-only signed log, a derived search index, and verification that doesn't depend on Freehold.">
   <link rel="stylesheet" href="../assets/site.css">
 </head>
 <body>
@@ -29,9 +29,9 @@
     <div class="docs-sidebar-section">
       <div class="docs-sidebar-label">On this page</div>
       <ul class="docs-sidebar-links">
-        <li><a href="#packages">Package structure</a></li>
+        <li><a href="#system">The system</a></li>
         <li><a href="#allod">The Allod foundation</a></li>
-        <li><a href="#data-flow">Data flow</a></li>
+        <li><a href="#data-flow">The path of a write</a></li>
         <li><a href="#disposable-index">Disposable index</a></li>
         <li><a href="#verification">Verification independence</a></li>
         <li><a href="#decisions">Key decisions</a></li>
@@ -53,37 +53,30 @@
     <div class="eyebrow reveal reveal-1">Documentation</div>
     <h1 class="reveal reveal-2">Architecture</h1>
     <p class="lead reveal reveal-3">
-      Freehold is one daemon built from four packages in a pnpm workspace. Graph storage, policy, the recall index, and the agent API are separate packages with clear ownership. There are no native modules anywhere in the tree, which is what makes the single compiled binary possible: every moving part is WASM or plain JavaScript.
+      Freehold runs as a single daemon on your machine. Your agents connect to it over MCP, you connect to it through the console and the CLI, and everything in between — the policy check, the signed log, the search index — lives in that one process and on your disk.
     </p>
 
-    <h2 id="packages">Package structure</h2>
+    <h2 id="system">The system</h2>
 
-    <table class="arch-table">
-      <thead>
-        <tr>
-          <th>Package</th>
-          <th>Role</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td>packages/core</td>
-          <td>The only package that touches Allod. Wraps <code>@allod/core</code>, owns PGlite, and exposes typed operations matching the product surface: the knowledge ops, retrieval, schema, and governance. Nothing above this layer sees Allod primitives directly.</td>
-        </tr>
-        <tr>
-          <td>packages/api</td>
-          <td>The daemon and the CLI in one artifact. Hono routes with zod schemas that generate <code>openapi.json</code>. The <code>/mcp</code> endpoint serves streamable HTTP MCP. The console is served statically with SPA fallback. Every CLI subcommand is a client of the running daemon through the public HTTP API.</td>
-        </tr>
-        <tr>
-          <td>packages/client</td>
-          <td>Generated from <code>openapi.json</code> by openapi-typescript in CI. Never hand-edited. The build fails if it drifts from the spec. Used by the CLI, the console, and any future integration equally — the same public-API conformance rule everywhere.</td>
-        </tr>
-        <tr>
-          <td>packages/web</td>
-          <td>The owner console: React 19, TanStack Router with colocated route tests, TanStack Query for server state. Tailwind + Radix primitives. Consumes <code>packages/client</code> only — never imports from <code>packages/core</code> or <code>packages/api</code> directly.</td>
-        </tr>
-      </tbody>
-    </table>
+    <pre><code>your agents ── MCP ──────┐        ┌────── console + CLI ── you
+                         ▼        ▼
+              freehold daemon (127.0.0.1:8710)
+                         │
+        policy check: save instantly, or mark pending for you
+                         │
+                         ▼
+        append-only signed log     ~/.freehold/graphs/main
+                         │
+                         ▼  derived
+        search index (embedded Postgres)   rebuilt any time from the log</code></pre>
+
+    <ul>
+      <li><strong>The daemon</strong> (<code>freehold serve</code>) listens on one local port and serves three things from it: the MCP endpoint agents connect to, the HTTP API, and your console.</li>
+      <li><strong>The graph</strong> is your memory: an append-only log of signed changesets on disk, in the open Allod format. Nothing is edited in place or deleted; the current state is the result of replaying the log.</li>
+      <li><strong>The policy engine</strong> checks every write against the rules declared in the graph. Quick notes save instantly; anything the rules cover becomes a pending proposal for you to approve or reject.</li>
+      <li><strong>The search index</strong> is an embedded Postgres (PGlite) with vector embeddings, built from the log. <code>recall</code> queries it. It holds nothing the log cannot reproduce.</li>
+      <li><strong>The console and the CLI</strong> are clients of the daemon's HTTP API. Approving, rejecting, policy edits, and verification live here — agents never get those.</li>
+    </ul>
 
     <h2 id="allod">The Allod foundation</h2>
 
@@ -99,34 +92,26 @@
       <li><strong>Schema as objects.</strong> A proposed entity type is a real in-graph changeset that creates <code>meta/EntityType</code> nodes. There is no side-channel schema store.</li>
     </ul>
 
-    <p>Because Freehold stores graphs in native Allod format, cross-implementation verification is a standing conformance check in CI: the TypeScript tests write a graph, then the Rust <code>allod verify</code> command passes on it.</p>
+    <p>Because Freehold stores graphs in native Allod format, anything Freehold writes can be opened and verified by the Rust <code>allod</code> CLI, with no Freehold code involved.</p>
 
-    <h2 id="data-flow">Data flow</h2>
+    <h2 id="data-flow">The path of a write</h2>
 
-    <p>The path from an agent write to a searchable, verified record:</p>
+    <p>From an agent write to a searchable, verified record:</p>
 
     <ol>
-      <li>Agent calls an MCP tool or the HTTP API directly.</li>
-      <li><code>packages/api</code> validates the request against the OpenAPI schema, then calls the corresponding operation in <code>packages/core</code>.</li>
-      <li><code>packages/core</code> builds an Allod changeset and submits it to the admission layer.</li>
-      <li>The admission layer runs the changeset through the policy engine. Scratch-classified writes pass immediately; governed writes are held as proposals.</li>
-      <li>On admission (immediate or after owner approval), the core layer folds the new objects into PGlite: one row per object plus a locally-computed embedding (bge-small-en-v1.5 via transformers.js WASM ONNX).</li>
-      <li>Retrieval via <code>recall</code> runs a pgvector cosine similarity query merged with Postgres full-text search. Results include provenance from the Allod graph.</li>
+      <li>An agent calls an MCP tool or the HTTP API directly.</li>
+      <li>The daemon validates the request against its published OpenAPI schema.</li>
+      <li>The daemon builds a signed Allod changeset from the request.</li>
+      <li>The policy engine matches the changeset against the installed rules. Quick notes save immediately; anything the rules cover becomes a pending proposal.</li>
+      <li>Once the write is saved (immediately or after your approval), the new objects are folded into the search index: one row per object plus a locally-computed embedding (bge-small-en-v1.5 via transformers.js WASM ONNX).</li>
+      <li>Retrieval via <code>recall</code> runs a vector similarity query merged with full-text search. Every result says who wrote it and who approved it.</li>
     </ol>
 
     <h2 id="disposable-index">Disposable index</h2>
 
-    <p>The PGlite database carries nothing the Allod log cannot reproduce. Embeddings are derived data: they are computed from content and can be recomputed from the same content and model. This property is enforced by a test:</p>
+    <p>The search index carries nothing the log cannot reproduce. Embeddings are derived data, computed locally from the content itself. You can wipe the index at any time and <code>freehold reindex</code> rebuilds it from the log, landing on identical state.</p>
 
-    <ol>
-      <li>Fold a set of changesets into the index</li>
-      <li>Snapshot the PGlite state</li>
-      <li>Wipe PGlite entirely</li>
-      <li>Run <code>freehold reindex</code> to rebuild from the log</li>
-      <li>Assert that the new state matches the snapshot</li>
-    </ol>
-
-    <p>This is also the recovery path: if the PGlite data directory is lost or corrupted, <code>freehold reindex</code> rebuilds it from the log.</p>
+    <p>This is also the recovery path: if the index directory is lost or corrupted, <code>freehold reindex</code> brings it back. The log is the only thing you need to protect.</p>
 
     <h2 id="verification">Verification independence</h2>
 
@@ -135,18 +120,18 @@
     <ul>
       <li><strong>Integrity.</strong> Hash chain verification — each changeset's content hash matches its predecessor's reference. Tampering with any changeset breaks the chain.</li>
       <li><strong>Authorship.</strong> Signature verification — each changeset's signature verifies against the author's registered public key.</li>
-      <li><strong>Governance.</strong> Decision record verification — every governed write in the graph has a corresponding signed decision record from the owner's key.</li>
+      <li><strong>Governance.</strong> Decision record verification — every write that needed approval has a corresponding decision record signed with your key.</li>
     </ul>
 
     <p>Verification does not depend on Freehold. The Rust <code>allod verify</code> command performs all three levels independently: run <code>allod verify ~/.freehold/graphs/main</code> with no daemon running and you get the same pass/fail result as the console's Verify page. You never have to trust Freehold's own verification code.</p>
 
     <h2 id="decisions">Key decisions</h2>
 
-    <h3>One binary, two personalities (the valet pattern)</h3>
+    <h3>One binary, server and client</h3>
 
     <p><code>freehold serve</code> boots the full product: HTTP API, MCP endpoint, and the console on one local port. Every other subcommand (<code>status</code>, <code>pending</code>, <code>approve</code>, <code>reject</code>, <code>remember</code>, <code>recall</code>, <code>verify</code>, <code>reindex</code>, <code>mcp setup</code>) is a client of a running instance through the public HTTP API. There is no side door into the engine.</p>
 
-    <p>This design makes the CLI a permanent conformance consumer of the API. If the CLI breaks, the API is broken. It also avoids two processes sharing the PGlite database file.</p>
+    <p>Because the CLI goes through the same public API as everything else, there is no hidden behavior the API cannot express, and only one process ever touches the database.</p>
 
     <h3>No native modules</h3>
 
@@ -171,7 +156,7 @@
         graph.yaml     # graph ID, root authority
         HEAD           # tip changeset hash
         changesets/    # the append-only log, one file per changeset
-        proposals/     # held writes awaiting decision
+        proposals/     # pending writes awaiting your decision
         keys/          # keypairs (plain-keypair profile)
         checkpoints/   # signed checkpoints</code></pre>
 
