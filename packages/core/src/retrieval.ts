@@ -37,7 +37,7 @@ interface RawEntityContext {
 
 // ---- Raw shapes from log() ----
 
-interface RawLogEntry {
+export interface RawLogEntry {
   hash: string;
   author: string;
   op_count: number;
@@ -93,6 +93,14 @@ interface ExtendedGraph {
   // The log() entries don't expose individual op details, so we need to use
   // the allod store chain. allod-wasm's log() only returns ChangesetSummary,
   // not full changesets. We derive revisions from log entries + pattern matching.
+}
+
+/**
+ * Narrow interface for AllodGraph that exposes the log() method with
+ * proper typing. Use this instead of casting to `any` in route handlers.
+ */
+export interface LoggableGraph {
+  log(): RawLogEntry[];
 }
 
 // ---- Internal helpers ----

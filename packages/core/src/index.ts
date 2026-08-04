@@ -60,6 +60,8 @@ export type { ApproveResult, RejectResult } from "./governance.js";
 
 // Retrieval operations
 export { getEntity, traverse, entitiesOfType } from "./retrieval.js";
+// Graph log type extensions
+export type { RawLogEntry, LoggableGraph } from "./retrieval.js";
 
 // Schema operations
 export { describeSchema, proposeOntologyChange, installOntology } from "./schema.js";
