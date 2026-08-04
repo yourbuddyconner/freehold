@@ -4,7 +4,8 @@
  * Flat index listing (backs the console's tree) and full graph export
  * (backs the graph canvas). Nodes come from the PGlite index; taxonomy
  * terms and edges come from fold state via entity_context, read inside
- * one withGraph critical section.
+ * one withGraph critical section. System nodes (meta/*, core/*) are not
+ * memories and are excluded.
  */
 
 import type { Freehold } from "./graphs.js";
@@ -117,7 +118,7 @@ async function indexRows(freehold: Freehold, cap: number): Promise<IndexRow[]> {
   const { pg } = freehold.db;
   const result = await pg.query<IndexRow>(
     `SELECT id, type, content, author, approval, updated_at FROM objects
-     WHERE kind = 'node' AND type NOT LIKE 'meta/%'
+     WHERE kind = 'node' AND type NOT LIKE 'meta/%' AND type NOT LIKE 'core/%'
      ORDER BY updated_at DESC
      LIMIT $1`,
     [cap]
