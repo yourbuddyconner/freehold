@@ -87,5 +87,5 @@ export type { DbHandle } from "./db.js";
 export { syncIndex, reindex } from "./indexer.js";
 
 // Recall
-export { recall } from "./recall.js";
+export { recall, recentMemories } from "./recall.js";
 export type { RecallResult, RecallFilters } from "./recall.js";

@@ -122,6 +122,19 @@ describe("Core flow", () => {
     expect(typeof b.changeset).toBe("string");
   });
 
+  test("GET /api/v1/memories — recent list contains the saved note, newest first", async () => {
+    const { status, body } = await req("GET", "/api/v1/memories");
+    expect(status).toBe(200);
+    const b = body as { results: Array<{ content: unknown; author: string; approval: string }> };
+    expect(Array.isArray(b.results)).toBe(true);
+    const note = b.results.find((r) =>
+      JSON.stringify(r.content).includes("I prefer morning meetings")
+    );
+    expect(note).toBeDefined();
+    expect(note?.author).toBe(agentName);
+    expect(note?.approval).toBe("saved");
+  });
+
   test("POST /api/v1/entities — governed Preference entity write is pending (no scratch classification)", async () => {
     // Preference without workspace/scratch@1 classification goes through governance → pending
     const { status, body } = await req("POST", "/api/v1/entities", {

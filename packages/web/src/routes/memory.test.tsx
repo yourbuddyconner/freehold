@@ -8,6 +8,8 @@ import { routeTree } from "~/routes/../routeTree.gen";
 vi.mock("~/lib/hooks", () => ({
   usePending: vi.fn(),
   useRecall: vi.fn(),
+  useRecentMemories: vi.fn(),
+  usePrincipals: vi.fn(),
   useVerify: vi.fn(),
   useSchema: vi.fn(),
   useEntity: vi.fn(),
@@ -19,6 +21,8 @@ vi.mock("~/lib/api", () => ({
     approve: vi.fn().mockResolvedValue({}),
     reject: vi.fn().mockResolvedValue({}),
     recall: vi.fn(),
+    recentMemories: vi.fn(),
+    principals: vi.fn(),
     getEntity: vi.fn(),
     schema: vi.fn(),
   },
@@ -37,6 +41,7 @@ const sampleResult = {
 function setupHooks(
   overrides: {
     results?: (typeof sampleResult)[];
+    recent?: (typeof sampleResult)[];
     terms?: { name: string; parent?: string }[];
   } = {}
 ) {
@@ -62,6 +67,23 @@ function setupHooks(
     isError: false,
     error: null,
   } as unknown as ReturnType<typeof hooks.useSchema>);
+  vi.mocked(hooks.useRecentMemories).mockReturnValue({
+    data: { results: overrides.recent ?? [] },
+    isLoading: false,
+    isError: false,
+    error: null,
+  } as unknown as ReturnType<typeof hooks.useRecentMemories>);
+  vi.mocked(hooks.usePrincipals).mockReturnValue({
+    data: {
+      principals: [
+        { name: "owner", kind: "user" },
+        { name: "claude-code", kind: "agent" },
+      ],
+    },
+    isLoading: false,
+    isError: false,
+    error: null,
+  } as unknown as ReturnType<typeof hooks.usePrincipals>);
   vi.mocked(hooks.useVerify).mockReturnValue({
     data: undefined,
     isLoading: false,
@@ -73,6 +95,7 @@ function setupHooks(
 async function renderMemory(
   overrides: {
     results?: (typeof sampleResult)[];
+    recent?: (typeof sampleResult)[];
     terms?: { name: string; parent?: string }[];
   } = {}
 ) {
@@ -104,6 +127,12 @@ describe("Memory browser", () => {
   it("empty state shows freehold mcp setup snippet when no query", async () => {
     await renderMemory();
     expect(screen.getByText(/freehold mcp setup claude-code/)).toBeInTheDocument();
+  });
+
+  it("shows recent memories without a query", async () => {
+    await renderMemory({ recent: [sampleResult] });
+    expect(screen.getByText("Alice Smith — product designer")).toBeInTheDocument();
+    expect(screen.queryByText(/freehold mcp setup claude-code/)).not.toBeInTheDocument();
   });
 
   it("type filter chips render", async () => {

@@ -8,7 +8,7 @@
   "servers": [
     {
       "url": "http://127.0.0.1:8710",
-      "description": "Local daemon"
+      "description": "Local Freehold"
     }
   ],
   "components": {
@@ -380,7 +380,7 @@
           },
           "port": {
             "type": "number",
-            "description": "Daemon listening port"
+            "description": "Freehold's local port"
           }
         },
         "required": ["defaultAgent", "embedder", "port"]
@@ -679,6 +679,73 @@
           },
           "401": {
             "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/memories": {
+      "get": {
+        "summary": "List recent memories",
+        "description": "Most recently indexed memories, newest first. Same result shape as recall (score is 0). The `status` query param maps to the `approval` field.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "type",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "author",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "status",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Max results (default 50, cap 200)"
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Recent memories with provenance",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/RecallResult"
+                      }
+                    }
+                  },
+                  "required": ["results"]
+                }
+              }
+            }
           }
         }
       }
@@ -1152,8 +1219,8 @@
     },
     "/api/v1/session": {
       "get": {
-        "summary": "Get daemon session config",
-        "description": "Returns non-secret daemon configuration (defaultAgent, embedder, port). The bearer token is NOT returned here — it is injected as a meta tag by the server.",
+        "summary": "Get session config",
+        "description": "Returns non-secret Freehold configuration (defaultAgent, embedder, port). The bearer token is NOT returned here — it is injected as a meta tag by the server.",
         "security": [
           {
             "bearerAuth": []

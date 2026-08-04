@@ -22,6 +22,15 @@ interface MemoryCardProps {
 function renderContent(content: unknown): string {
   if (content === undefined || content === null) return "";
   if (typeof content === "string") return content;
+  // Indexed objects carry the full node; lead with what a human wants to
+  // read — the note text or preference statement — over the raw shape.
+  const attrs = (content as { attributes?: Record<string, unknown> }).attributes;
+  if (attrs) {
+    if (typeof attrs.content === "string") return attrs.content;
+    if (typeof attrs.statement === "string") return attrs.statement;
+    if (typeof attrs.name === "string") return attrs.name;
+    return JSON.stringify(attrs, null, 2);
+  }
   return JSON.stringify(content, null, 2);
 }
 

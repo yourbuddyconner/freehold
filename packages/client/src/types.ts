@@ -410,6 +410,52 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/memories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List recent memories
+         * @description Most recently indexed memories, newest first. Same result shape as recall (score is 0). The `status` query param maps to the `approval` field.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    type?: string;
+                    author?: string;
+                    status?: string;
+                    limit?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Recent memories with provenance */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            results: components["schemas"]["RecallResult"][];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/recall": {
         parameters: {
             query?: never;
@@ -1112,8 +1158,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get daemon session config
-         * @description Returns non-secret daemon configuration (defaultAgent, embedder, port). The bearer token is NOT returned here — it is injected as a meta tag by the server.
+         * Get session config
+         * @description Returns non-secret Freehold configuration (defaultAgent, embedder, port). The bearer token is NOT returned here — it is injected as a meta tag by the server.
          */
         get: {
             parameters: {
@@ -1316,7 +1362,7 @@ export interface components {
              * @enum {string}
              */
             embedder: "transformers" | "hash";
-            /** @description Daemon listening port */
+            /** @description Freehold's local port */
             port: number;
         };
     };

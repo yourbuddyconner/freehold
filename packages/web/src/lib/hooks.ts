@@ -22,6 +22,18 @@ export function useRecall(
   });
 }
 
+/** Recent memories for the no-query browse view. */
+export function useRecentMemories(
+  filters: { type?: string; author?: string; status?: string } = {},
+  enabled = true
+) {
+  return useQuery({
+    queryKey: ["recent-memories", filters],
+    queryFn: () => apiClient.recentMemories(filters),
+    enabled,
+  });
+}
+
 /** Single entity detail. */
 export function useEntity(id: string | undefined) {
   return useQuery({

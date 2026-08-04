@@ -151,3 +151,45 @@ export async function recall(
 
   return results;
 }
+
+/**
+ * List the most recently indexed memories, newest first, in the same shape
+ * as recall results (score 0). Backs the Memory browser's no-query view.
+ * Schema objects (meta/*) are excluded.
+ */
+export async function recentMemories(
+  freehold: Freehold,
+  filters?: RecallFilters,
+  limit = 50
+): Promise<RecallResult[]> {
+  const { pg } = freehold.db;
+  const rowsResult = await pg.query<ObjectRow>(
+    `SELECT id, type, content, author, method, approval, changeset FROM objects
+     WHERE kind = 'node' AND type NOT LIKE 'meta/%'
+     ORDER BY created_at DESC
+     LIMIT $1`,
+    [limit * 3]
+  );
+
+  const results: RecallResult[] = [];
+  for (const row of rowsResult.rows) {
+    if (filters?.type && row.type.split("@")[0] !== filters.type && row.type !== filters.type)
+      continue;
+    if (filters?.author && row.author !== filters.author) continue;
+    if (filters?.approval && row.approval !== filters.approval) continue;
+
+    results.push({
+      id: row.id,
+      type: row.type,
+      content: row.content,
+      author: row.author,
+      method: row.method,
+      approval: row.approval,
+      changeset: row.changeset,
+      score: 0,
+    });
+
+    if (results.length >= limit) break;
+  }
+  return results;
+}

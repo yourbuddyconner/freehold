@@ -1,4 +1,4 @@
-import { getEntity, recall, traverse } from "@freehold/core";
+import { getEntity, recall, recentMemories, traverse } from "@freehold/core";
 import { Hono } from "hono";
 import { ERROR_CODES, apiError } from "../errors.js";
 import type { AppEnv } from "../types.js";
@@ -22,6 +22,25 @@ retrievalRouter.get("/recall", async (c) => {
     approval: status ?? undefined,
   };
   const results = await recall(fh, q, embedder, filters);
+  return c.json({ results });
+});
+
+retrievalRouter.get("/memories", async (c) => {
+  const type = c.req.query("type");
+  const author = c.req.query("author");
+  const status = c.req.query("status");
+  const limitRaw = c.req.query("limit");
+  const limit = limitRaw ? Math.min(Number(limitRaw) || 50, 200) : 50;
+  const fh = c.get("freehold");
+  const results = await recentMemories(
+    fh,
+    {
+      type: type ?? undefined,
+      author: author ?? undefined,
+      approval: status ?? undefined,
+    },
+    limit
+  );
   return c.json({ results });
 });
 

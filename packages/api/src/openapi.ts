@@ -335,6 +335,30 @@ function buildRegistry(): OpenAPIRegistry {
     },
   });
 
+  // Retrieval — recent memories (no-query browse)
+  registry.registerPath({
+    method: "get",
+    path: "/api/v1/memories",
+    summary: "List recent memories",
+    description:
+      "Most recently indexed memories, newest first. Same result shape as recall (score is 0). The `status` query param maps to the `approval` field.",
+    security: auth,
+    request: {
+      query: z.object({
+        type: z.string().optional(),
+        author: z.string().optional(),
+        status: z.string().optional(),
+        limit: z.string().optional().openapi({ description: "Max results (default 50, cap 200)" }),
+      }),
+    },
+    responses: {
+      "200": {
+        description: "Recent memories with provenance",
+        content: { "application/json": { schema: z.object({ results: z.array(RecallResult) }) } },
+      },
+    },
+  });
+
   // Retrieval — recall
   registry.registerPath({
     method: "get",

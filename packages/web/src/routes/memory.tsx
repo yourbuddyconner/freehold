@@ -2,7 +2,7 @@ import { Outlet, createRoute, useRouterState } from "@tanstack/react-router";
 import { useState } from "react";
 import { MemoryCard } from "~/components/MemoryCard";
 import { TaxonomyTree } from "~/components/TaxonomyTree";
-import { useRecall, useSchema } from "~/lib/hooks";
+import { usePrincipals, useRecall, useRecentMemories, useSchema } from "~/lib/hooks";
 import { Route as RootRoute } from "./__root";
 
 export const Route = createRoute({
@@ -28,8 +28,6 @@ function MemoryLayout() {
 const TYPE_FILTERS = ["entity", "document", "event"] as const;
 const STATUS_FILTERS = ["approved", "pending", "rejected"] as const;
 
-const AUTHOR_FILTERS = ["claude-code"] as const;
-
 function MemoryPage() {
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<string | undefined>();
@@ -42,10 +40,20 @@ function MemoryPage() {
     author: authorFilter,
   };
 
-  const { data, isLoading } = useRecall(query, filters, query.length > 0);
+  const searching = query.length > 0;
+  const { data, isLoading } = useRecall(query, filters, searching);
+  const { data: recentData, isLoading: recentLoading } = useRecentMemories(filters, !searching);
   const { data: schemaData } = useSchema();
-  const results = data?.results ?? [];
+  const { data: principalsData } = usePrincipals();
+  const results = (searching ? data?.results : recentData?.results) ?? [];
   const terms = schemaData?.terms ?? [];
+  // Author chips are the registered agents, straight from the graph.
+  const authors = (
+    (principalsData as { principals?: Array<{ name: string; kind: string }> } | undefined)
+      ?.principals ?? []
+  )
+    .filter((p) => p.kind === "agent")
+    .map((p) => p.name);
 
   function toggleFilter<T extends string>(
     current: T | undefined,
@@ -118,7 +126,7 @@ function MemoryPage() {
           </button>
         ))}
         <span className="text-xs text-(--fg-muted) self-center ml-2">Author:</span>
-        {AUTHOR_FILTERS.map((f) => (
+        {authors.map((f) => (
           <button
             key={f}
             type="button"
@@ -147,10 +155,10 @@ function MemoryPage() {
 
         {/* Results */}
         <div className="flex-1 min-w-0">
-          {query.length === 0 && (
+          {!searching && !recentLoading && results.length === 0 && (
             <div className="border border-(--border) bg-(--bg-subtle) p-6 space-y-3 max-w-xl">
               <p className="text-sm text-(--fg-muted)">
-                Search memories above. Agents will surface entities, documents, and events here as
+                Nothing in memory yet. Agents will surface entities, documents, and events here as
                 they work.
               </p>
               <p className="text-sm text-(--fg-muted)">
@@ -162,9 +170,11 @@ function MemoryPage() {
             </div>
           )}
 
-          {query.length > 0 && isLoading && <p className="text-sm text-(--fg-muted)">Searching…</p>}
+          {(searching ? isLoading : recentLoading) && (
+            <p className="text-sm text-(--fg-muted)">Searching…</p>
+          )}
 
-          {query.length > 0 && !isLoading && results.length === 0 && (
+          {searching && !isLoading && results.length === 0 && (
             <p className="text-sm text-(--fg-muted)">No memories match your search.</p>
           )}
 

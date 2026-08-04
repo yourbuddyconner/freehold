@@ -189,6 +189,15 @@ export class FreeholdClient {
     return this.fetch<AdmissionResponse>("POST", "/api/v1/documents", { body });
   }
 
+  /** GET /api/v1/memories — recent memories, newest first */
+  async recentMemories(
+    opts: { type?: string; author?: string; status?: string; limit?: string } = {}
+  ): Promise<{ results: RecallResult[] }> {
+    return this.fetch<{ results: RecallResult[] }>("GET", "/api/v1/memories", {
+      query: { type: opts.type, author: opts.author, status: opts.status, limit: opts.limit },
+    });
+  }
+
   /** GET /api/v1/recall */
   async recall(
     q: string,
