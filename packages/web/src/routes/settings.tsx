@@ -69,7 +69,7 @@ function ApiTokenSection() {
     <section className="space-y-3">
       <h3 className="text-sm font-semibold text-[--fg]">API bearer token</h3>
       <p className="text-xs text-[--fg-muted]">
-        Used to authenticate API and MCP requests to this daemon.{" "}
+        Used to authenticate API and MCP requests to Freehold.{" "}
         <strong className="text-amber-700 dark:text-amber-400">Keep this secret.</strong>
       </p>
       {token ? (
@@ -96,7 +96,7 @@ function ApiTokenSection() {
         </div>
       ) : (
         <p className="text-xs text-[--fg-muted] italic">
-          Token not available — open this page via the daemon (not the Vite dev server without a
+          Token not available — open this page from Freehold (not the Vite dev server without a
           running daemon).
         </p>
       )}

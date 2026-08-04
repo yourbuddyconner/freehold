@@ -13,7 +13,7 @@ alone, and govern with rules you declare.
 
 ## What it does
 
-Freehold is one daemon (`freehold serve`) that gives agents a memory
+Freehold (`freehold serve`) runs on your machine. It gives agents a memory
 they can read and write, and gives you control over what they write:
 
 - **Agents connect over MCP** (streamable HTTP at `/mcp`) and get twelve
@@ -36,7 +36,7 @@ they can read and write, and gives you control over what they write:
   provenance: who wrote it, by what method, who approved it, and the
   changeset hash. The index is disposable: `freehold reindex` rebuilds
   it from the log.
-- **The console** (served at the daemon's port) has six areas: Inbox
+- **The console** (served at the same port) has six areas: Inbox
   (pending proposals with diffs and the rules that stopped them), Memory
   (search, browse, entity detail with provenance), Schema (the ontology
   viewer, including agent-added types), Policy, Verify (the changeset
@@ -64,7 +64,7 @@ cd freehold && pnpm install
 pnpm --dir packages/api exec tsx src/cli/index.ts serve
 ```
 
-The daemon binds `127.0.0.1:8710`, creates `~/.freehold/` (config,
+Freehold binds `127.0.0.1:8710`, creates `~/.freehold/` (config,
 index, and your graph in native Allod layout), and serves the console at
 [http://127.0.0.1:8710](http://127.0.0.1:8710).
 
@@ -81,11 +81,11 @@ agent works, and approve what deserves to be true.
 ## CLI
 
 `freehold serve` runs the product. Every other command is a client of
-the running daemon over its public HTTP API: `status`, `remember`,
+the running Freehold over its public HTTP API: `status`, `remember`,
 `recall`, `pending`, `approve <hash>`, `reject <hash>`, `verify`,
 `reindex`, `mcp setup`. All commands take `--json`; exit codes are
-`0` ok, `2` pending approval, `3` policy-rejected, `4` auth, `5` daemon
-unreachable.
+`0` ok, `2` pending approval, `3` policy-rejected, `4` auth, `5` Freehold
+not running.
 
 ## How it's built
 

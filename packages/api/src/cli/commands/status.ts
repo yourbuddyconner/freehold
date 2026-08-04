@@ -7,7 +7,7 @@ export async function runStatus(opts: BaseOpts): Promise<void> {
     const result = await client.health();
     output(result, opts.json, (d) => {
       const r = d as { status: string };
-      console.log(`Daemon status: ${r.status}`);
+      console.log(`Freehold status: ${r.status}`);
     });
     process.exit(0);
   } catch (err) {

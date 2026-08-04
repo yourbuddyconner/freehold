@@ -939,6 +939,31 @@ p + p {
 }
 
 
+
+/* ── Hero grid + visual ──────────────────────────────────────────── */
+.hero-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+  gap: 64px;
+  align-items: center;
+}
+.hero-visual {
+  border: 1px solid var(--hairline);
+  background: #fff;
+  padding: 20px;
+}
+.hero-visual svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+@media (max-width: 900px) {
+  .hero-grid {
+    grid-template-columns: 1fr;
+    gap: 48px;
+  }
+}
+
 /* ── Architecture diagram ────────────────────────────────────────── */
 .arch-diagram {
   border: 1px solid var(--hairline);

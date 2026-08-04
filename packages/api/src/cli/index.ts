@@ -35,8 +35,8 @@ Usage:
   freehold <command> [options]
 
 Commands:
-  serve                       Start the freehold daemon
-  status                      Check daemon health
+  serve                       Start Freehold
+  status                      Check that Freehold is running
   remember <content>          Store a memory note
     --agent <name>            Agent name (default: "cli")
     --type <type>             Entity type, e.g. memory/Preference@1 (default: memory/Note@1)

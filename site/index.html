@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Freehold — Memory for AI agents, on your machine</title>
-  <meta name="description" content="Freehold is a memory server for AI agents that runs on your machine. Quick notes save instantly, important writes wait for your approval, and every decision is signed and verifiable.">
+  <meta name="description" content="Freehold is a memory server for AI agents that runs on your machine. Notes save instantly, important writes wait for your approval, and every decision is signed and verifiable.">
   <link rel="stylesheet" href="assets/site.css">
 </head>
 <body>
@@ -30,18 +30,105 @@
 
     <!-- Hero -->
     <section class="hero">
-      <div class="hero-label reveal reveal-1">
-        v0 — local-first, MIT OR Apache-2.0
-      </div>
-      <h1 class="hero-headline reveal reveal-2">
-        Your agents' memory,<br>in a graph you own.
-      </h1>
-      <p class="hero-subhead reveal reveal-3">
-        Freehold is a memory server for AI agents that runs on your machine. Agents connect over MCP and save what they learn as they work. Quick notes save instantly. Anything important — a preference about you, a change to how memory is organized — waits in your inbox until you approve it. Every decision is signed with your key, and the whole history can be verified with open tools.
-      </p>
-      <div class="hero-actions reveal reveal-4">
-        <a href="docs/quickstart.html" class="btn btn-primary">Get started</a>
-        <a href="https://github.com/yourbuddyconner/freehold" class="btn btn-secondary">View on GitHub</a>
+      <div class="hero-grid">
+        <div class="hero-copy">
+          <div class="hero-label reveal reveal-1">
+            v0 — local-first, MIT OR Apache-2.0
+          </div>
+          <h1 class="hero-headline reveal reveal-2">
+            Your agents' memory, in a graph you own.
+          </h1>
+          <p class="hero-subhead reveal reveal-3">
+            Freehold is a memory server for AI agents that runs on your machine. Agents save what they learn as they work, anything important waits for your approval, and every decision is signed with your key in a history you can verify.
+          </p>
+          <div class="hero-actions reveal reveal-4">
+            <a href="docs/quickstart.html" class="btn btn-primary">Get started</a>
+            <a href="https://github.com/yourbuddyconner/freehold" class="btn btn-secondary">View on GitHub</a>
+          </div>
+        </div>
+
+        <div class="hero-visual reg-marks reveal reveal-3">
+          <span class="reg-mark-bl"></span><span class="reg-mark-br"></span>
+          <svg viewBox="0 0 460 520" role="img" aria-label="A pending proposal from an agent, your signed decision, and the append-only log it lands in.">
+            <defs>
+              <marker id="h-arr" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M0 0 L8 4 L0 8 z" fill="#0E0E0C"/>
+              </marker>
+            </defs>
+            <style>
+              .h-card   { fill: #FFFFFF; stroke: #E8A200; stroke-dasharray: 5 4; }
+              .h-panel  { fill: #FFFFFF; stroke: #0E0E0C; }
+              .h-chip   { fill: #fffbeb; stroke: #E8A200; stroke-dasharray: 4 3; }
+              .h-chip-t { font: 600 10px "IBM Plex Mono", monospace; letter-spacing: 0.08em; fill: #E8A200; }
+              .h-type   { font: 500 11.5px "IBM Plex Mono", monospace; fill: #0E0E0C; }
+              .h-stmt   { font: 16px "Archivo", sans-serif; fill: #0E0E0C; }
+              .h-rule   { font: 10.5px "IBM Plex Mono", monospace; fill: #6B6F66; }
+              .h-sig    { font: 11px "Archivo", sans-serif; fill: #6B6F66; }
+              .h-btn-g  { fill: #FFFFFF; stroke: #0BA05F; }
+              .h-btn-r  { fill: #FFFFFF; stroke: #D14B3A; }
+              .h-btn-gt { font: 600 10px "IBM Plex Mono", monospace; letter-spacing: 0.08em; fill: #0BA05F; }
+              .h-btn-rt { font: 600 10px "IBM Plex Mono", monospace; letter-spacing: 0.08em; fill: #D14B3A; }
+              .h-label  { font: 10.5px "IBM Plex Mono", monospace; fill: #6B6F66; }
+              .h-line   { stroke: #0E0E0C; fill: none; }
+              .h-title  { font: 600 11px "IBM Plex Mono", monospace; letter-spacing: 0.1em; fill: #0E0E0C; }
+              .h-sub    { font: 10px "IBM Plex Mono", monospace; fill: #6B6F66; }
+              .h-row    { fill: #FAFAF8; stroke: #C9C9C2; }
+              .h-row-g  { fill: #f0fdf4; stroke: #0BA05F; }
+              .h-row-k  { font: 600 11px "IBM Plex Mono", monospace; fill: #0E0E0C; }
+              .h-row-c  { font: 11px "Archivo", sans-serif; fill: #6B6F66; }
+              .h-row-s  { font: 10px "Archivo", sans-serif; fill: #6B6F66; }
+              .h-row-sg { font: 10px "Archivo", sans-serif; fill: #0BA05F; }
+              .h-hash   { font: 9.5px "IBM Plex Mono", monospace; fill: #9B9F94; }
+            </style>
+
+            <!-- Pending proposal card -->
+            <rect class="h-card" x="20" y="16" width="420" height="160"/>
+            <rect class="h-chip" x="40" y="36" width="76" height="22"/>
+            <text class="h-chip-t" x="78" y="51" text-anchor="middle">PENDING</text>
+            <text class="h-type" x="130" y="51">memory/Preference</text>
+            <text class="h-stmt" x="40" y="90">“prefers morning meetings”</text>
+            <text class="h-rule" x="40" y="118">rule: preferences-are-owner-business</text>
+            <text class="h-sig" x="40" y="150">✎ claude-code</text>
+            <rect class="h-btn-g" x="232" y="126" width="92" height="30"/>
+            <text class="h-btn-gt" x="278" y="145" text-anchor="middle">APPROVE</text>
+            <rect class="h-btn-r" x="336" y="126" width="84" height="30"/>
+            <text class="h-btn-rt" x="378" y="145" text-anchor="middle">REJECT</text>
+
+            <!-- Decision arrow -->
+            <path class="h-line" d="M230 176 V 212" marker-end="url(#h-arr)"/>
+            <text class="h-label" x="244" y="192">your decision,</text>
+            <text class="h-label" x="244" y="206">signed with your key</text>
+
+            <!-- The log -->
+            <rect class="h-panel" x="20" y="216" width="420" height="288"/>
+            <text class="h-title" x="230" y="242" text-anchor="middle">THE LOG</text>
+            <text class="h-sub" x="230" y="258" text-anchor="middle">append-only · every entry names the previous hash</text>
+
+            <rect class="h-row-g" x="40" y="270" width="380" height="48"/>
+            <text class="h-row-k" x="56" y="290">decision</text>
+            <text class="h-row-c" x="140" y="290">approved memory/Preference</text>
+            <text class="h-row-sg" x="404" y="290" text-anchor="end">✎ you</text>
+            <text class="h-hash" x="56" y="306">hash a3f2…9c1d · prev 8c41…77e2</text>
+
+            <rect class="h-row" x="40" y="326" width="380" height="48"/>
+            <text class="h-row-k" x="56" y="346">write</text>
+            <text class="h-row-c" x="140" y="346">prefers morning meetings</text>
+            <text class="h-row-s" x="404" y="346" text-anchor="end">✎ claude-code</text>
+            <text class="h-hash" x="56" y="362">hash 8c41…77e2 · prev f09a…b2c6</text>
+
+            <rect class="h-row" x="40" y="382" width="380" height="48"/>
+            <text class="h-row-k" x="56" y="402">write</text>
+            <text class="h-row-c" x="140" y="402">note: meeting with design at 2pm</text>
+            <text class="h-row-s" x="404" y="402" text-anchor="end">✎ claude-code</text>
+            <text class="h-hash" x="56" y="418">hash f09a…b2c6 · prev 2d17…04ae</text>
+
+            <rect class="h-row" x="40" y="438" width="380" height="48"/>
+            <text class="h-row-k" x="56" y="458">genesis</text>
+            <text class="h-row-c" x="140" y="458">schema + policy installed</text>
+            <text class="h-row-s" x="404" y="458" text-anchor="end">✎ you</text>
+            <text class="h-hash" x="56" y="474">hash 2d17…04ae · prev 0000…0000</text>
+          </svg>
+        </div>
       </div>
     </section>
 
@@ -58,10 +145,10 @@
           <div class="loop-number">01</div>
           <h3>It runs on your machine</h3>
           <p>
-            Freehold is a single daemon on your laptop. Memory lives in <code>~/.freehold</code> as an append-only log of signed changes in the open <a href="https://github.com/yourbuddyconner/allod">Allod</a> format, and the console, the API, and the MCP endpoint all serve from one local port. There is no cloud service and no account.
+            Freehold is one program on your laptop. Memory lives in <code>~/.freehold</code> as an append-only log of signed changes in the open <a href="https://github.com/yourbuddyconner/allod">Allod</a> format. No cloud service, no account, and nothing leaves the machine — even search embeddings are computed locally.
           </p>
           <div style="margin-top:20px;">
-            <a href="docs/architecture.html" class="link-arrow">How it's built</a>
+            <a href="docs/architecture.html" class="link-arrow">How the system fits together</a>
           </div>
         </div>
 
@@ -70,7 +157,7 @@
           <div class="loop-number">02</div>
           <h3>You approve what matters</h3>
           <p>
-            Agents save quick notes instantly. Writes that change what memory says about you — preferences, facts about people, new entity types — go to your inbox as proposals, and nothing important lands until you approve it. Agents can propose changes to memory's own schema through the same inbox.
+            Agents save notes instantly and read memory freely. Preferences about you, facts about people, and schema changes arrive in your inbox as proposals, and they only become memory when you approve them. Agents can propose changes to memory's own schema through the same inbox.
           </p>
           <div style="margin-top:20px;">
             <a href="docs/governance.html" class="link-arrow">How approval works</a>
@@ -80,12 +167,12 @@
         <div class="loop-card reg-marks reveal reveal-4">
           <span class="reg-mark-bl"></span><span class="reg-mark-br"></span>
           <div class="loop-number">03</div>
-          <h3>You can check everything</h3>
+          <h3>Signed, so you can check it</h3>
           <p>
-            Approvals and rejections are records signed with your key, stored in the same log as the memory itself. The independent <code>allod verify</code> command checks the whole history — hashes, signatures, and decisions — without running Freehold at all, so you never have to take Freehold's word for it.
+            Agents sign their writes, you sign your decisions, and every entry names the hash of the one before it. The independent <code>allod verify</code> command checks the whole history from the files alone — you never have to take Freehold's word for what happened.
           </p>
           <div style="margin-top:20px;">
-            <a href="docs/architecture.html#verification" class="link-arrow">How verification works</a>
+            <a href="docs/architecture.html#signatures" class="link-arrow">How signatures work</a>
           </div>
         </div>
       </div>
@@ -97,7 +184,7 @@
         <div class="eyebrow">How it works</div>
         <h2>From agent write to signed record</h2>
         <p>
-          Here is what happens when an agent tries to save something important.
+          What happens when an agent tries to save something important.
         </p>
       </div>
 
@@ -107,9 +194,9 @@
           <div class="wt-step reg-marks">
             <span class="reg-mark-bl"></span><span class="reg-mark-br"></span>
             <div class="wt-step-num">Step 01</div>
-            <h4>The agent writes</h4>
+            <h4>An agent writes</h4>
             <p>
-              The agent calls <code>create_entity</code> with a <code>memory/Preference</code>: "prefers morning meetings". A quick note would save instantly; a preference goes through the policy rules first.
+              The agent calls <code>create_entity</code> with a <code>memory/Preference</code>: "prefers morning meetings". Notes save instantly; a preference goes to the policy rules first.
             </p>
             <div style="margin-top:16px;">
               <span class="chip chip-scratch">note → saves instantly</span>
@@ -119,9 +206,9 @@
           <div class="wt-step pending-state reg-marks">
             <span class="reg-mark-bl"></span><span class="reg-mark-br"></span>
             <div class="wt-step-num">Step 02</div>
-            <h4>Policy pauses it</h4>
+            <h4>Policy makes it a proposal</h4>
             <p>
-              The write matches a rule — preferences about you need your approval — so it becomes a proposal. The agent gets <code>{ status: "pending", proposal, rule }</code> and moves on.
+              The write matches a rule: preferences about you need your approval. The agent gets <code>{ status: "pending", proposal, rule }</code> and moves on.
             </p>
             <div style="margin-top:16px;">
               <span class="chip chip-pending">pending</span>
@@ -133,7 +220,7 @@
             <div class="wt-step-num">Step 03</div>
             <h4>You decide</h4>
             <p>
-              The proposal appears in your inbox with the agent's name, what it wants to save, the diff, and the rule that stopped it. You approve or reject it in one click.
+              The proposal shows up in your inbox with the agent's name, the diff, and the rule that matched. One click to approve or reject.
             </p>
             <div style="margin-top:16px;">
               <span class="chip chip-approved">approved</span>
@@ -143,9 +230,9 @@
           <div class="wt-step reg-marks">
             <span class="reg-mark-bl"></span><span class="reg-mark-br"></span>
             <div class="wt-step-num">Step 04</div>
-            <h4>The decision is signed</h4>
+            <h4>Signed and saved</h4>
             <p>
-              Approving signs a decision record with your key and saves the write. From then on it comes back in <code>recall</code> with its history attached: who wrote it, who approved it, and the changeset hash.
+              Your approval is a decision record signed with your key. The preference is saved, indexed, and comes back in <code>recall</code> with its full history.
             </p>
             <div style="margin-top:16px;">
               <span class="chip chip-verified">verified</span>
@@ -178,7 +265,7 @@ git clone https://github.com/yourbuddyconner/freehold
 <span class="code-comment"># 2. Build the Allod wasm package (one time)</span>
 cd allod/crates/allod-wasm &amp;&amp; pnpm install &amp;&amp; pnpm build &amp;&amp; cd ../../..
 
-<span class="code-comment"># 3. Install dependencies and start the daemon</span>
+<span class="code-comment"># 3. Install dependencies and start Freehold</span>
 cd freehold &amp;&amp; pnpm install
 pnpm --dir packages/api exec tsx src/cli/index.ts serve
 <span class="code-comment"># Binds 127.0.0.1:8710 — console at http://127.0.0.1:8710</span>
@@ -200,7 +287,7 @@ freehold mcp setup --print        <span class="code-comment"># or print JSON for
         <div class="eyebrow">MCP tools</div>
         <h2>Twelve tools for agents</h2>
         <p>
-          Agents get exactly these tools over MCP. Approving, rejecting, and policy changes are not agent tools — those happen in your console and CLI.
+          Agents get exactly these tools over MCP. Approving, rejecting, and policy changes are yours alone — they happen in the console and the CLI.
         </p>
       </div>
 
@@ -279,7 +366,7 @@ freehold mcp setup --print        <span class="code-comment"># or print JSON for
       <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:32px; margin-top:24px;">
         <div>
           <h4 style="margin-bottom:8px;">Quickstart</h4>
-          <p style="font-size:0.875rem; margin-bottom:12px;">Install the daemon and connect an agent.</p>
+          <p style="font-size:0.875rem; margin-bottom:12px;">Install Freehold and connect an agent.</p>
           <a href="docs/quickstart.html" class="link-arrow">Get started</a>
         </div>
         <div>
@@ -294,7 +381,7 @@ freehold mcp setup --print        <span class="code-comment"># or print JSON for
         </div>
         <div>
           <h4 style="margin-bottom:8px;">Architecture</h4>
-          <p style="font-size:0.875rem; margin-bottom:12px;">Package structure, the Allod foundation, and the disposable index.</p>
+          <p style="font-size:0.875rem; margin-bottom:12px;">The actors, the signed log, and verification anyone can run.</p>
           <a href="docs/architecture.html" class="link-arrow">View architecture</a>
         </div>
       </div>

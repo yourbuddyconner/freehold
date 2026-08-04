@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Quickstart — Freehold</title>
-  <meta name="description" content="Install Freehold, start the daemon, and connect an agent.">
+  <meta name="description" content="Install Freehold, start it, and connect an agent.">
   <link rel="stylesheet" href="../assets/site.css">
 </head>
 <body>
@@ -33,7 +33,7 @@
       <ul class="docs-sidebar-links">
         <li><a href="#prerequisites" class="active">Prerequisites</a></li>
         <li><a href="#install">Install and build</a></li>
-        <li><a href="#serve">Start the daemon</a></li>
+        <li><a href="#serve">Start Freehold</a></li>
         <li><a href="#wire-agent">Wire an agent</a></li>
         <li><a href="#cli">CLI reference</a></li>
         <li><a href="#limitations">Known limitations</a></li>
@@ -55,7 +55,7 @@
     <div class="eyebrow reveal reveal-1">Documentation</div>
     <h1 class="reveal reveal-2">Quickstart</h1>
     <p class="lead reveal reveal-3">
-      This guide goes from a clean machine to a running Freehold daemon with an agent connected. Two prerequisites matter: the Allod repo checked out as a sibling directory, and a one-time WASM build.
+      This guide goes from a clean machine to Freehold running with an agent connected. Two prerequisites matter: the Allod repo checked out as a sibling directory, and a one-time WASM build.
     </p>
 
     <h2 id="prerequisites">Prerequisites</h2>
@@ -63,7 +63,7 @@
     <p>Freehold consumes <code>@allod/core</code>, a WASM npm package built from the Allod source. The package is not yet published to npm; it is consumed from a sibling checkout on disk. This means you need both repos.</p>
 
     <ul>
-      <li><strong>Node ≥ 22</strong> — the daemon uses Node for the runtime</li>
+      <li><strong>Node ≥ 22</strong> — Freehold runs on Node</li>
       <li><strong>pnpm</strong> — the workspace package manager (<a href="https://pnpm.io">pnpm.io</a>)</li>
       <li><strong>Rust + wasm-pack</strong> — required once to build the Allod WASM package; not needed after that unless you update Allod</li>
     </ul>
@@ -95,11 +95,11 @@ cd ../../..
 cd freehold
 pnpm install</code></pre>
 
-    <h2 id="serve">Start the daemon</h2>
+    <h2 id="serve">Start Freehold</h2>
 
     <pre><code>pnpm --dir packages/api exec tsx src/cli/index.ts serve</code></pre>
 
-    <p>The daemon binds <code>127.0.0.1:8710</code>, creates <code>~/.freehold/</code> on first run (config, the PGlite index directory, and your graph in native Allod layout), and serves the owner console at <a href="http://127.0.0.1:8710">http://127.0.0.1:8710</a>.</p>
+    <p>Freehold binds <code>127.0.0.1:8710</code>, creates <code>~/.freehold/</code> on first run (config, the PGlite index directory, and your graph in native Allod layout), and serves the owner console at <a href="http://127.0.0.1:8710">http://127.0.0.1:8710</a>.</p>
 
     <p>A bearer token is auto-minted into <code>~/.freehold/config.json</code> (mode 0600) at first boot. The CLI and the MCP config use this token automatically.</p>
 
@@ -109,7 +109,7 @@ pnpm install</code></pre>
 
     <h2 id="wire-agent">Wire an agent</h2>
 
-    <p>With the daemon running, wire an agent from a second terminal:</p>
+    <p>With Freehold running, wire an agent from a second terminal:</p>
 
     <pre><code><span class="code-comment"># Write the MCP config entry for Claude Code</span>
 freehold mcp setup claude-code
@@ -157,7 +157,7 @@ entity_types:
 
     <h2 id="cli">CLI reference</h2>
 
-    <p><code>freehold serve</code> runs the product. Every other subcommand is a client of the running daemon over its public HTTP API:</p>
+    <p><code>freehold serve</code> runs the product. Every other subcommand is a client of the running Freehold over its public HTTP API:</p>
 
     <table class="arch-table">
       <thead>
@@ -167,7 +167,7 @@ entity_types:
         </tr>
       </thead>
       <tbody>
-        <tr><td>freehold status</td><td>Check if the daemon is running and report its state</td></tr>
+        <tr><td>freehold status</td><td>Check that Freehold is running and report its state</td></tr>
         <tr><td>freehold remember &lt;text&gt;</td><td>Write a scratch note from the command line</td></tr>
         <tr><td>freehold recall &lt;query&gt;</td><td>Search memory and print results</td></tr>
         <tr><td>freehold pending</td><td>List writes pending your approval</td></tr>
@@ -180,14 +180,14 @@ entity_types:
       </tbody>
     </table>
 
-    <p>All commands accept <code>--json</code> for machine-readable output. Exit codes: <code>0</code> ok, <code>2</code> pending approval, <code>3</code> policy-rejected, <code>4</code> auth, <code>5</code> daemon unreachable.</p>
+    <p>All commands accept <code>--json</code> for machine-readable output. Exit codes: <code>0</code> ok, <code>2</code> pending approval, <code>3</code> policy-rejected, <code>4</code> auth, <code>5</code> Freehold not running.</p>
 
     <h2 id="limitations">Known limitations (v0)</h2>
 
     <ul>
       <li><strong>Semantic recall unavailable in the compiled binary.</strong> The binary ships with the hash embedder only. Run from source via <code>tsx</code> for semantic search over bge-small embeddings. See <a href="https://github.com/yourbuddyconner/freehold/blob/main/docs/notes/F10-deferred.md">F10-deferred</a> for the details.</li>
       <li><strong>Sidecar files required for the compiled binary.</strong> The binary requires four sidecar files in the same directory (PGlite WASM engine, FS bundle, initdb WASM, pgvector extension bundle). The <code>compile-binary.mjs</code> script copies these automatically.</li>
-      <li><strong>Single-user, local-only.</strong> The daemon binds <code>127.0.0.1</code>. Multi-user, remote instances, and federation between Freehold instances are out of scope for v0.</li>
+      <li><strong>Single-user, local-only.</strong> Freehold binds <code>127.0.0.1</code>. Multi-user, remote instances, and federation between Freehold instances are out of scope for v0.</li>
       <li><strong>No memory graph visualization.</strong> The force-directed graph view is deferred to v0.1.</li>
     </ul>
 

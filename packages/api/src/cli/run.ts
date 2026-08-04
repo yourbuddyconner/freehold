@@ -36,7 +36,7 @@ export function handleError(err: unknown): never {
     e.message?.includes("ECONNREFUSED") ||
     e.message?.includes("Network error")
   ) {
-    console.error(`Daemon unreachable: ${e.message}`);
+    console.error(`Freehold is not running — start it with \`freehold serve\` (${e.message})`);
     console.error("Is `freehold serve` running?");
     process.exit(5);
   }

@@ -90,7 +90,7 @@ const SessionInfo = z
   .object({
     defaultAgent: z.string().nullable().openapi({ description: "Default MCP agent name, if set" }),
     embedder: z.enum(["transformers", "hash"]).openapi({ description: "Active embedder backend" }),
-    port: z.number().openapi({ description: "Daemon listening port" }),
+    port: z.number().openapi({ description: "Freehold's local port" }),
   })
   .openapi("SessionInfo");
 
@@ -584,9 +584,9 @@ function buildRegistry(): OpenAPIRegistry {
   registry.registerPath({
     method: "get",
     path: "/api/v1/session",
-    summary: "Get daemon session config",
+    summary: "Get session config",
     description:
-      "Returns non-secret daemon configuration (defaultAgent, embedder, port). The bearer token is NOT returned here — it is injected as a meta tag by the server.",
+      "Returns non-secret Freehold configuration (defaultAgent, embedder, port). The bearer token is NOT returned here — it is injected as a meta tag by the server.",
     security: auth,
     responses: {
       "200": {
@@ -620,7 +620,7 @@ export function getOpenApiDoc(): object {
       version: "0.1.0",
       description: "Governed memory backend for AI agents, built on the Allod format.",
     },
-    servers: [{ url: "http://127.0.0.1:8710", description: "Local daemon" }],
+    servers: [{ url: "http://127.0.0.1:8710", description: "Local Freehold" }],
   });
 }
 
