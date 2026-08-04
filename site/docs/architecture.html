@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Architecture — Freehold</title>
-  <meta name="description" content="How Freehold works: one local daemon, an append-only signed log, a derived search index, and verification that doesn't depend on Freehold.">
+  <meta name="description" content="The Freehold system: your agents, you, the daemon between them, a signed history on your disk, and verification anyone can run.">
   <link rel="stylesheet" href="../assets/site.css">
 </head>
 <body>
@@ -30,11 +30,12 @@
       <div class="docs-sidebar-label">On this page</div>
       <ul class="docs-sidebar-links">
         <li><a href="#system">The system</a></li>
-        <li><a href="#allod">The Allod foundation</a></li>
+        <li><a href="#signatures">How signatures work</a></li>
+        <li><a href="#graph">The graph</a></li>
         <li><a href="#data-flow">The path of a write</a></li>
-        <li><a href="#disposable-index">Disposable index</a></li>
-        <li><a href="#verification">Verification independence</a></li>
-        <li><a href="#decisions">Key decisions</a></li>
+        <li><a href="#index">The search index</a></li>
+        <li><a href="#verification">Independent verification</a></li>
+        <li><a href="#decisions">Design choices</a></li>
         <li><a href="#disk-layout">Disk layout</a></li>
       </ul>
     </div>
@@ -53,114 +54,206 @@
     <div class="eyebrow reveal reveal-1">Documentation</div>
     <h1 class="reveal reveal-2">Architecture</h1>
     <p class="lead reveal reveal-3">
-      Freehold runs as a single daemon on your machine. Your agents connect to it over MCP, you connect to it through the console and the CLI, and everything in between — the policy check, the signed log, the search index — lives in that one process and on your disk.
+      The system has three actors: your agents, you, and a verifier anyone can run. The daemon sits between the first two, and everything the actors do ends up as signed entries in one log on your disk.
     </p>
 
     <h2 id="system">The system</h2>
 
-    <pre><code>your agents ── MCP ──────┐        ┌────── console + CLI ── you
-                         ▼        ▼
-              freehold daemon (127.0.0.1:8710)
-                         │
-        policy check: save instantly, or mark pending for you
-                         │
-                         ▼
-        append-only signed log     ~/.freehold/graphs/main
-                         │
-                         ▼  derived
-        search index (embedded Postgres)   rebuilt any time from the log</code></pre>
+    <div class="arch-diagram">
+      <svg viewBox="0 0 920 620" role="img" aria-label="Diagram: agents write over MCP with their own keys, you approve with the owner key, the daemon appends signed changesets to the graph, the search index is derived from it, and allod verify checks the graph independently.">
+        <defs>
+          <marker id="arr" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0 0 L8 4 L0 8 z" fill="#0E0E0C"/>
+          </marker>
+          <marker id="arr-m" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0 0 L8 4 L0 8 z" fill="#6B6F66"/>
+          </marker>
+        </defs>
+        <style>
+          .d-box   { fill: #FFFFFF; stroke: #0E0E0C; }
+          .d-soft  { fill: #FFFFFF; stroke: #9B9F94; }
+          .d-title { font: 600 12px "IBM Plex Mono", monospace; letter-spacing: 0.08em; fill: #0E0E0C; }
+          .d-sub   { font: 12px "Archivo", sans-serif; fill: #6B6F66; }
+          .d-key   { font: 12px "Archivo", sans-serif; fill: #0E0E0C; }
+          .d-label { font: 11px "IBM Plex Mono", monospace; fill: #6B6F66; }
+          .d-line  { stroke: #0E0E0C; fill: none; }
+          .d-dash  { stroke: #6B6F66; fill: none; stroke-dasharray: 4 3; }
+          .d-chip-green { fill: #f0fdf4; stroke: #0BA05F; }
+          .d-chip-amber { fill: #fffbeb; stroke: #E8A200; stroke-dasharray: 4 3; }
+          .d-chip-text-green { font: 11px "IBM Plex Mono", monospace; fill: #0BA05F; }
+          .d-chip-text-amber { font: 11px "IBM Plex Mono", monospace; fill: #E8A200; }
+          .d-block { fill: #FAFAF8; stroke: #9B9F94; }
+          .d-block-green { fill: #f0fdf4; stroke: #0BA05F; }
+          .d-block-title { font: 600 11px "IBM Plex Mono", monospace; fill: #0E0E0C; }
+          .d-block-sig   { font: 10px "Archivo", sans-serif; fill: #6B6F66; }
+        </style>
+
+        <!-- Actor: agents -->
+        <rect class="d-box" x="40" y="36" width="250" height="118"/>
+        <text class="d-title" x="165" y="72" text-anchor="middle">YOUR AGENTS</text>
+        <text class="d-sub" x="165" y="98" text-anchor="middle">connect over MCP</text>
+        <text class="d-key" x="165" y="122" text-anchor="middle">✎ one key per agent</text>
+
+        <!-- Actor: you -->
+        <rect class="d-box" x="630" y="36" width="250" height="118"/>
+        <text class="d-title" x="755" y="72" text-anchor="middle">YOU</text>
+        <text class="d-sub" x="755" y="98" text-anchor="middle">console + CLI</text>
+        <text class="d-key" x="755" y="122" text-anchor="middle">✎ the owner key</text>
+
+        <!-- Agents -> daemon -->
+        <path class="d-line" d="M165 154 V 315 H 266" marker-end="url(#arr)"/>
+        <text class="d-label" x="178" y="198">writes, signed with</text>
+        <text class="d-label" x="178" y="214">the agent's key</text>
+
+        <!-- Daemon -> you (proposals) -->
+        <path class="d-dash" d="M650 290 H 690 V 158" marker-end="url(#arr-m)"/>
+        <text class="d-label" x="678" y="198" text-anchor="end">pending proposals</text>
+        <text class="d-label" x="678" y="214" text-anchor="end">to your inbox</text>
+
+        <!-- You -> daemon (decisions) -->
+        <path class="d-line" d="M755 154 V 340 H 654" marker-end="url(#arr)"/>
+        <text class="d-label" x="768" y="198">decisions, signed</text>
+        <text class="d-label" x="768" y="214">with your key</text>
+
+        <!-- Daemon -->
+        <rect class="d-box" x="270" y="240" width="380" height="150"/>
+        <text class="d-title" x="460" y="272" text-anchor="middle">FREEHOLD DAEMON</text>
+        <text class="d-sub" x="460" y="296" text-anchor="middle">policy rules decide each write</text>
+        <rect class="d-chip-green" x="300" y="318" width="150" height="36"/>
+        <text class="d-chip-text-green" x="375" y="340" text-anchor="middle">note → saved</text>
+        <rect class="d-chip-amber" x="470" y="318" width="150" height="36"/>
+        <text class="d-chip-text-amber" x="545" y="340" text-anchor="middle">important → pending</text>
+
+        <!-- Daemon -> graph -->
+        <path class="d-line" d="M460 390 V 432" marker-end="url(#arr)"/>
+        <text class="d-label" x="474" y="414">appended in order</text>
+
+        <!-- Graph -->
+        <rect class="d-box" x="270" y="436" width="380" height="150"/>
+        <text class="d-title" x="460" y="466" text-anchor="middle">THE GRAPH</text>
+        <text class="d-sub" x="460" y="484" text-anchor="middle">append-only log on your disk</text>
+
+        <rect class="d-block" x="292" y="500" width="74" height="48"/>
+        <text class="d-block-title" x="329" y="521" text-anchor="middle">write</text>
+        <text class="d-block-sig" x="329" y="537" text-anchor="middle">✎ agent</text>
+
+        <path class="d-line" d="M382 524 L 370 524" marker-end="url(#arr)"/>
+        <rect class="d-block" x="382" y="500" width="74" height="48"/>
+        <text class="d-block-title" x="419" y="521" text-anchor="middle">write</text>
+        <text class="d-block-sig" x="419" y="537" text-anchor="middle">✎ agent</text>
+
+        <path class="d-line" d="M472 524 L 460 524" marker-end="url(#arr)"/>
+        <rect class="d-block-green" x="472" y="500" width="74" height="48"/>
+        <text class="d-block-title" x="509" y="521" text-anchor="middle">decision</text>
+        <text class="d-block-sig" x="509" y="537" text-anchor="middle">✎ you</text>
+
+        <path class="d-line" d="M562 524 L 550 524" marker-end="url(#arr)"/>
+        <rect class="d-block" x="562" y="500" width="74" height="48"/>
+        <text class="d-block-title" x="599" y="521" text-anchor="middle">write</text>
+        <text class="d-block-sig" x="599" y="537" text-anchor="middle">✎ agent</text>
+
+        <text class="d-label" x="460" y="574" text-anchor="middle">each entry names the hash of the one before it</text>
+
+        <!-- Verifier -->
+        <rect class="d-soft" x="40" y="470" width="180" height="84"/>
+        <text class="d-title" x="130" y="502" text-anchor="middle">ALLOD VERIFY</text>
+        <text class="d-sub" x="130" y="524" text-anchor="middle">anyone can run it</text>
+        <path class="d-dash" d="M220 512 H 266" marker-end="url(#arr-m)"/>
+
+        <!-- Index -->
+        <rect class="d-soft" x="700" y="470" width="180" height="84"/>
+        <text class="d-title" x="790" y="502" text-anchor="middle">SEARCH INDEX</text>
+        <text class="d-sub" x="790" y="524" text-anchor="middle">derived · disposable</text>
+        <path class="d-dash" d="M650 512 H 696" marker-end="url(#arr-m)"/>
+      </svg>
+    </div>
 
     <ul>
-      <li><strong>The daemon</strong> (<code>freehold serve</code>) listens on one local port and serves three things from it: the MCP endpoint agents connect to, the HTTP API, and your console.</li>
-      <li><strong>The graph</strong> is your memory: an append-only log of signed changesets on disk, in the open Allod format. Nothing is edited in place or deleted; the current state is the result of replaying the log.</li>
-      <li><strong>The policy engine</strong> checks every write against the rules declared in the graph. Quick notes save instantly; anything the rules cover becomes a pending proposal for you to approve or reject.</li>
-      <li><strong>The search index</strong> is an embedded Postgres (PGlite) with vector embeddings, built from the log. <code>recall</code> queries it. It holds nothing the log cannot reproduce.</li>
-      <li><strong>The console and the CLI</strong> are clients of the daemon's HTTP API. Approving, rejecting, policy edits, and verification live here — agents never get those.</li>
+      <li><strong>Your agents</strong> connect over MCP and write memory. Every write is signed with that agent's own key.</li>
+      <li><strong>You</strong> use the console and the CLI. Pending proposals come to your inbox, and your approvals and rejections are signed with the owner key.</li>
+      <li><strong>The daemon</strong> runs the policy rules and appends every saved write and every decision to the graph, in order.</li>
+      <li><strong>The graph</strong> is the append-only log on your disk. It is the system's only source of truth.</li>
+      <li><strong>The search index</strong> is derived from the graph and can be thrown away and rebuilt at any time.</li>
+      <li><strong>The verifier</strong> is a separate program that reads the graph files directly and checks the whole history.</li>
     </ul>
 
-    <h2 id="allod">The Allod foundation</h2>
+    <h2 id="signatures">How signatures work</h2>
 
-    <p>Freehold's storage is built on <a href="https://github.com/yourbuddyconner/allod">Allod</a> — an append-only log of signed changesets with a typed object model. Allod is a separate project. Freehold consumes <code>@allod/core</code>, the WASM npm package produced from the Allod Rust codebase.</p>
-
-    <p>The key properties Freehold inherits from Allod:</p>
+    <p>Three mechanisms make the history checkable:</p>
 
     <ul>
-      <li><strong>Append-only log.</strong> Changesets are never deleted or modified. The current state is the result of replaying the log.</li>
-      <li><strong>Signed changesets.</strong> Every changeset is signed by the author's key. Authorship can be verified without trusting any intermediary.</li>
-      <li><strong>Typed object model.</strong> Objects have types defined in a schema that lives in the graph itself. The schema is versioned and import-hashed.</li>
-      <li><strong>Native on-disk layout.</strong> Graphs are stored in Allod's native format — the Rust <code>allod</code> CLI can open any graph Freehold writes without modification.</li>
-      <li><strong>Schema as objects.</strong> A proposed entity type is a real in-graph changeset that creates <code>meta/EntityType</code> nodes. There is no side-channel schema store.</li>
+      <li><strong>Agent signatures.</strong> When an agent is registered, it gets its own keypair. Every changeset the agent writes is signed with that key, so each memory traces to the agent that wrote it.</li>
+      <li><strong>Your signature.</strong> The owner key is created at first boot and stays in <code>~/.freehold</code>. Approvals and rejections are decision records signed with it. A preference about you is only true if your signature says so.</li>
+      <li><strong>The hash chain.</strong> Each changeset names the hash of the one before it. Changing any entry breaks the hash of every entry after it, so history cannot be quietly rewritten.</li>
     </ul>
 
-    <p>Because Freehold stores graphs in native Allod format, anything Freehold writes can be opened and verified by the Rust <code>allod</code> CLI, with no Freehold code involved.</p>
+    <p>All three are properties of the files themselves, so checking them requires no trust in Freehold — see <a href="#verification">independent verification</a>.</p>
+
+    <h2 id="graph">The graph</h2>
+
+    <p>Memory is a typed graph: entities, relationships between them, and the schema that defines both. It is stored as an append-only log of changesets on your disk. Nothing is edited in place and nothing is deleted; the current state of memory is the result of replaying the log from the beginning.</p>
+
+    <p>The format is <a href="https://github.com/yourbuddyconner/allod">Allod</a>, a separate open project. Your graph is readable and verifiable without Freehold, and the schema itself lives inside the graph as ordinary entries — which is why agents can propose schema changes through the same approval flow as everything else.</p>
 
     <h2 id="data-flow">The path of a write</h2>
 
-    <p>From an agent write to a searchable, verified record:</p>
-
     <ol>
-      <li>An agent calls an MCP tool or the HTTP API directly.</li>
-      <li>The daemon validates the request against its published OpenAPI schema.</li>
-      <li>The daemon builds a signed Allod changeset from the request.</li>
-      <li>The policy engine matches the changeset against the installed rules. Quick notes save immediately; anything the rules cover becomes a pending proposal.</li>
-      <li>Once the write is saved (immediately or after your approval), the new objects are folded into the search index: one row per object plus a locally-computed embedding (bge-small-en-v1.5 via transformers.js WASM ONNX).</li>
-      <li>Retrieval via <code>recall</code> runs a vector similarity query merged with full-text search. Every result says who wrote it and who approved it.</li>
+      <li>An agent calls a tool, such as <code>remember</code> or <code>create_entity</code>.</li>
+      <li>The daemon builds a changeset signed with the agent's key.</li>
+      <li>The policy rules match it: notes save immediately, and writes the rules name become pending proposals in your inbox.</li>
+      <li>You approve or reject. The decision record is signed with your key and appended to the log.</li>
+      <li>Saved objects are added to the search index, with an embedding computed on your machine.</li>
+      <li><code>recall</code> returns them with their author, approval status, and changeset hash.</li>
     </ol>
 
-    <h2 id="disposable-index">Disposable index</h2>
+    <h2 id="index">The search index</h2>
 
-    <p>The search index carries nothing the log cannot reproduce. Embeddings are derived data, computed locally from the content itself. You can wipe the index at any time and <code>freehold reindex</code> rebuilds it from the log, landing on identical state.</p>
+    <p>The index exists so recall is fast: an embedded database with vector and full-text search over everything saved. Embeddings are computed locally, so memory never leaves the machine.</p>
 
-    <p>This is also the recovery path: if the index directory is lost or corrupted, <code>freehold reindex</code> brings it back. The log is the only thing you need to protect.</p>
+    <p>The index carries nothing the log cannot reproduce. You can delete it at any time and <code>freehold reindex</code> rebuilds it from the log, landing on identical state. The log is the only thing you need to protect.</p>
 
-    <h2 id="verification">Verification independence</h2>
+    <h2 id="verification">Independent verification</h2>
 
-    <p>Freehold's verification surface is three levels:</p>
+    <p>Verification checks three things, one per signature mechanism:</p>
 
     <ul>
-      <li><strong>Integrity.</strong> Hash chain verification — each changeset's content hash matches its predecessor's reference. Tampering with any changeset breaks the chain.</li>
-      <li><strong>Authorship.</strong> Signature verification — each changeset's signature verifies against the author's registered public key.</li>
-      <li><strong>Governance.</strong> Decision record verification — every write that needed approval has a corresponding decision record signed with your key.</li>
+      <li><strong>Integrity.</strong> Every changeset's hash matches the reference in the entry after it. Tampering anywhere breaks the chain.</li>
+      <li><strong>Authorship.</strong> Every signature verifies against its author's registered public key.</li>
+      <li><strong>Governance.</strong> Every write that needed approval has a matching decision record signed with your key.</li>
     </ul>
 
-    <p>Verification does not depend on Freehold. The Rust <code>allod verify</code> command performs all three levels independently: run <code>allod verify ~/.freehold/graphs/main</code> with no daemon running and you get the same pass/fail result as the console's Verify page. You never have to trust Freehold's own verification code.</p>
+    <p>The Rust <code>allod verify</code> command performs all three from the files alone: run <code>allod verify ~/.freehold/graphs/main</code> with no daemon running and you get the same pass/fail result as the console's Verify page. You never have to trust Freehold's own verification code.</p>
 
-    <h2 id="decisions">Key decisions</h2>
+    <h2 id="decisions">Design choices</h2>
 
     <h3>One binary, server and client</h3>
 
-    <p><code>freehold serve</code> boots the full product: HTTP API, MCP endpoint, and the console on one local port. Every other subcommand (<code>status</code>, <code>pending</code>, <code>approve</code>, <code>reject</code>, <code>remember</code>, <code>recall</code>, <code>verify</code>, <code>reindex</code>, <code>mcp setup</code>) is a client of a running instance through the public HTTP API. There is no side door into the engine.</p>
+    <p><code>freehold serve</code> runs the full product: the agent API, the MCP endpoint, and the console on one local port. Every other command — <code>pending</code>, <code>approve</code>, <code>recall</code>, <code>verify</code>, and the rest — is a client of the running daemon through the same public API the console uses. There is no side door into the engine.</p>
 
-    <p>Because the CLI goes through the same public API as everything else, there is no hidden behavior the API cannot express, and only one process ever touches the database.</p>
+    <h3>Local only</h3>
 
-    <h3>No native modules</h3>
+    <p>The daemon binds <code>127.0.0.1</code> and mints a bearer token into <code>~/.freehold/config.json</code> (mode 0600) at first boot. The CLI, the console, and agent MCP configs use that token. Multi-user and remote deployments are out of scope for v0.</p>
 
-    <p>No native <code>.node</code> modules anywhere in the dependency tree. PGlite (embedded Postgres) is WASM. <code>@allod/core</code> is WASM. Embeddings run via transformers.js (WASM ONNX), not fastembed or any native binding. This discipline is what makes the single compiled binary possible.</p>
+    <h3>MCP over HTTP</h3>
 
-    <h3>MCP over HTTP, no stdio bridge</h3>
-
-    <p>The daemon serves streamable-HTTP MCP at <code>/mcp</code>. There is no stdio MCP transport. Agent connections require the daemon to be running and reachable at the configured address. <code>freehold mcp setup claude-code</code> writes the MCP config entry pointing at the running daemon.</p>
-
-    <h3>Local-first auth</h3>
-
-    <p>The daemon binds <code>127.0.0.1</code>. A bearer token is auto-minted into <code>~/.freehold/config.json</code> (mode 0600) at first boot. The CLI, the console, and MCP configs use this token. Multi-user and remote deployments are out of scope for v0.</p>
+    <p>Agents connect to the running daemon at <code>/mcp</code>; there is no stdio transport, so the daemon must be up for agents to reach memory. <code>freehold mcp setup claude-code</code> writes the config entry that points an agent at it.</p>
 
     <h2 id="disk-layout">Disk layout</h2>
 
     <pre><code>~/.freehold/
   config.json          # bearer token, graph name, embedder choice
-  pg/                  # PGlite data directory (single owner: the daemon)
+  pg/                  # the search index (delete freely; reindex rebuilds it)
   graphs/
-    main/              # native Allod layout
+    main/              # your graph, in the open Allod format
       .allod/
         graph.yaml     # graph ID, root authority
         HEAD           # tip changeset hash
         changesets/    # the append-only log, one file per changeset
         proposals/     # pending writes awaiting your decision
-        keys/          # keypairs (plain-keypair profile)
+        keys/          # your key and each agent's key
         checkpoints/   # signed checkpoints</code></pre>
 
-    <p>The <code>graphs/main/</code> directory is native Allod format. The Rust <code>allod</code> CLI opens it directly. The schema is not a directory: since Allod's schema materialization, ontology types and policy live in the graph as meta-typed nodes, created by the genesis changeset.</p>
+    <p>The <code>graphs/main/</code> directory is what <code>allod verify</code> reads and what you back up. Everything else can be regenerated.</p>
 
   </article>
 </div>

@@ -938,6 +938,20 @@ p + p {
   align-content: center;
 }
 
+
+/* ── Architecture diagram ────────────────────────────────────────── */
+.arch-diagram {
+  border: 1px solid var(--hairline);
+  background: #fff;
+  padding: 28px 24px;
+  margin: 24px 0;
+}
+.arch-diagram svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
 /* ── Notice / callout ────────────────────────────────────────────── */
 .notice {
   border: 1px solid var(--amber);
