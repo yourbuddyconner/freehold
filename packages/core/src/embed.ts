@@ -126,39 +126,56 @@ function resolveOrtWasmPaths(): { mjs: string; wasm: string } | null {
  *
  * Lazy: the pipeline is created on first use and cached for subsequent calls.
  */
+// Set to true if @huggingface/transformers import failed at runtime; subsequent
+// calls will skip the import attempt and fall back to hashEmbedder directly.
+let _transformersFailed = false;
+
 export const transformersEmbedder: Embedder = {
   async embed(texts: string[]): Promise<number[][]> {
+    // If a previous call failed to import transformers, fall back immediately.
+    if (_transformersFailed) {
+      return hashEmbedder.embed(texts);
+    }
+
     if (!_pipeline) {
-      // Static-analysis-friendly dynamic import — TypeScript and bundlers can
-      // resolve this to the installed @huggingface/transformers package without
-      // attempting to load onnxruntime-node (blocked by the pnpm override).
-      const { pipeline, env } = await import("@huggingface/transformers");
+      try {
+        // Static-analysis-friendly dynamic import — TypeScript and bundlers can
+        // resolve this to the installed @huggingface/transformers package without
+        // attempting to load onnxruntime-node (blocked by the pnpm override).
+        const { pipeline, env } = await import("@huggingface/transformers");
 
-      // --- Attempt 1: file:// wasmPaths to bypass blob: URL creation -----------
-      //
-      // @huggingface/transformers bundles ort-web but falls back to CDN URLs when
-      // wasmPaths is unset, then converts the downloaded factory to a blob: URL so
-      // it can be dynamically import()-ed.  Node's ESM loader rejects blob: imports.
-      //
-      // Fix: pre-set wasmPaths to file:// URLs pointing at the ort-web dist that
-      // pnpm installed alongside transformers.  This satisfies the "wasmPaths is set"
-      // check so transformers skips the CDN path, and useWasmCache=false skips the
-      // blob creation step.  ORT then does import("file:///…") which Node accepts.
-      const ortPaths = resolveOrtWasmPaths();
-      if (ortPaths && env.backends.onnx.wasm) {
-        env.backends.onnx.wasm.wasmPaths = ortPaths;
-        env.backends.onnx.wasm.numThreads = 1;
-      } else if (env.backends.onnx.wasm) {
-        env.backends.onnx.wasm.numThreads = 1;
+        // --- Attempt 1: file:// wasmPaths to bypass blob: URL creation -----------
+        //
+        // @huggingface/transformers bundles ort-web but falls back to CDN URLs when
+        // wasmPaths is unset, then converts the downloaded factory to a blob: URL so
+        // it can be dynamically import()-ed.  Node's ESM loader rejects blob: imports.
+        //
+        // Fix: pre-set wasmPaths to file:// URLs pointing at the ort-web dist that
+        // pnpm installed alongside transformers.  This satisfies the "wasmPaths is set"
+        // check so transformers skips the CDN path, and useWasmCache=false skips the
+        // blob creation step.  ORT then does import("file:///…") which Node accepts.
+        const ortPaths = resolveOrtWasmPaths();
+        if (ortPaths && env.backends.onnx.wasm) {
+          env.backends.onnx.wasm.wasmPaths = ortPaths;
+          env.backends.onnx.wasm.numThreads = 1;
+        } else if (env.backends.onnx.wasm) {
+          env.backends.onnx.wasm.numThreads = 1;
+        }
+        // Disable WASM cache: this prevents loadWasmFactory() from creating a blob: URL
+        // from the factory file content.  ORT will load the factory via direct import().
+        env.useWasmCache = false;
+        // -------------------------------------------------------------------------
+
+        _pipeline = (await pipeline("feature-extraction", "Xenova/bge-small-en-v1.5", {
+          dtype: "fp32",
+        })) as unknown as FeaturePipeline;
+      } catch (err) {
+        process.stderr.write(
+          `[freehold] warn: @huggingface/transformers unavailable (${String(err)}); falling back to hashEmbedder\n`
+        );
+        _transformersFailed = true;
+        return hashEmbedder.embed(texts);
       }
-      // Disable WASM cache: this prevents loadWasmFactory() from creating a blob: URL
-      // from the factory file content.  ORT will load the factory via direct import().
-      env.useWasmCache = false;
-      // -------------------------------------------------------------------------
-
-      _pipeline = (await pipeline("feature-extraction", "Xenova/bge-small-en-v1.5", {
-        dtype: "fp32",
-      })) as unknown as FeaturePipeline;
     }
 
     const results: number[][] = [];
@@ -178,8 +195,21 @@ export const transformersEmbedder: Embedder = {
 
 /**
  * Pick the right embedder based on FreeholdConfig.
+ *
+ * Under a compiled bun binary, resolveOrtWasmPaths() returns null because the
+ * pnpm store is not present at runtime.  In that case we fall back to
+ * hashEmbedder and emit a warning so the operator knows semantic search is
+ * degraded.  The transformersEmbedder also has its own import-time try/catch
+ * for the same scenario.
  */
 export function makeEmbedder(config: FreeholdConfig): Embedder {
   if (config.embedder === "hash") return hashEmbedder;
+  const ortPaths = resolveOrtWasmPaths();
+  if (ortPaths === null) {
+    process.stderr.write(
+      "[freehold] warn: ort-wasm paths not resolvable (compiled binary?); falling back to hashEmbedder\n"
+    );
+    return hashEmbedder;
+  }
   return transformersEmbedder;
 }
