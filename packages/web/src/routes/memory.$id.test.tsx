@@ -17,6 +17,15 @@ vi.mock("~/lib/hooks", () => ({
 }));
 
 vi.mock("~/lib/api", () => ({
+  ApiError: class ApiError extends Error {
+    code: string;
+    status: number;
+    constructor(code: string, message: string, status: number) {
+      super(message);
+      this.code = code;
+      this.status = status;
+    }
+  },
   apiClient: {
     proposals: vi.fn(),
     approve: vi.fn().mockResolvedValue({}),
@@ -25,6 +34,37 @@ vi.mock("~/lib/api", () => ({
     getEntity: vi.fn(),
     schema: vi.fn(),
   },
+}));
+
+vi.mock("~/components/DocEditor", () => ({
+  DocEditor: ({
+    initial,
+    onSave,
+    onCancel,
+  }: {
+    initial: string;
+    onSave: (next: string) => void;
+    onCancel: () => void;
+  }) => (
+    <div data-testid="doc-editor">
+      <button
+        type="button"
+        data-testid="mock-save"
+        onClick={() => onSave(`${initial}\nedited line`)}
+      >
+        Save
+      </button>
+      <button type="button" data-testid="mock-cancel" onClick={onCancel}>
+        Cancel
+      </button>
+    </div>
+  ),
+}));
+
+vi.mock("~/components/PierreDiff", () => ({
+  PierreDiff: ({ oldText, newText }: { oldText: string; newText: string }) => (
+    <pre data-testid="pierre-diff">{`${oldText}\n---\n${newText}`}</pre>
+  ),
 }));
 
 interface LinkMockProps {
@@ -53,6 +93,7 @@ vi.mock("@tanstack/react-router", async () => {
 // Uses the REAL API shape from GET /api/v1/entities/:id (EntityView)
 const sampleEntity = {
   type: "User",
+  rev: "rev-0",
   attributes: {
     email: "alice@example.com",
     name: "Alice Smith",
@@ -225,5 +266,71 @@ describe("MemoryDetailPage", () => {
   it("shows not-found message when data is undefined", async () => {
     await renderPage(undefined, false);
     expect(screen.getByText("Entity not found.")).toBeInTheDocument();
+  });
+
+  it("edit → save → commit calls the update mutation with the edited content", async () => {
+    const mutateAsync = vi.fn().mockResolvedValue({ status: "saved", hash: "sha256:new" });
+    await renderPage({
+      ...sampleEntity,
+      rev: "rev-1",
+      attributes: { content: "# Note\nbody" },
+    } as unknown as typeof sampleEntity);
+    vi.mocked(hooks.useUpdateMemory).mockReturnValue({
+      mutate: vi.fn(),
+      mutateAsync,
+      isPending: false,
+      reset: vi.fn(),
+    } as unknown as ReturnType<typeof hooks.useUpdateMemory>);
+
+    // Re-render with the mutation mock in place
+    await act(async () => {
+      screen.getByTestId("edit-button").click();
+    });
+    expect(screen.getByTestId("doc-editor")).toBeInTheDocument();
+
+    await act(async () => {
+      screen.getByTestId("mock-save").click();
+    });
+    // Commit step shows the diff of old vs edited
+    const diff = screen.getByTestId("pierre-diff");
+    expect(diff.textContent).toContain("edited line");
+
+    await act(async () => {
+      screen.getByRole("button", { name: "Commit" }).click();
+    });
+    expect(mutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agent: "owner",
+        type: "User",
+        prior: "rev-1",
+        attributes: expect.objectContaining({ content: "# Note\nbody\nedited line" }),
+      })
+    );
+  });
+
+  it("keep editing returns to the editor with the draft", async () => {
+    await renderPage({
+      ...sampleEntity,
+      rev: "rev-1",
+      attributes: { content: "# Note\nbody" },
+    } as unknown as typeof sampleEntity);
+    await act(async () => {
+      screen.getByTestId("edit-button").click();
+    });
+    await act(async () => {
+      screen.getByTestId("mock-save").click();
+    });
+    await act(async () => {
+      screen.getByRole("button", { name: "Keep editing" }).click();
+    });
+    expect(screen.getByTestId("doc-editor")).toBeInTheDocument();
+  });
+
+  it("entities without prose get the properties editor", async () => {
+    await renderPage({ ...sampleEntity, rev: "rev-1" });
+    await act(async () => {
+      screen.getByTestId("edit-button").click();
+    });
+    expect(screen.getByTestId("properties-editor")).toBeInTheDocument();
   });
 });

@@ -1,6 +1,7 @@
 import * as Dialog from "@radix-ui/react-dialog";
+import { useState } from "react";
 import { cn } from "~/lib/cn";
-import { DiffView } from "./DiffView";
+import { PierreDiff } from "./PierreDiff";
 
 interface DiffEntry {
   key: string;
@@ -177,7 +178,7 @@ export function ProposalCard({
       {schemaMeta && <SchemaTypeDefinition meta={schemaMeta} data-testid="schema-definition" />}
 
       {/* Diff */}
-      <DiffView diff={diff} />
+      <ProposalDiff diff={diff} />
 
       {/* Actions */}
       <div className="flex gap-2 pt-1">
@@ -239,5 +240,44 @@ export function ProposalCard({
       <span className="reg-mark-bl" aria-hidden />
       <span className="reg-mark-br" aria-hidden />
     </article>
+  );
+}
+
+/** Serialize proposal diff entries into before/after text for the diff renderer. */
+function diffToTexts(diff: DiffEntry[]): { oldText: string; newText: string } {
+  const fmt = (v: unknown) => (typeof v === "string" ? v : JSON.stringify(v, null, 2));
+  const oldLines: string[] = [];
+  const newLines: string[] = [];
+  for (const entry of diff) {
+    if (entry.before !== undefined) oldLines.push(`${entry.key}: ${fmt(entry.before)}`);
+    if (entry.after !== undefined) newLines.push(`${entry.key}: ${fmt(entry.after)}`);
+  }
+  return {
+    oldText: oldLines.length > 0 ? `${oldLines.join("\n")}\n` : "",
+    newText: newLines.length > 0 ? `${newLines.join("\n")}\n` : "",
+  };
+}
+
+/** Collapsible diff for a proposal, rendered with the console's diff surface. */
+function ProposalDiff({ diff }: { diff: DiffEntry[] }) {
+  const [open, setOpen] = useState(false);
+  if (diff.length === 0) return null;
+  const { oldText, newText } = diffToTexts(diff);
+  return (
+    <div className="text-xs">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="text-(--fg-muted) hover:text-(--fg) underline underline-offset-2 transition-colors"
+      >
+        {open ? "Hide diff" : "Show diff"}
+      </button>
+      {open && (
+        <div className="mt-2">
+          <PierreDiff oldText={oldText} newText={newText} name="proposal.yaml" />
+        </div>
+      )}
+    </div>
   );
 }

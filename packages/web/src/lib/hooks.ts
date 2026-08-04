@@ -56,7 +56,12 @@ export function useMemoryGraph(enabled = true) {
 export function useUpdateMemory(id: string | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (body: { agent: string; type: string; attributes: Record<string, unknown> }) =>
+    mutationFn: (body: {
+      agent: string;
+      type: string;
+      attributes: Record<string, unknown>;
+      prior?: string;
+    }) =>
       // biome-ignore lint/style/noNonNullAssertion: callers only mutate with a loaded entity
       apiClient.updateEntity(id!, body),
     onSuccess: () => {

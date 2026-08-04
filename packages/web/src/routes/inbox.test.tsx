@@ -14,6 +14,12 @@ vi.mock("~/lib/hooks", () => ({
   useEntity: vi.fn(),
 }));
 
+vi.mock("~/components/PierreDiff", () => ({
+  PierreDiff: ({ oldText, newText }: { oldText: string; newText: string }) => (
+    <pre data-testid="pierre-diff">{`${oldText}\n---\n${newText}`}</pre>
+  ),
+}));
+
 vi.mock("~/lib/api", () => ({
   apiClient: {
     proposals: vi.fn(),
@@ -206,8 +212,9 @@ describe("Inbox", () => {
       fireEvent.click(showDiff);
     });
     // email is an added key (after only), name is changed (before+after)
-    expect(screen.getByText("email:")).toBeInTheDocument();
-    expect(screen.getByText("name:")).toBeInTheDocument();
+    const diffEl = screen.getByTestId("pierre-diff");
+    expect(diffEl.textContent).toContain("email:");
+    expect(diffEl.textContent).toContain("name:");
   });
 
   it("clicking approve button and then confirming invalidates queries", async () => {

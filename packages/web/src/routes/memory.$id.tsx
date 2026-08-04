@@ -1,10 +1,14 @@
 import { createRoute } from "@tanstack/react-router";
+import { useState } from "react";
+import { CommitStep } from "~/components/CommitStep";
 import { ConnectionsPanel, type EdgeView } from "~/components/ConnectionsPanel";
+import { DocEditor } from "~/components/DocEditor";
 import { LineageTrail } from "~/components/LineageTrail";
 import { MarkdownView } from "~/components/MarkdownView";
 import { ProvenanceFooter } from "~/components/ProvenanceFooter";
 import type { StatusKind } from "~/components/StatusChip";
-import { useEntity, useMemoryIndex } from "~/lib/hooks";
+import { ApiError } from "~/lib/api";
+import { useEntity, useMemoryIndex, useSession, useUpdateMemory } from "~/lib/hooks";
 import { Route as RootRoute } from "./__root";
 
 export const Route = createRoute({
@@ -17,6 +21,7 @@ export const Route = createRoute({
 interface EntityData {
   attributes?: Record<string, unknown>;
   type?: string;
+  rev?: string;
   classifications?: string[];
   edges?: EdgeView[];
   provenance?: unknown;
@@ -28,12 +33,14 @@ export interface MemoryDetailPageProps {
   entityId?: string;
 }
 
-/** Prose body of a node, when it has one. */
-export function proseOf(attributes: Record<string, unknown>): string | undefined {
+/** Prose body of a node, when it has one, with the attribute key it lives in. */
+export function proseOf(
+  attributes: Record<string, unknown>
+): { key: "content" | "statement"; text: string } | undefined {
   if (typeof attributes.content === "string" && attributes.content.trim())
-    return attributes.content;
+    return { key: "content", text: attributes.content };
   if (typeof attributes.statement === "string" && attributes.statement.trim())
-    return attributes.statement;
+    return { key: "statement", text: attributes.statement };
   return undefined;
 }
 
@@ -45,7 +52,7 @@ function titleOf(attributes: Record<string, unknown>, fallback: string): string 
   }
   const prose = proseOf(attributes);
   if (prose) {
-    const first = prose
+    const first = prose.text
       .trim()
       .split("\n")[0]
       .replace(/^#+\s*/, "")
@@ -76,10 +83,95 @@ function PropertiesTable({ attributes }: { attributes: Record<string, unknown> }
   );
 }
 
+/** Field-per-attribute editor for entities without a prose body. */
+function PropertiesEditor({
+  attributes,
+  onSave,
+  onCancel,
+}: {
+  attributes: Record<string, unknown>;
+  onSave: (next: Record<string, unknown>) => void;
+  onCancel: () => void;
+}) {
+  const [fields, setFields] = useState<Record<string, string>>(() =>
+    Object.fromEntries(
+      Object.entries(attributes).map(([k, v]) => [k, typeof v === "string" ? v : JSON.stringify(v)])
+    )
+  );
+
+  function save() {
+    const next: Record<string, unknown> = {};
+    for (const [key, raw] of Object.entries(fields)) {
+      const original = attributes[key];
+      if (typeof original === "string" || original === undefined) {
+        next[key] = raw;
+      } else {
+        // Non-string attributes round-trip through JSON
+        try {
+          next[key] = JSON.parse(raw);
+        } catch {
+          next[key] = raw;
+        }
+      }
+    }
+    onSave(next);
+  }
+
+  return (
+    <div className="space-y-3" data-testid="properties-editor">
+      <div className="space-y-2">
+        {Object.entries(fields).map(([key, value]) => (
+          <label key={key} className="block">
+            <span className="block font-mono text-[10px] uppercase tracking-[0.08em] text-(--fg-muted) mb-1">
+              {key}
+            </span>
+            <textarea
+              value={value}
+              rows={value.includes("\n") ? 4 : 1}
+              onChange={(e) => setFields((prev) => ({ ...prev, [key]: e.target.value }))}
+              className="w-full border border-(--border) bg-(--bg-subtle) px-2.5 py-1.5 text-sm text-(--fg) focus:outline-none focus:ring-1 focus:ring-(--border)"
+            />
+          </label>
+        ))}
+      </div>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={save}
+          className="border border-[var(--color-accent)] bg-[var(--color-accent)] px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-accent-fg)] hover:opacity-90"
+        >
+          Save
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="border border-(--border) px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.08em] text-(--fg-muted) hover:text-(--fg)"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+type Mode =
+  | { kind: "read" }
+  | { kind: "edit" }
+  | { kind: "commit"; draftAttributes: Record<string, unknown>; conflict: boolean; error?: string }
+  | { kind: "pending"; hash: string };
+
+function serializeAttrs(attributes: Record<string, unknown>): string {
+  return JSON.stringify(attributes, null, 2);
+}
+
 /** The page component — exported so tests can render it directly without a router. */
 export function MemoryDetailPage({ entityId }: MemoryDetailPageProps) {
-  const { data, isLoading } = useEntity(entityId);
+  const { data, isLoading, refetch } = useEntity(entityId);
   const { data: indexData } = useMemoryIndex();
+  const { data: sessionData } = useSession();
+  const update = useUpdateMemory(entityId);
+  const [mode, setMode] = useState<Mode>({ kind: "read" });
+
   const entity = data as EntityData | undefined;
 
   if (isLoading) {
@@ -96,37 +188,145 @@ export function MemoryDetailPage({ entityId }: MemoryDetailPageProps) {
   const prose = proseOf(attributes);
   const title = titleOf(attributes, entityId ?? "Untitled");
   const typeLabel = (entity.type ?? "").split("@")[0];
+  const owner = (sessionData as { owner?: string } | undefined)?.owner ?? "owner";
 
-  // Peer titles for the connections panel, from the workspace index
   const titles = new Map<string, string>(
     (indexData?.results ?? []).map((e) => [e.id, e.title] as [string, string])
   );
 
-  // Properties: everything that is not the prose body
   const properties = Object.fromEntries(
     Object.entries(attributes).filter(([key]) => {
-      if (prose && (key === "content" || key === "statement")) return false;
+      if (prose && key === prose.key) return false;
       if (key === "title" || key === "name") return false;
       return true;
     })
   );
 
-  return (
-    <article className="max-w-2xl space-y-8 reg-marks relative">
-      <header>
-        <div className="flex items-center gap-1.5 mb-1">
-          <span
-            style={{
-              display: "inline-block",
-              width: 10,
-              height: 3,
-              background: "var(--color-accent)",
-            }}
-            aria-hidden
+  async function commit(draftAttributes: Record<string, unknown>) {
+    if (!entity?.type) return;
+    try {
+      const result = await update.mutateAsync({
+        agent: owner,
+        type: entity.type,
+        attributes: draftAttributes,
+        prior: entity.rev,
+      });
+      if (result.status === "pending") {
+        setMode({ kind: "pending", hash: result.hash });
+      } else {
+        setMode({ kind: "read" });
+      }
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        // The node changed under us: reload the base, keep the draft, re-diff
+        await refetch();
+        setMode({ kind: "commit", draftAttributes, conflict: true });
+      } else {
+        setMode({
+          kind: "commit",
+          draftAttributes,
+          conflict: false,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+  }
+
+  function renderContentLayer() {
+    if (mode.kind === "edit") {
+      if (prose) {
+        return (
+          <DocEditor
+            initial={prose.text}
+            onSave={(next) =>
+              setMode({
+                kind: "commit",
+                draftAttributes: { ...attributes, [prose.key]: next },
+                conflict: false,
+              })
+            }
+            onCancel={() => setMode({ kind: "read" })}
           />
-          <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-(--fg-muted)">
-            {typeLabel || "MEMORY"}
-          </span>
+        );
+      }
+      return (
+        <PropertiesEditor
+          attributes={attributes}
+          onSave={(next) => setMode({ kind: "commit", draftAttributes: next, conflict: false })}
+          onCancel={() => setMode({ kind: "read" })}
+        />
+      );
+    }
+
+    if (mode.kind === "commit") {
+      const draftProse = prose ? mode.draftAttributes[prose.key] : undefined;
+      const isProseDiff = prose && typeof draftProse === "string";
+      return (
+        <CommitStep
+          oldText={isProseDiff ? prose.text : serializeAttrs(attributes)}
+          newText={isProseDiff ? (draftProse as string) : serializeAttrs(mode.draftAttributes)}
+          name={isProseDiff ? "memory.md" : "attributes.json"}
+          conflictNotice={mode.conflict}
+          errorMessage={mode.error}
+          committing={update.isPending}
+          onCommit={() => commit(mode.draftAttributes)}
+          onKeepEditing={() => setMode({ kind: "edit" })}
+        />
+      );
+    }
+
+    if (mode.kind === "pending") {
+      return (
+        <CommitStep
+          oldText=""
+          newText=""
+          pendingHash={mode.hash}
+          onCommit={() => {}}
+          onKeepEditing={() => setMode({ kind: "read" })}
+        />
+      );
+    }
+
+    // Read mode
+    return prose ? (
+      <section data-testid="memory-content">
+        <MarkdownView>{prose.text}</MarkdownView>
+      </section>
+    ) : (
+      <section data-testid="memory-properties">
+        <PropertiesTable attributes={attributes} />
+      </section>
+    );
+  }
+
+  return (
+    <article className="max-w-3xl space-y-8 reg-marks relative">
+      <header>
+        <div className="flex items-center justify-between gap-3 mb-1">
+          <div className="flex items-center gap-1.5">
+            <span
+              style={{
+                display: "inline-block",
+                width: 10,
+                height: 3,
+                background: "var(--color-accent)",
+              }}
+              aria-hidden
+            />
+            <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-(--fg-muted)">
+              {typeLabel || "MEMORY"}
+            </span>
+          </div>
+          {mode.kind === "read" && (
+            <button
+              type="button"
+              onClick={() => setMode({ kind: "edit" })}
+              data-testid="edit-button"
+              className="border border-(--border) px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.08em] text-(--fg-muted) hover:text-(--fg)"
+            >
+              Edit
+            </button>
+          )}
         </div>
         <h2 className="text-2xl font-semibold tracking-tight mb-2">{title}</h2>
         {classifications.length > 0 && (
@@ -143,19 +343,11 @@ export function MemoryDetailPage({ entityId }: MemoryDetailPageProps) {
         )}
       </header>
 
-      {/* Content layer */}
-      {prose ? (
-        <section data-testid="memory-content">
-          <MarkdownView>{prose}</MarkdownView>
-        </section>
-      ) : (
-        <section data-testid="memory-properties">
-          <PropertiesTable attributes={attributes} />
-        </section>
-      )}
+      {/* Content layer: read / edit / commit */}
+      {renderContentLayer()}
 
-      {/* Remaining properties under prose */}
-      {prose && Object.keys(properties).length > 0 && (
+      {/* Remaining properties under prose (read mode only) */}
+      {mode.kind === "read" && prose && Object.keys(properties).length > 0 && (
         <section>
           <h3 className="text-sm font-semibold text-(--fg) mb-2">Properties</h3>
           <PropertiesTable attributes={properties} />

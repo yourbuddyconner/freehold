@@ -12,6 +12,8 @@
  */
 import { FreeholdClient } from "@freehold/client";
 
+export { ApiError } from "@freehold/client";
+
 function readToken(): string {
   const meta = document.querySelector<HTMLMetaElement>('meta[name="freehold-token"]');
   return meta?.content ?? "";

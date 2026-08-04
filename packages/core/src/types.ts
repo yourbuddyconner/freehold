@@ -12,6 +12,8 @@ export interface Admission {
 export interface EntityView {
   id: string;
   type: string;
+  /** Current revision hash of the node's content — pass as `prior` on update */
+  rev: string;
   attributes: Record<string, unknown>;
   classifications: string[];
   edges: EdgeView[];

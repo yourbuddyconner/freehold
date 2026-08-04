@@ -218,6 +218,7 @@ function buildEntityView(graph: AllodGraph, nodeId: string): EntityView | null {
   return {
     id: nodeId,
     type: typeRef,
+    rev: obj.rev,
     attributes,
     classifications,
     edges,
@@ -341,6 +342,7 @@ export async function entitiesOfType(graph: AllodGraph, typeRef: string): Promis
       .map((n) => ({
         id: n.label ?? "",
         type: n.type_ref ?? "",
+        rev: "",
         attributes: { label: n.label },
         classifications: [],
         edges: [],
