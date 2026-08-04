@@ -5,9 +5,9 @@
  * The Hono app is tested in-process via app.request() — no port is bound.
  */
 
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { Freehold, hashEmbedder, loadConfig } from "@freehold/core";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { createApp } from "../src/app.js";
@@ -109,33 +109,36 @@ describe("Founding loop", () => {
     expect(typeof b.changeset).toBe("string");
   });
 
-  test("POST /api/v1/entities — entity write returns 200", async () => {
+  test("POST /api/v1/entities — governed Preference entity write is held (no scratch classification)", async () => {
+    // Preference without workspace/scratch@1 classification goes through governance → held
     const { status, body } = await req("POST", "/api/v1/entities", {
       agent: agentName,
       type: "memory/Preference@1",
       attributes: { statement: "prefers morning meetings", strength: "soft" },
-      classification: "workspace/personal@1",
+      // No classification → governed by default → should be held under memory-baseline
     });
     expect(status).toBe(200);
     const b = body as { status: string; nodeId: string; changeset: string };
-    expect(b.status === "admitted" || b.status === "held").toBe(true);
+    // Under memory-baseline policy, Preference writes without scratch classification are held
+    expect(b.status).toBe("held");
     expect(typeof b.changeset).toBe("string");
+    proposalHash = b.changeset;
   });
 
-  test("GET /api/v1/proposals — returns proposals array", async () => {
+  test("GET /api/v1/proposals — proposals array contains the held entity proposal", async () => {
     const { status, body } = await req("GET", "/api/v1/proposals");
     expect(status).toBe(200);
     const b = body as { proposals: Array<{ hash: string; summary: string; rules: string[] }> };
     expect(Array.isArray(b.proposals)).toBe(true);
-    if (b.proposals.length > 0) {
-      const p = b.proposals[0];
-      expect(typeof p.hash).toBe("string");
-      proposalHash = p.hash;
-    }
+    expect(b.proposals.length).toBeGreaterThan(0);
+    // proposalHash was set from the changeset of the held write above
+    const found = b.proposals.find((p) => p.hash === proposalHash);
+    expect(found).toBeDefined();
+    expect(typeof found?.hash).toBe("string");
   });
 
-  test("POST /api/v1/proposals/:hash/approve — approve held proposal", async () => {
-    if (!proposalHash) return;
+  test("POST /api/v1/proposals/:hash/approve — approve the held Preference proposal", async () => {
+    // proposalHash is always defined because the preceding entity test asserts status=held
     const { status, body } = await req("POST", `/api/v1/proposals/${proposalHash}/approve`);
     expect(status).toBe(200);
     const b = body as { status: string };
@@ -429,5 +432,25 @@ describe("Static asset security and caching", () => {
     const text = await res.text();
     expect(text).toContain("<html"); // HTML shell, not /etc/passwd contents
     expect(text).not.toContain("root:"); // definitely not /etc/passwd
+  });
+});
+
+describe("OpenAPI drift: committed openapi.json must match getOpenApiDoc() output", () => {
+  test("openapi.json on disk equals getOpenApiDoc() — run 'pnpm openapi' if this fails", () => {
+    // Resolve relative to the test file: tests/ → packages/api/
+    const committedPath = resolve(__dirname, "../openapi.json");
+    let committed: unknown;
+    try {
+      committed = JSON.parse(readFileSync(committedPath, "utf-8"));
+    } catch {
+      throw new Error(
+        `Could not read ${committedPath}. Run 'pnpm --filter @freehold/api openapi' to generate it.`
+      );
+    }
+    const generated = getOpenApiDoc();
+    // Compare serialised JSON (normalises key order via JSON.stringify with stable sort)
+    const committedStr = JSON.stringify(committed, Object.keys(committed as object).sort(), 2);
+    const generatedStr = JSON.stringify(generated, Object.keys(generated as object).sort(), 2);
+    expect(committedStr).toBe(generatedStr);
   });
 });
