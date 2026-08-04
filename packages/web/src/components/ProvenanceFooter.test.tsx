@@ -96,4 +96,9 @@ describe("ProvenanceFooter", () => {
     });
     expect(screen.getByTestId("provenance-hash")).toHaveTextContent("Copied!");
   });
+
+  it("renders 'unrecorded' method label when passed", () => {
+    render(<ProvenanceFooter {...props} method="unrecorded" />);
+    expect(screen.getByTestId("provenance-method")).toHaveTextContent("unrecorded");
+  });
 });

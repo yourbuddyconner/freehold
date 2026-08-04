@@ -194,6 +194,12 @@ export async function syncIndex(freehold: Freehold, embedder: Embedder): Promise
     const isMeta = typeRef.split("@")[0].startsWith("meta/");
     const searchText = isMeta ? "" : extractSearchText(objContent);
 
+    // Extract method from provenance, with fallback to null for owner-authored objects
+    // (they carry no provenance stamp). Log entries' ops carry provenance for agent writes;
+    // only admitted changesets are indexed, so approval is always "admitted".
+    const provenance = objContent.provenance as Record<string, unknown> | undefined;
+    const method = (provenance?.method as string) ?? null;
+
     // Upsert into objects table
     await pg.query(
       `INSERT INTO objects (id, kind, type, content, author, method, approval, changeset, search_text, updated_at)
@@ -214,7 +220,7 @@ export async function syncIndex(freehold: Freehold, embedder: Embedder): Promise
         typeRef,
         JSON.stringify(objContent),
         author,
-        "model-assisted",
+        method,
         "admitted",
         changesetHash,
         searchText,

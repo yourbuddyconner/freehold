@@ -14,6 +14,7 @@ export interface RecallResult {
   type: string;
   content: unknown;
   author: string;
+  method: string | null;
   approval: string;
   changeset: string;
   score: number;
@@ -30,6 +31,7 @@ interface ObjectRow {
   type: string;
   content: unknown;
   author: string;
+  method: string | null;
   approval: string;
   changeset: string;
 }
@@ -113,7 +115,7 @@ export async function recall(
   // Build parameterized IN query
   const placeholders = idList.map((_, i) => `$${i + 1}`).join(",");
   const rowsResult = await pg.query<ObjectRow>(
-    `SELECT id, type, content, author, approval, changeset FROM objects WHERE id IN (${placeholders})`,
+    `SELECT id, type, content, author, method, approval, changeset FROM objects WHERE id IN (${placeholders})`,
     idList
   );
 
@@ -138,6 +140,7 @@ export async function recall(
       type: row.type,
       content: row.content,
       author: row.author,
+      method: row.method,
       approval: row.approval,
       changeset: row.changeset,
       score,

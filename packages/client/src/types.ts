@@ -1278,6 +1278,8 @@ export interface components {
             approval: string;
             changeset: string;
             score: number;
+            /** @description Method from the object's provenance, or null for unrecorded (owner-authored) */
+            method: string | null;
         };
         VerifyReport: {
             ok: boolean;

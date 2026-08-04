@@ -7,6 +7,8 @@ interface RecallResult {
   type: string;
   content?: unknown;
   author: string;
+  // `method` is the provenance method from the indexed object, or null for unrecorded
+  method: string | null;
   // `approval` is the raw value from the index: "admitted", "held", "rejected", etc.
   approval: string;
   changeset: string;
@@ -40,8 +42,11 @@ function approvalToLabel(approval: string): string {
 }
 
 export function MemoryCard({ result }: MemoryCardProps) {
-  const { id, type, content, author, approval, changeset } = result;
+  const { id, type, content, author, method, approval, changeset } = result;
   const text = renderContent(content);
+
+  // Format method for display: null → "unrecorded"
+  const methodLabel = method ?? "unrecorded";
 
   return (
     <article className="rounded-lg border border-[--border] bg-[--bg-subtle] p-4 space-y-3">
@@ -64,10 +69,10 @@ export function MemoryCard({ result }: MemoryCardProps) {
         <p className="text-sm text-[--fg] font-serif leading-relaxed line-clamp-4">{text}</p>
       )}
 
-      {/* Provenance — shows REAL approval status from the indexed data, not hardcoded */}
+      {/* Provenance — shows REAL method from the indexed object, or "unrecorded" when absent */}
       <ProvenanceFooter
         author={author}
-        method="agent"
+        method={methodLabel}
         approvalLabel={approvalToLabel(approval)}
         approvalStatus={approvalToStatus(approval)}
         changesetHash={changeset}

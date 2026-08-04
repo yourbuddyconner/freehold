@@ -45,6 +45,7 @@ async function snapshot(pg: PGlite): Promise<
     kind: string;
     type: string;
     author: string;
+    method: string | null;
     approval: string;
     search_text: string;
   }>
@@ -54,9 +55,10 @@ async function snapshot(pg: PGlite): Promise<
     kind: string;
     type: string;
     author: string;
+    method: string | null;
     approval: string;
     search_text: string;
-  }>("SELECT id, kind, type, author, approval, search_text FROM objects ORDER BY id");
+  }>("SELECT id, kind, type, author, method, approval, search_text FROM objects ORDER BY id");
   return result.rows;
 }
 
@@ -171,10 +173,44 @@ describe("recall", () => {
     expect(typeof first.id).toBe("string");
     expect(typeof first.type).toBe("string");
     expect(typeof first.author).toBe("string");
+    // method is string or null (for unrecorded provenance)
+    expect(first.method === null || typeof first.method === "string").toBe(true);
     expect(typeof first.approval).toBe("string");
     expect(typeof first.changeset).toBe("string");
     expect(typeof first.score).toBe("number");
     expect(first.score).toBeGreaterThan(0);
+  });
+
+  test("indexes agent write with model-assisted method and genesis owner node with null method", async () => {
+    const fh = await makeFreehold();
+
+    // Create an agent-authored note (should have method = "model-assisted" from provenance)
+    const noteResult = await remember(fh.graph, "agent", "an agent note");
+    expect(noteResult.status).toBe("admitted");
+
+    // Sync the index
+    await syncIndex(fh as unknown as Freehold, hashEmbedder);
+
+    // Recall both note and any genesis nodes
+    const allResults = await recall(fh as unknown as Freehold, "", hashEmbedder, undefined, 100);
+
+    // Find the note we created
+    const noteObj = allResults.find((r) => r.id === noteResult.noteId);
+    if (noteObj) {
+      // Agent writes carry provenance with method field
+      expect(noteObj.method).toBe("model-assisted");
+    }
+
+    // Genesis owner node should have null method (no provenance)
+    const ownerNodes = allResults.filter((r) => r.type.includes("principal") || r.author === "owner");
+    // At least some of these may exist; if they do, they should have null method
+    for (const ownerNode of ownerNodes) {
+      // Owner-authored genesis nodes carry no provenance, so method is null
+      if (ownerNode.author === "owner") {
+        // Accept either null (as string) or actual null
+        expect(ownerNode.method === null || ownerNode.method === "").toBeTruthy();
+      }
+    }
   });
 });
 

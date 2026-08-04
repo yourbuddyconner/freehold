@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS objects (
   type text NOT NULL,
   content jsonb NOT NULL DEFAULT '{}',
   author text NOT NULL DEFAULT '',
-  method text NOT NULL DEFAULT '',
+  method text DEFAULT NULL,
   approval text NOT NULL DEFAULT 'admitted',
   changeset text NOT NULL DEFAULT '',
   search_text text NOT NULL DEFAULT '',
