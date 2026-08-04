@@ -1,4 +1,4 @@
-import { createRoute } from "@tanstack/react-router";
+import { Outlet, createRoute, useRouterState } from "@tanstack/react-router";
 import { useState } from "react";
 import { MemoryCard } from "~/components/MemoryCard";
 import { TaxonomyTree } from "~/components/TaxonomyTree";
@@ -8,8 +8,22 @@ import { Route as RootRoute } from "./__root";
 export const Route = createRoute({
   getParentRoute: () => RootRoute,
   path: "/memory",
-  component: MemoryPage,
+  component: MemoryLayout,
 });
+
+// Layout wrapper: renders the list page at /memory, or the child route at /memory/$id.
+// The <Outlet /> carries child content when a child route (memory.$id) is matched.
+// When MemoryRoute is matched exactly (no child active), the Outlet renders nothing
+// and MemoryPage fills the view.
+function MemoryLayout() {
+  const { location } = useRouterState();
+  // If the pathname is exactly /memory, render the list. Otherwise render the child route.
+  const isExact = location.pathname === "/memory" || location.pathname === "/memory/";
+  if (isExact) {
+    return <MemoryPage />;
+  }
+  return <Outlet />;
+}
 
 const TYPE_FILTERS = ["entity", "document", "event"] as const;
 const STATUS_FILTERS = ["approved", "held", "rejected"] as const;

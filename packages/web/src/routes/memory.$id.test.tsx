@@ -47,6 +47,7 @@ vi.mock("@tanstack/react-router", async () => {
   };
 });
 
+// Uses the REAL API shape from GET /api/v1/entities/:id (EntityView)
 const sampleEntity = {
   type: "User",
   attributes: {
@@ -54,14 +55,19 @@ const sampleEntity = {
     name: "Alice Smith",
   },
   classifications: ["internal", "pii"],
-  edges: {
-    in: [],
-    out: [{ type: "belongsTo", targetId: "org-42", targetType: "Org" }],
-  },
+  // Real shape: flat EdgeView[] with direction "outgoing"/"incoming", from/to prefixed IDs
+  edges: [
+    {
+      id: "edge-1",
+      type: "belongsTo",
+      from: "node:entity-1",
+      to: "node:org-42",
+      direction: "outgoing" as const,
+    },
+  ],
   provenance: {
-    author: "claude-code",
+    derived_by: "principal:claude-code",
     method: "model-assisted",
-    changeset: "cafebabe1234",
   },
   revisions: [
     { hash: "deadbeef1234abcd", timestamp: "2026-01-01T00:00:00Z" },
@@ -145,6 +151,7 @@ describe("MemoryDetailPage", () => {
   it("renders edges grouped by type with direction label", async () => {
     await renderPage(sampleEntity);
     expect(screen.getByText("belongsTo")).toBeInTheDocument();
+    // targetId is extracted from the "to" field: "node:org-42" → "org-42"
     expect(screen.getByText("org-42")).toBeInTheDocument();
     expect(screen.getByText("Out")).toBeInTheDocument();
   });
@@ -157,8 +164,9 @@ describe("MemoryDetailPage", () => {
     expect(screen.getByText("aabbccdd1122…")).toBeInTheDocument();
   });
 
-  it("renders provenance footer", async () => {
+  it("renders provenance footer extracting author from derived_by", async () => {
     await renderPage(sampleEntity);
+    // provenance.derived_by = "principal:claude-code" → author = "claude-code"
     expect(screen.getByTestId("provenance-author")).toHaveTextContent("claude-code");
     expect(screen.getByTestId("provenance-method")).toHaveTextContent("model-assisted");
   });

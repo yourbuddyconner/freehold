@@ -13,8 +13,8 @@ interface ProvenanceFooterProps {
   approvalStatus?: StatusKind;
   /** Optional href linking the approval badge to the decision record. */
   evidenceHref?: string;
-  /** Full changeset hash (hex or similar). Displayed truncated; click to copy. */
-  changesetHash: string;
+  /** Full changeset hash (hex or similar). Displayed truncated; click to copy. Optional — omit when not yet known. */
+  changesetHash?: string;
   className?: string;
 }
 
@@ -29,10 +29,12 @@ export function ProvenanceFooter({
 }: ProvenanceFooterProps) {
   const [copied, setCopied] = useState(false);
 
-  const truncated = changesetHash.length > 12 ? `${changesetHash.slice(0, 12)}…` : changesetHash;
+  const hash = changesetHash ?? "";
+  const truncated = hash.length > 12 ? `${hash.slice(0, 12)}…` : hash;
 
   function handleCopy() {
-    navigator.clipboard.writeText(changesetHash).then(() => {
+    if (!hash) return;
+    navigator.clipboard.writeText(hash).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     });
@@ -66,16 +68,18 @@ export function ProvenanceFooter({
         )}
       </span>
 
-      {/* Changeset hash — mono, truncated, copy-on-click */}
-      <button
-        type="button"
-        onClick={handleCopy}
-        data-testid="provenance-hash"
-        title={changesetHash}
-        className="font-mono rounded bg-neutral-100 dark:bg-neutral-800 px-1.5 py-0.5 hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors cursor-pointer"
-      >
-        {copied ? "Copied!" : truncated}
-      </button>
+      {/* Changeset hash — mono, truncated, copy-on-click (only shown when a hash is available) */}
+      {hash && (
+        <button
+          type="button"
+          onClick={handleCopy}
+          data-testid="provenance-hash"
+          title={hash}
+          className="font-mono rounded bg-neutral-100 dark:bg-neutral-800 px-1.5 py-0.5 hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors cursor-pointer"
+        >
+          {copied ? "Copied!" : truncated}
+        </button>
+      )}
     </footer>
   );
 }
