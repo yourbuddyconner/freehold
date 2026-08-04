@@ -72,7 +72,7 @@
     </p>
 
     <blockquote>
-      <p>A held response is a first-class success shape, not an error. The agent received a valid response; the write is in the queue. See <a href="governance.html">Governance</a> for how held writes are reviewed and admitted.</p>
+      <p>A held response is a success shape, not an error. The agent received a valid response, and the write is queued for review. See <a href="governance.html">Governance</a> for how held writes are reviewed and admitted.</p>
     </blockquote>
 
     <h2>Knowledge tools</h2>
@@ -86,14 +86,15 @@
       </div>
       <div class="tool-ref-body">
         <p class="tool-ref-desc">
-          The ergonomic fast path for capturing a thought or observation. Creates a <code>memory/Note</code> entity classified as scratch and admits it immediately. This is sugar over <code>create_entity</code> — it does not accept type overrides or relationship parameters.
+          The fast path for capturing a thought. Creates a <code>memory/Note</code> entity classified as scratch and admits it immediately. This is sugar over <code>create_entity</code> and does not accept type overrides or relationships.
         </p>
         <strong>Parameters</strong>
         <ul>
           <li><code>content</code> (string, required) — the text of the note</li>
+          <li><code>agent</code> (string, optional) — agent principal name; defaults to the configured agent</li>
         </ul>
         <div class="tool-admission">
-          <strong>Admission:</strong> Always admitted. Scratch notes bypass the policy engine. The note is immediately indexed and retrievable via <code>recall</code>.
+          <strong>Admission:</strong> Admitted immediately under the <code>scratch-is-free</code> policy rule. The note is indexed and retrievable via <code>recall</code>.
         </div>
       </div>
     </div>
@@ -110,10 +111,11 @@
         </p>
         <strong>Parameters</strong>
         <ul>
-          <li><code>type</code> (string, required) — a fully-qualified type name from the installed schema, e.g., <code>memory/Preference</code>, <code>core/Person</code></li>
-          <li><code>attributes</code> (object, required) — attribute key-value pairs matching the type's schema</li>
-          <li><code>classify</code> (string[], optional) — taxonomy terms to apply in the same changeset</li>
-          <li><code>relate</code> (object[], optional) — edges to create in the same changeset: <code>{ to, edge_type, attributes? }</code></li>
+          <li><code>type</code> (string, required) — a type ref from the installed schema, e.g. <code>memory/Preference@1</code></li>
+          <li><code>attributes</code> (object, required) — key/value pairs matching the type's schema</li>
+          <li><code>classify</code> (string, optional) — a taxonomy term to apply in the same changeset, e.g. <code>workspace/scratch@1</code></li>
+          <li><code>relate</code> (object, optional) — an edge to create after the entity: <code>{ to, edge_type, attributes? }</code>. The edge is a second changeset; if the entity is held, the edge is skipped.</li>
+          <li><code>agent</code> (string, optional) — agent principal name</li>
         </ul>
         <div class="tool-admission">
           <strong>Admission:</strong> Depends on policy. Entities classified as scratch are admitted; governed types (preferences, people, agreements) are held pending owner approval.
@@ -129,13 +131,14 @@
       </div>
       <div class="tool-ref-body">
         <p class="tool-ref-desc">
-          Revise an existing entity's attributes. Uses optimistic concurrency: the request includes the entity's current revision identifier, and the server rejects the update if the entity has been modified since. This prevents conflicting updates from silently overwriting each other.
+          Revise an existing entity's attributes. The server reads the entity's current revision and pins the update against it (optimistic concurrency), so conflicting updates cannot silently overwrite each other.
         </p>
         <strong>Parameters</strong>
         <ul>
-          <li><code>id</code> (string, required) — the entity's stable identifier</li>
-          <li><code>attributes</code> (object, required) — attribute fields to set; unspecified fields are unchanged</li>
-          <li><code>revision</code> (string, required) — the entity's current revision, returned by <code>get_entity</code></li>
+          <li><code>id</code> (string, required) — the entity's identifier (bare UUID)</li>
+          <li><code>type</code> (string, required) — the entity's type ref, required for validation</li>
+          <li><code>attributes</code> (object, required) — attributes to update</li>
+          <li><code>agent</code> (string, optional) — agent principal name</li>
         </ul>
         <div class="tool-admission">
           <strong>Admission:</strong> Follows the same policy as the entity's type. Updates to governed entities are held.
@@ -151,17 +154,19 @@
       </div>
       <div class="tool-ref-body">
         <p class="tool-ref-desc">
-          Create a typed edge between two existing nodes. Edge types define the valid domain and range (e.g., a <code>derived_from</code> edge must connect a knowledge entity to its source). Time lives on edges — use <code>from</code> and <code>until</code> attributes following the corp-ontology convention for time-bounded relationships.
+          Create a typed edge between two existing nodes. Edge types declare a valid domain and range, and the graph rejects edges that violate them. Time-bounded relationships carry <code>from</code> and <code>until</code> attributes on the edge.
         </p>
         <strong>Parameters</strong>
         <ul>
-          <li><code>from</code> (string, required) — source entity identifier</li>
-          <li><code>to</code> (string, required) — target entity identifier</li>
-          <li><code>edge_type</code> (string, required) — a fully-qualified edge type from the installed schema</li>
-          <li><code>attributes</code> (object, optional) — edge attributes, including <code>from</code>/<code>until</code> timestamps</li>
+          <li><code>from</code> (string, required) — source node identifier (bare UUID)</li>
+          <li><code>to</code> (string, required) — target node identifier (bare UUID)</li>
+          <li><code>edge_type</code> (string, required) — an edge type ref, e.g. <code>memory/relates_to@1</code></li>
+          <li><code>attributes</code> (object, optional) — edge attributes</li>
+          <li><code>scratch</code> (boolean, optional, default true) — classify the edge as scratch so it admits immediately; pass <code>false</code> to route it through governance</li>
+          <li><code>agent</code> (string, optional) — agent principal name</li>
         </ul>
         <div class="tool-admission">
-          <strong>Admission:</strong> Policy-dependent. Edges connecting governed entities are typically held.
+          <strong>Admission:</strong> Admitted immediately by default (scratch). With <code>scratch: false</code>, policy decides.
         </div>
       </div>
     </div>
@@ -174,12 +179,13 @@
       </div>
       <div class="tool-ref-body">
         <p class="tool-ref-desc">
-          Place a node, edge, or document in the taxonomy. Classification affects policy routing — classifying a node under a governed taxonomy term can change which policy rules apply to it. For this reason, classification can itself be held.
+          Place a node in the taxonomy. Classification routes policy: the terms on an object decide which rules apply to changes of it. For that reason a classification write can itself be held.
         </p>
         <strong>Parameters</strong>
         <ul>
-          <li><code>subject</code> (string, required) — the identifier of the node, edge, or document to classify</li>
-          <li><code>term</code> (string, required) — the taxonomy term to apply, e.g., <code>life/health</code>, <code>work/project</code></li>
+          <li><code>subject</code> (string, required) — the node to classify (bare UUID)</li>
+          <li><code>term</code> (string, required) — the taxonomy term, e.g. <code>life/health@1</code></li>
+          <li><code>agent</code> (string, optional) — agent principal name</li>
         </ul>
         <div class="tool-admission">
           <strong>Admission:</strong> Depends on the taxonomy term and the target object's type. Classification under a governed term may be held.
@@ -195,15 +201,18 @@
       </div>
       <div class="tool-ref-body">
         <p class="tool-ref-desc">
-          Anchor source material in the graph by content hash. The document is stored and addressed by the hash of its content — other entities can cite exact bytes by referencing the hash. Use this to give claims a durable source reference.
+          Anchor source material in the graph by content hash. The document is addressed by the SHA-256 of its bytes, so claims can cite an exact, checkable source. In v0 the document is associated with an entity through the changeset's intent text; edges cannot target document-kind objects.
         </p>
         <strong>Parameters</strong>
         <ul>
+          <li><code>entity_id</code> (string, required) — the entity this document supports (bare UUID)</li>
           <li><code>content</code> (string, required) — the document text to anchor</li>
-          <li><code>media_type</code> (string, required) — MIME type, e.g., <code>text/plain</code>, <code>text/markdown</code></li>
+          <li><code>media_type</code> (string, optional) — MIME type, e.g. <code>text/markdown</code>; defaults to <code>text/plain</code></li>
+          <li><code>title</code> (string, optional) — a document title</li>
+          <li><code>agent</code> (string, optional) — agent principal name</li>
         </ul>
         <div class="tool-admission">
-          <strong>Admission:</strong> Documents in the scratch region are admitted immediately. The content hash is returned for use in subsequent <code>relate</code> calls.
+          <strong>Admission:</strong> Admitted under the scratch rule. The response includes the document's content hash.
         </div>
       </div>
     </div>
@@ -219,22 +228,22 @@
       </div>
       <div class="tool-ref-body">
         <p class="tool-ref-desc">
-          Hybrid search: pgvector cosine similarity (bge-small-en-v1.5, 384-dim) merged with Postgres full-text search, over the PGlite index. Every result carries its provenance: changeset hash, author DID, approval status, and the rule (if any) that governed the write. Memory never leaves the machine — the embedding model runs in-process via transformers.js.
+          Hybrid search: pgvector cosine similarity (bge-small-en-v1.5, 384 dimensions) merged with Postgres full-text search over the PGlite index. Every result carries its provenance: changeset hash, author principal, method, and approval status. The embedding model runs in-process via transformers.js, so memory never leaves the machine.
         </p>
         <strong>Parameters</strong>
         <ul>
-          <li><code>query</code> (string, required) — natural language search query</li>
+          <li><code>query</code> (string, required) — natural-language search query</li>
           <li><code>filters</code> (object, optional):
             <ul>
-              <li><code>type</code> — restrict to a specific entity type</li>
-              <li><code>region</code> — restrict to a graph region (e.g., <code>scratch</code>, <code>governed</code>)</li>
-              <li><code>author</code> — restrict to a specific author DID</li>
-              <li><code>approval_status</code> — one of <code>admitted</code>, <code>held</code>, <code>rejected</code></li>
+              <li><code>type</code> — restrict to an entity type ref</li>
+              <li><code>author</code> — restrict to an author principal name</li>
+              <li><code>approval</code> — restrict by approval status</li>
             </ul>
           </li>
+          <li><code>limit</code> (number, optional) — maximum results, default 10</li>
         </ul>
         <div class="tool-admission">
-          <strong>Note:</strong> When running from the compiled binary, semantic (cosine similarity) recall is unavailable and the search falls back to BM25 full-text + hash vectors. Run from source for full hybrid recall.
+          <strong>Note:</strong> The compiled binary ships the hash embedder only, so semantic similarity is unavailable there and search relies on full-text matching. Run from source for full hybrid recall.
         </div>
       </div>
     </div>
@@ -264,14 +273,14 @@
       </div>
       <div class="tool-ref-body">
         <p class="tool-ref-desc">
-          Walk the typed graph from a starting node. Follow specific edge types in either direction (outbound, inbound, or both) up to a configurable depth. Useful for answering questions like "what does this preference derive from?" or "who else relates to this document?"
+          Walk the typed graph from a starting node, following edges of specified types in either direction, up to a maximum depth. This answers questions like "what does this preference derive from?".
         </p>
         <strong>Parameters</strong>
         <ul>
-          <li><code>from</code> (string, required) — starting entity identifier</li>
-          <li><code>edge_types</code> (string[], optional) — restrict traversal to these edge types; if omitted, follows all edges</li>
-          <li><code>direction</code> (string, optional) — <code>outbound</code> (default), <code>inbound</code>, or <code>both</code></li>
-          <li><code>depth</code> (number, optional) — maximum traversal depth, default 2</li>
+          <li><code>from</code> (string, required) — starting node identifier (bare UUID)</li>
+          <li><code>edge_types</code> (string[], optional) — restrict traversal to these edge types; omit to follow all edges</li>
+          <li><code>direction</code> (string, optional) — <code>out</code> (default), <code>in</code>, or <code>both</code></li>
+          <li><code>depth</code> (number, optional) — maximum hops, default 1, maximum 10</li>
         </ul>
       </div>
     </div>
@@ -284,7 +293,7 @@
       </div>
       <div class="tool-ref-body">
         <p class="tool-ref-desc">
-          Return the agent's own held proposals — writes that have been submitted but not yet approved or rejected by the owner. The agent can use this to check whether a previous write is still pending, approved, or rejected before deciding to re-attempt or proceed.
+          Return the agent's own held proposals: writes submitted but not yet decided by the owner. An agent uses this to check on a previous write before retrying or proceeding.
         </p>
         <strong>Parameters</strong>
         <ul>
@@ -304,18 +313,14 @@
       </div>
       <div class="tool-ref-body">
         <p class="tool-ref-desc">
-          Return the graph's installed ontologies as structured data. An agent calls this to learn what types the graph currently holds before deciding whether to create an entity or propose a new type. The schema is read from the graph itself — not from documentation — so what the agent sees is what is actually installed.
+          Return the graph's installed ontologies as structured data. An agent calls this to learn what the graph can hold before creating an entity or proposing a new type. The answer comes from the graph itself, so what the agent sees is what is actually installed.
         </p>
         <strong>Returns</strong>
         <ul>
-          <li>Entity types with attribute schemas (name, type expression, required flag) and inheritance chains</li>
-          <li>Edge types with domain, range, cardinality, and attributes</li>
-          <li>The full taxonomy tree</li>
-          <li>Installed package versions and import hashes</li>
+          <li>Entity types with attribute schemas (name, type expression, required flag) and inheritance</li>
+          <li>Edge types with domain, range, and cardinality</li>
+          <li>The taxonomy terms with their parents</li>
         </ul>
-        <div class="tool-admission">
-          <strong>Design note:</strong> This is how an agent learns what the graph can hold — not from documentation, but from the graph itself. It is the entry point to the schema loop.
-        </div>
       </div>
     </div>
 
@@ -327,23 +332,16 @@
       </div>
       <div class="tool-ref-body">
         <p class="tool-ref-desc">
-          Propose a change to the graph's installed schema: add an entity type, add an edge type, or add a taxonomy term. Schema proposals are always held — the <code>schema-changes-are-serious</code> policy rule applies unconditionally. The proposal appears in the owner's Inbox alongside knowledge proposals, reviewed and installed on approval. This is the agent's path to evolving its world-model under governance.
+          Propose a change to the graph's installed schema: new entity types, edge types, or taxonomy terms, written as an ontology package in YAML. The proposal is held under the <code>schema-changes-are-serious</code> rule, appears in the owner's Inbox alongside knowledge proposals, and is installed on approval.
         </p>
         <strong>Parameters</strong>
         <ul>
-          <li><code>change</code> (object, required):
-            <ul>
-              <li><code>kind</code> — <code>add_entity_type</code>, <code>add_edge_type</code>, or <code>add_taxonomy_term</code></li>
-              <li><code>name</code> — the proposed type or term name</li>
-              <li><code>extends</code> (for entity types) — parent type, e.g., <code>core/Person</code></li>
-              <li><code>attributes</code> (for entity types) — array of <code>{ name, type, required }</code></li>
-              <li><code>domain</code> / <code>range</code> (for edge types)</li>
-              <li><code>parent</code> (for taxonomy terms)</li>
-            </ul>
-          </li>
+          <li><code>package_name</code> (string, required) — the ontology package name, e.g. <code>my-workspace</code></li>
+          <li><code>ontology_yaml</code> (string, required) — the package in Allod projection form: <code>ontology</code>, <code>version</code>, <code>entity_types</code>, <code>edge_types</code>, and so on</li>
+          <li><code>agent</code> (string, optional) — agent principal name</li>
         </ul>
         <div class="tool-admission">
-          <strong>Admission:</strong> Always held. Schema changes are in-graph changesets — a proposed entity type is a held changeset that creates a <code>meta/EntityType</code> node, governed, signed, and provenance-carrying like every other write.
+          <strong>Admission:</strong> Always held. A schema change is an ordinary in-graph changeset: the proposal creates <code>meta/EntityType</code> and related nodes, signed and provenance-carrying like every other write.
         </div>
       </div>
     </div>

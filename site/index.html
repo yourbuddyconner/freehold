@@ -37,7 +37,7 @@
         Your agents' memory,<br>in a graph you own.
       </h1>
       <p class="hero-subhead reveal reveal-3">
-        Most memory products lease you back your own data. Freehold keeps your agents' accumulated knowledge in an <strong>Allod graph</strong>: an append-only log of signed changes, verifiable from your keys alone, governed by rules you declare. One daemon. Twelve tools. No third party holds the graph.
+        Most memory products lease you back your own data. Freehold keeps your agents' accumulated knowledge in an <strong>Allod graph</strong>: an append-only log of signed changes, verifiable from your keys alone, governed by rules you declare. One daemon serves twelve agent tools, and no third party ever holds the graph.
       </p>
       <div class="hero-actions reveal reveal-4">
         <a href="docs/quickstart.html" class="btn btn-primary">Get started</a>
@@ -49,9 +49,9 @@
     <section class="section">
       <div class="section-header reveal reveal-1">
         <div class="eyebrow">The founding loops</div>
-        <h2>Memory, schema, and trust — governed end to end</h2>
+        <h2>Three loops: memory, schema, and trust</h2>
         <p>
-          Three loops run through every part of Freehold. Each one is a complete cycle: the agent acts, the system enforces, you decide, the record is signed.
+          Each loop starts with an agent action and ends with a signed, checkable record.
         </p>
       </div>
 
@@ -61,7 +61,7 @@
           <div class="loop-number">01 — MEMORY LOOP</div>
           <h3>Write, hold, approve, recall</h3>
           <p>
-            Scratch notes are admitted immediately — agents can think at full speed. Consequential writes are held as proposals: a preference about you, an entity outside the scratch region. You approve in the Inbox; the approval is a signed decision record. Recall returns every result with its full provenance chain — who wrote it, who approved it, the changeset hash.
+            Scratch notes are admitted immediately, so agents can think at full speed. Consequential writes are held as proposals: a preference about you, an entity outside the scratch region. You approve in the Inbox, and the approval is a signed decision record. Recall returns every result with its provenance: who wrote it, who approved it, the changeset hash.
           </p>
           <div style="margin-top:20px;">
             <a href="docs/governance.html" class="link-arrow">How governance works</a>
@@ -71,9 +71,9 @@
         <div class="loop-card reg-marks reveal reveal-3">
           <span class="reg-mark-bl"></span><span class="reg-mark-br"></span>
           <div class="loop-number">02 — SCHEMA LOOP</div>
-          <h3>Typed knowledge, governed evolution</h3>
+          <h3>The agent can extend its own schema</h3>
           <p>
-            Memory is a typed knowledge graph, not a pile of notes. Entities have types, relationships are typed edges, and the schema lives in the graph itself. An agent reads the schema with <code>describe_schema</code> and, when the graph lacks a type it needs, proposes one with <code>propose_ontology_change</code>. Schema changes are always held — the same inbox, the same approval flow — then installed on approval.
+            Memory is a typed knowledge graph, not a pile of notes. Entities have types, relationships are typed edges, and the schema lives in the graph itself. An agent reads the schema with <code>describe_schema</code> and, when the graph lacks a type it needs, proposes one with <code>propose_ontology_change</code>. Schema changes are always held, reviewed in the same Inbox as everything else, and installed when you approve them.
           </p>
           <div style="margin-top:20px;">
             <a href="docs/tools.html" class="link-arrow">Schema tools reference</a>
@@ -85,7 +85,7 @@
           <div class="loop-number">03 — TRUST LOOP</div>
           <h3>Verify without trusting Freehold</h3>
           <p>
-            The Rust reference implementation's <code>allod verify</code> passes on graphs Freehold writes. Verification does not depend on Freehold, or on trusting Freehold. The PGlite index is derived data — <code>freehold reindex</code> rebuilds it from the log and must land on identical state. The graph is the truth; the index is a view.
+            The Rust reference implementation's <code>allod verify</code> passes on graphs Freehold writes, so verification never depends on trusting Freehold. The PGlite search index is derived data: <code>freehold reindex</code> rebuilds it from the log and must land on identical state.
           </p>
           <div style="margin-top:20px;">
             <a href="docs/architecture.html" class="link-arrow">Architecture overview</a>
@@ -100,7 +100,7 @@
         <div class="eyebrow">MCP tool surface</div>
         <h2>Twelve tools, grouped by function</h2>
         <p>
-          Agents connect over streamable HTTP MCP at <code>/mcp</code>. Agents never receive approval, rejection, policy mutation, or key operations — those belong to the owner.
+          Agents connect over streamable HTTP MCP at <code>/mcp</code>. Approval, rejection, policy changes, and key operations are not tools; they belong to the owner.
         </p>
       </div>
 
@@ -179,7 +179,7 @@
         <div class="eyebrow">Governed write</div>
         <h2>From write to signed record</h2>
         <p>
-          A held write is the system working correctly, not an error. Here is the lifecycle of a consequential write from agent call to verified record.
+          A held write is the system working correctly, not an error. This is the path a consequential write takes.
         </p>
       </div>
 
@@ -227,7 +227,7 @@
             <div class="wt-step-num">Step 04</div>
             <h4>Decision record signed</h4>
             <p>
-              Approval signs a decision record with the owner's key. The write is admitted, indexed, and returned by <code>recall</code> with full provenance — changeset hash, author, approval signature.
+              Approval signs a decision record with the owner's key. The write is admitted, indexed, and returned by <code>recall</code> with its provenance: changeset hash, author, approval signature.
             </p>
             <div style="margin-top:16px;">
               <span class="chip chip-verified">verified</span>
@@ -282,7 +282,7 @@ freehold mcp setup --print        <span class="code-comment"># or print JSON for
       <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:32px; margin-top:24px;">
         <div>
           <h4 style="margin-bottom:8px;">Quickstart</h4>
-          <p style="font-size:0.875rem; margin-bottom:12px;">Install, configure, and connect an agent in under ten minutes.</p>
+          <p style="font-size:0.875rem; margin-bottom:12px;">Install the daemon and connect an agent.</p>
           <a href="docs/quickstart.html" class="link-arrow">Get started</a>
         </div>
         <div>
@@ -292,7 +292,7 @@ freehold mcp setup --print        <span class="code-comment"># or print JSON for
         </div>
         <div>
           <h4 style="margin-bottom:8px;">Governance</h4>
-          <p style="font-size:0.875rem; margin-bottom:12px;">The policy model, decision records, the lifecycle from write to verified.</p>
+          <p style="font-size:0.875rem; margin-bottom:12px;">The policy model, decision records, and the write lifecycle.</p>
           <a href="docs/governance.html" class="link-arrow">Read governance</a>
         </div>
         <div>

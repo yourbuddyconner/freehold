@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Quickstart — Freehold</title>
-  <meta name="description" content="Install Freehold, start the daemon, and connect an agent in under ten minutes.">
+  <meta name="description" content="Install Freehold, start the daemon, and connect an agent.">
   <link rel="stylesheet" href="../assets/site.css">
 </head>
 <body>
@@ -55,7 +55,7 @@
     <div class="eyebrow reveal reveal-1">Documentation</div>
     <h1 class="reveal reveal-2">Quickstart</h1>
     <p class="lead reveal reveal-3">
-      This guide walks from a clean machine to a running Freehold daemon with an agent connected. The two prerequisites — a sibling Allod checkout and a one-time WASM build — are the main things to get right before anything else.
+      This guide goes from a clean machine to a running Freehold daemon with an agent connected. Get two things right first: a sibling Allod checkout and a one-time WASM build.
     </p>
 
     <h2 id="prerequisites">Prerequisites</h2>
@@ -74,7 +74,7 @@
 
     <h2 id="install">Install and build</h2>
 
-    <p>Both repositories must be siblings in the same parent directory. The name matters: Freehold's workspace configuration resolves <code>@allod/core</code> as <code>../allod/crates/allod-wasm/pkg</code>.</p>
+    <p>Both repositories must be siblings in the same parent directory, and the directory names matter: Freehold's workspace declares <code>@allod/core</code> as <code>link:../allod/crates/allod-wasm</code>.</p>
 
     <pre><code><span class="code-comment"># 1. Clone both repos as siblings — order does not matter</span>
 git clone https://github.com/yourbuddyconner/allod
@@ -104,7 +104,7 @@ pnpm install</code></pre>
     <p>A bearer token is auto-minted into <code>~/.freehold/config.json</code> (mode 0600) at first boot. The CLI and the MCP config use this token automatically.</p>
 
     <div class="notice">
-      <p><strong>Run from source for semantic recall.</strong> The compiled binary ships with a hash embedder only — semantic recall (bge-small cosine similarity) is unavailable in the binary build. For development and dogfood use, run from source via <code>tsx</code> as shown above. Recall still functions with the hash embedder (BM25 full-text + hash vectors), but semantic similarity is not available.</p>
+      <p><strong>Run from source for semantic recall.</strong> The compiled binary ships with a deterministic hash embedder only, so semantic similarity is unavailable in the binary build. Run from source via <code>tsx</code> as shown above to get the real embedding model. With the hash embedder, recall still works through Postgres full-text search.</p>
     </div>
 
     <h2 id="wire-agent">Wire an agent</h2>
@@ -119,7 +119,7 @@ freehold mcp setup --print</code></pre>
 
     <p>The config points the agent at <code>http://127.0.0.1:8710/mcp</code> (streamable HTTP MCP) with the bearer token from <code>~/.freehold/config.json</code>.</p>
 
-    <p>Then open the console in your browser at <a href="http://127.0.0.1:8710">http://127.0.0.1:8710</a> and watch the Inbox as the agent works. Scratch notes appear in Memory immediately. Consequential writes — preferences about you, entities outside the scratch region — appear in the Inbox as proposals for you to approve or reject.</p>
+    <p>Then open the console at <a href="http://127.0.0.1:8710">http://127.0.0.1:8710</a> and watch the Inbox as the agent works. Scratch notes appear in Memory immediately. Consequential writes, such as preferences about you, appear in the Inbox as proposals for you to approve or reject.</p>
 
     <h3>Try the memory loop</h3>
 
@@ -128,10 +128,10 @@ freehold mcp setup --print</code></pre>
     <pre><code><span class="code-comment"># Fast scratch note — admitted immediately</span>
 remember("Meeting with design team at 2pm")
 
-<span class="code-comment"># Governed write — will be held for approval</span>
-create_entity("memory/Preference", {
-  content: "prefers morning meetings",
-  strength: "strong"
+<span class="code-comment"># Governed write — held for approval</span>
+create_entity(type: "memory/Preference@1", attributes: {
+  statement: "prefers morning meetings",
+  strength: "hard"
 })</code></pre>
 
     <p>The second call returns <code>{ status: "held", proposal, rule }</code>. The proposal appears in your Inbox with the agent's identity, the diff, and the rule that held it. Approve it to admit the write and sign a decision record.</p>
@@ -142,14 +142,18 @@ create_entity("memory/Preference", {
 describe_schema()
 
 <span class="code-comment"># Propose a new type when the graph lacks one</span>
-propose_ontology_change({
-  kind: "add_entity_type",
-  name: "Colleague",
-  extends: "core/Person",
-  attributes: [{ name: "slack_id", type: "string", required: false }]
-})</code></pre>
+propose_ontology_change(package_name: "my-workspace", ontology_yaml: "
+ontology: my-workspace
+version: 1
+entity_types:
+  Colleague:
+    extends: core/Person
+    attributes:
+      slack_id:
+        type: string
+")</code></pre>
 
-    <p>Schema proposals are always held. Approve the proposal in the Inbox to install the type. The Schema viewer in the console will show the new type with its provenance — which agent proposed it, which changeset added it, your signature on the approval.</p>
+    <p>Schema proposals are always held. Approve the proposal in the Inbox to install the type. The Schema viewer then shows the new type with its provenance: which agent proposed it, which changeset added it, and your signature on the approval.</p>
 
     <h2 id="cli">CLI reference</h2>
 
@@ -181,7 +185,7 @@ propose_ontology_change({
     <h2 id="limitations">Known limitations (v0)</h2>
 
     <ul>
-      <li><strong>Semantic recall unavailable in the compiled binary.</strong> The binary ships with hash-embedder only. Run from source via <code>tsx</code> for semantic (cosine similarity) search over bge-small embeddings. See <a href="https://github.com/yourbuddyconner/freehold/blob/main/docs/notes/F10-deferred.md">F10-deferred</a> for the technical details and planned resolution.</li>
+      <li><strong>Semantic recall unavailable in the compiled binary.</strong> The binary ships with the hash embedder only. Run from source via <code>tsx</code> for semantic search over bge-small embeddings. See <a href="https://github.com/yourbuddyconner/freehold/blob/main/docs/notes/F10-deferred.md">F10-deferred</a> for the details.</li>
       <li><strong>Sidecar files required for the compiled binary.</strong> The binary requires four sidecar files in the same directory (PGlite WASM engine, FS bundle, initdb WASM, pgvector extension bundle). The <code>compile-binary.mjs</code> script copies these automatically.</li>
       <li><strong>Single-user, local-only.</strong> The daemon binds <code>127.0.0.1</code>. Multi-user, remote instances, and federation between Freehold instances are out of scope for v0.</li>
       <li><strong>No memory graph visualization.</strong> The force-directed graph view is deferred to v0.1.</li>

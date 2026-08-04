@@ -53,7 +53,7 @@
     <div class="eyebrow reveal reveal-1">Documentation</div>
     <h1 class="reveal reveal-2">Architecture</h1>
     <p class="lead reveal reveal-3">
-      Freehold is one daemon built from four packages in a pnpm workspace. The graph storage, policy engine, recall index, and agent API are separate concerns with clear ownership. No native modules anywhere in the tree — the single binary is possible because every moving part is WASM or pure JavaScript.
+      Freehold is one daemon built from four packages in a pnpm workspace. Graph storage, policy, the recall index, and the agent API are separate packages with clear ownership. There are no native modules anywhere in the tree, which is what makes the single compiled binary possible: every moving part is WASM or plain JavaScript.
     </p>
 
     <h2 id="packages">Package structure</h2>
@@ -72,7 +72,7 @@
         </tr>
         <tr>
           <td>packages/api</td>
-          <td>The daemon and the CLI in one artifact. Hono routes defined schema-first with <code>@hono/zod-openapi</code> — the routes generate <code>openapi.json</code>. The <code>/mcp</code> endpoint serves streamable HTTP MCP. Static serving of the console with SPA fallback. All CLI subcommands are clients of the running daemon through the public HTTP API only.</td>
+          <td>The daemon and the CLI in one artifact. Hono routes with zod schemas that generate <code>openapi.json</code>. The <code>/mcp</code> endpoint serves streamable HTTP MCP. The console is served statically with SPA fallback. Every CLI subcommand is a client of the running daemon through the public HTTP API.</td>
         </tr>
         <tr>
           <td>packages/client</td>
@@ -87,16 +87,16 @@
 
     <h2 id="allod">The Allod foundation</h2>
 
-    <p>Freehold's storage is built on <a href="https://github.com/yourbuddyconner/allod">Allod</a> — an append-only log of signed changesets with a typed object model. Allod is a separate project and codebase. Freehold consumes <code>@allod/core</code>, the WASM npm package produced from the Allod Rust codebase.</p>
+    <p>Freehold's storage is built on <a href="https://github.com/yourbuddyconner/allod">Allod</a> — an append-only log of signed changesets with a typed object model. Allod is a separate project. Freehold consumes <code>@allod/core</code>, the WASM npm package produced from the Allod Rust codebase.</p>
 
     <p>The key properties Freehold inherits from Allod:</p>
 
     <ul>
-      <li><strong>Append-only log.</strong> Changesets are never deleted or modified. The graph's history is its truth.</li>
+      <li><strong>Append-only log.</strong> Changesets are never deleted or modified. The current state is the result of replaying the log.</li>
       <li><strong>Signed changesets.</strong> Every changeset is signed by the author's key. Authorship can be verified without trusting any intermediary.</li>
       <li><strong>Typed object model.</strong> Objects have types defined in a schema that lives in the graph itself. The schema is versioned and import-hashed.</li>
       <li><strong>Native on-disk layout.</strong> Graphs are stored in Allod's native format — the Rust <code>allod</code> CLI can open any graph Freehold writes without modification.</li>
-      <li><strong>Schema as objects.</strong> Allod's schema materialization ships before Freehold — proposed entity types are real in-graph changesets creating <code>meta/EntityType</code> nodes, not a side-channel schema store.</li>
+      <li><strong>Schema as objects.</strong> A proposed entity type is a real in-graph changeset that creates <code>meta/EntityType</code> nodes. There is no side-channel schema store.</li>
     </ul>
 
     <p>Because Freehold stores graphs in native Allod format, cross-implementation verification is a standing conformance check in CI: the TypeScript tests write a graph, then the Rust <code>allod verify</code> command passes on it.</p>
@@ -116,7 +116,7 @@
 
     <h2 id="disposable-index">Disposable index</h2>
 
-    <p>The PGlite database carries nothing the Allod log cannot reproduce. Embeddings are derived data — they are computed from content and recomputable given the same content and model. This property is enforced by a test:</p>
+    <p>The PGlite database carries nothing the Allod log cannot reproduce. Embeddings are derived data: they are computed from content and can be recomputed from the same content and model. This property is enforced by a test:</p>
 
     <ol>
       <li>Fold a set of changesets into the index</li>
@@ -126,7 +126,7 @@
       <li>Assert that the new state matches the snapshot</li>
     </ol>
 
-    <p>The index is also the recovery story: if the PGlite data directory is lost or corrupted, <code>freehold reindex</code> rebuilds it from the append-only Allod log. The log is the durable store; the index is an accelerant.</p>
+    <p>This is also the recovery path: if the PGlite data directory is lost or corrupted, <code>freehold reindex</code> rebuilds it from the log.</p>
 
     <h2 id="verification">Verification independence</h2>
 
@@ -138,13 +138,13 @@
       <li><strong>Governance.</strong> Decision record verification — every governed write in the graph has a corresponding signed decision record from the owner's key.</li>
     </ul>
 
-    <p>The critical design property: verification does not depend on Freehold. The Rust <code>allod verify</code> command performs all three levels independently. Running <code>allod verify ~/.freehold/graphs/memory</code> from the terminal — with no Freehold daemon running — produces the same pass/fail result as the Freehold console's Verify page. You do not need to trust Freehold's verification implementation; you can always check with the independent implementation.</p>
+    <p>Verification does not depend on Freehold. The Rust <code>allod verify</code> command performs all three levels independently: run <code>allod verify ~/.freehold/graphs/main</code> with no daemon running and you get the same pass/fail result as the console's Verify page. You never have to trust Freehold's own verification code.</p>
 
     <h2 id="decisions">Key decisions</h2>
 
     <h3>One binary, two personalities (the valet pattern)</h3>
 
-    <p><code>freehold serve</code> boots the full product: HTTP API, MCP endpoint, and the console on one local port. Every other subcommand (<code>status</code>, <code>pending</code>, <code>approve</code>, <code>reject</code>, <code>remember</code>, <code>recall</code>, <code>verify</code>, <code>reindex</code>, <code>mcp setup</code>) is a client of a running instance through the public HTTP API only — no side-door into the engine.</p>
+    <p><code>freehold serve</code> boots the full product: HTTP API, MCP endpoint, and the console on one local port. Every other subcommand (<code>status</code>, <code>pending</code>, <code>approve</code>, <code>reject</code>, <code>remember</code>, <code>recall</code>, <code>verify</code>, <code>reindex</code>, <code>mcp setup</code>) is a client of a running instance through the public HTTP API. There is no side door into the engine.</p>
 
     <p>This design makes the CLI a permanent conformance consumer of the API. If the CLI breaks, the API is broken. It also avoids two processes sharing the PGlite database file.</p>
 
@@ -163,15 +163,19 @@
     <h2 id="disk-layout">Disk layout</h2>
 
     <pre><code>~/.freehold/
-  config.json         # bearer token, embedding provider config
-  pg/                 # PGlite data directory (single-owner discipline)
+  config.json          # bearer token, graph name, embedder choice
+  pg/                  # PGlite data directory (single owner: the daemon)
   graphs/
-    memory/           # native Allod layout
-      log/            # append-only changeset log
-      keys/           # keypair profile (plain-keypair, per Allod spec)
-      schema/         # installed ontology packages</code></pre>
+    main/              # native Allod layout
+      .allod/
+        graph.yaml     # graph ID, root authority
+        HEAD           # tip changeset hash
+        changesets/    # the append-only log, one file per changeset
+        proposals/     # held writes awaiting decision
+        keys/          # keypairs (plain-keypair profile)
+        checkpoints/   # signed checkpoints</code></pre>
 
-    <p>The <code>graphs/memory/</code> directory is in native Allod format and can be opened by the Rust <code>allod</code> CLI directly. Keys live in the graph directory, plain-keypair profile, per the Allod reference profile specification.</p>
+    <p>The <code>graphs/main/</code> directory is native Allod format. The Rust <code>allod</code> CLI opens it directly. The schema is not a directory: since Allod's schema materialization, ontology types and policy live in the graph as meta-typed nodes, created by the genesis changeset.</p>
 
   </article>
 </div>
