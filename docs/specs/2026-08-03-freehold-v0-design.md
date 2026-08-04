@@ -383,6 +383,11 @@ sessions, v0 is shipped.
   `allod verify` against a graph produced by the TypeScript test suite —
   including the graph from the schema loop.
 - MCP round-trip: each tool exercised against a live daemon.
+- Real-agent E2E: a pi-agent (`@mariozechner/pi-agent-core`, the
+  framework valet already uses) wired to the daemon's `/mcp` endpoint
+  runs the founding loops as an actual agent — deciding for itself to
+  remember, propose, and recall — against a scripted scenario. This is
+  the closest CI gets to the dogfood exit criterion.
 - PGlite kill-test: SIGKILL durability against the compiled binary
   (valet's criterion, inherited).
 
