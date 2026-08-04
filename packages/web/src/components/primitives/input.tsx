@@ -2,8 +2,8 @@ import { type InputHTMLAttributes, type TextareaHTMLAttributes, forwardRef } fro
 import { cn } from "~/lib/cn";
 
 const FIELD_BASE =
-  "w-full rounded border bg-[--bg] text-[--fg] placeholder:text-muted " +
-  "border-[--border] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 " +
+  "w-full rounded border bg-(--bg) text-(--fg) placeholder:text-muted " +
+  "border-(--border) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 " +
   "focus-visible:border-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed";
 
 export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {}

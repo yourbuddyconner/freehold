@@ -67,7 +67,7 @@ function MemoryPage() {
           }}
           aria-hidden
         />
-        <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-[--fg-muted]">
+        <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-(--fg-muted)">
           MEMORY BROWSER
         </span>
       </div>
@@ -81,13 +81,13 @@ function MemoryPage() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search memories…"
-          className="w-full border border-[--border] bg-[--bg-subtle] px-3 py-2 text-sm text-[--fg] placeholder:text-[--fg-muted] focus:outline-none focus:ring-1 focus:ring-[--border]"
+          className="w-full border border-(--border) bg-(--bg-subtle) px-3 py-2 text-sm text-(--fg) placeholder:text-(--fg-muted) focus:outline-none focus:ring-1 focus:ring-(--border)"
         />
       </div>
 
       {/* Filter chips */}
       <div className="flex flex-wrap gap-2 mb-6">
-        <span className="text-xs text-[--fg-muted] self-center">Type:</span>
+        <span className="text-xs text-(--fg-muted) self-center">Type:</span>
         {TYPE_FILTERS.map((f) => (
           <button
             key={f}
@@ -96,13 +96,13 @@ function MemoryPage() {
             className={`border px-2 py-0.5 font-mono text-[11px] uppercase ${
               typeFilter === f
                 ? "border-[var(--color-accent)] bg-[var(--color-accent)] text-[var(--color-accent-fg)]"
-                : "border-[--border] text-[--fg-muted] hover:text-[--fg]"
+                : "border-(--border) text-(--fg-muted) hover:text-(--fg)"
             }`}
           >
             {f}
           </button>
         ))}
-        <span className="text-xs text-[--fg-muted] self-center ml-2">Status:</span>
+        <span className="text-xs text-(--fg-muted) self-center ml-2">Status:</span>
         {STATUS_FILTERS.map((f) => (
           <button
             key={f}
@@ -111,13 +111,13 @@ function MemoryPage() {
             className={`border px-2 py-0.5 font-mono text-[11px] uppercase ${
               statusFilter === f
                 ? "border-[var(--color-accent)] bg-[var(--color-accent)] text-[var(--color-accent-fg)]"
-                : "border-[--border] text-[--fg-muted] hover:text-[--fg]"
+                : "border-(--border) text-(--fg-muted) hover:text-(--fg)"
             }`}
           >
             {f}
           </button>
         ))}
-        <span className="text-xs text-[--fg-muted] self-center ml-2">Author:</span>
+        <span className="text-xs text-(--fg-muted) self-center ml-2">Author:</span>
         {AUTHOR_FILTERS.map((f) => (
           <button
             key={f}
@@ -127,7 +127,7 @@ function MemoryPage() {
             className={`border px-2 py-0.5 font-mono text-[11px] uppercase ${
               authorFilter === f
                 ? "border-[var(--color-accent)] bg-[var(--color-accent)] text-[var(--color-accent-fg)]"
-                : "border-[--border] text-[--fg-muted] hover:text-[--fg]"
+                : "border-(--border) text-(--fg-muted) hover:text-(--fg)"
             }`}
           >
             {f}
@@ -148,24 +148,24 @@ function MemoryPage() {
         {/* Results */}
         <div className="flex-1 min-w-0">
           {query.length === 0 && (
-            <div className="border border-[--border] bg-[--bg-subtle] p-6 space-y-3 max-w-xl">
-              <p className="text-sm text-[--fg-muted]">
+            <div className="border border-(--border) bg-(--bg-subtle) p-6 space-y-3 max-w-xl">
+              <p className="text-sm text-(--fg-muted)">
                 Search memories above. Agents will surface entities, documents, and events here as
                 they work.
               </p>
-              <p className="text-sm text-[--fg-muted]">
+              <p className="text-sm text-(--fg-muted)">
                 Connect an agent via{" "}
-                <code className="border border-[--border] bg-[--bg-subtle] px-1 py-0.5 font-mono text-[11px]">
+                <code className="border border-(--border) bg-(--bg-subtle) px-1 py-0.5 font-mono text-[11px]">
                   freehold mcp setup claude-code
                 </code>
               </p>
             </div>
           )}
 
-          {query.length > 0 && isLoading && <p className="text-sm text-[--fg-muted]">Searching…</p>}
+          {query.length > 0 && isLoading && <p className="text-sm text-(--fg-muted)">Searching…</p>}
 
           {query.length > 0 && !isLoading && results.length === 0 && (
-            <p className="text-sm text-[--fg-muted]">No memories match your search.</p>
+            <p className="text-sm text-(--fg-muted)">No memories match your search.</p>
           )}
 
           {results.length > 0 && (

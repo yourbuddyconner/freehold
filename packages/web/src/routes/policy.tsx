@@ -110,19 +110,19 @@ function EditDrawer({ open, onClose, rule, allRules }: EditDrawerProps) {
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 bg-black/30 z-40" />
         <Dialog.Content
-          className="fixed right-0 top-0 bottom-0 z-50 w-full max-w-lg bg-white dark:bg-neutral-900 border-l border-[--border] shadow-xl flex flex-col"
+          className="fixed right-0 top-0 bottom-0 z-50 w-full max-w-lg bg-white dark:bg-neutral-900 border-l border-(--border) shadow-xl flex flex-col"
           aria-label="Edit policy rule"
         >
           {/* Header */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-[--border]">
-            <Dialog.Title className="text-base font-semibold text-[--fg]">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-(--border)">
+            <Dialog.Title className="text-base font-semibold text-(--fg)">
               Edit rule: {rule.title}
             </Dialog.Title>
             <Dialog.Close asChild>
               <button
                 type="button"
                 aria-label="Close"
-                className="text-[--fg-muted] hover:text-[--fg] transition-colors"
+                className="text-(--fg-muted) hover:text-(--fg) transition-colors"
               >
                 <X className="h-4 w-4" aria-hidden />
               </button>
@@ -131,7 +131,7 @@ function EditDrawer({ open, onClose, rule, allRules }: EditDrawerProps) {
 
           {/* Body */}
           <div className="flex-1 overflow-auto p-6 space-y-4">
-            <p className="text-xs text-[--fg-muted]">
+            <p className="text-xs text-(--fg-muted)">
               Edit the rule below. Saving creates a policy-change proposal that will appear in your
               Inbox — you approve your own change, keeping the audit trail intact.
             </p>
@@ -141,7 +141,7 @@ function EditDrawer({ open, onClose, rule, allRules }: EditDrawerProps) {
               onChange={(e) => setYaml(e.target.value)}
               rows={14}
               spellCheck={false}
-              className="w-full border border-[--border] bg-white dark:bg-neutral-900 p-3 font-mono text-xs text-[--fg] resize-y focus:outline-none focus:ring-2 focus:ring-[--fg]/20"
+              className="w-full border border-(--border) bg-white dark:bg-neutral-900 p-3 font-mono text-xs text-(--fg) resize-y focus:outline-none focus:ring-2 focus:ring-(--fg)/20"
               aria-label="Policy YAML"
             />
 
@@ -152,14 +152,14 @@ function EditDrawer({ open, onClose, rule, allRules }: EditDrawerProps) {
                   type="button"
                   onClick={() => setDiffVisible((v) => !v)}
                   aria-expanded={diffVisible}
-                  className="text-xs text-[--fg-muted] underline underline-offset-2 hover:text-[--fg] transition-colors"
+                  className="text-xs text-(--fg-muted) underline underline-offset-2 hover:text-(--fg) transition-colors"
                 >
                   {diffVisible ? "Hide diff" : "Show diff preview"}
                 </button>
                 {diffVisible && (
-                  <div className="mt-2 border border-[--border] bg-[--bg-subtle] p-3 font-mono text-[11px] space-y-1">
-                    <div className="text-[--fg-muted] text-xs mb-1">Before → After</div>
-                    <div className="line-through text-[--fg-muted] whitespace-pre-wrap">
+                  <div className="mt-2 border border-(--border) bg-(--bg-subtle) p-3 font-mono text-[11px] space-y-1">
+                    <div className="text-(--fg-muted) text-xs mb-1">Before → After</div>
+                    <div className="line-through text-(--fg-muted) whitespace-pre-wrap">
                       {initialYaml}
                     </div>
                     <div className="text-green-700 dark:text-green-400 whitespace-pre-wrap">
@@ -178,11 +178,11 @@ function EditDrawer({ open, onClose, rule, allRules }: EditDrawerProps) {
           </div>
 
           {/* Footer */}
-          <div className="px-6 py-4 border-t border-[--border] flex justify-end gap-2">
+          <div className="px-6 py-4 border-t border-(--border) flex justify-end gap-2">
             <Dialog.Close asChild>
               <button
                 type="button"
-                className="border border-[--border] px-4 py-1.5 text-xs font-medium text-[--fg-muted] hover:text-[--fg] hover:bg-[--bg-subtle] transition-colors"
+                className="border border-(--border) px-4 py-1.5 text-xs font-medium text-(--fg-muted) hover:text-(--fg) hover:bg-(--bg-subtle) transition-colors"
               >
                 Cancel
               </button>
@@ -194,8 +194,8 @@ function EditDrawer({ open, onClose, rule, allRules }: EditDrawerProps) {
               className={cn(
                 "px-4 py-1.5 text-xs font-medium text-white transition-colors",
                 changed && !submitMutation.isPending
-                  ? "bg-[--fg] hover:opacity-80"
-                  : "bg-[--fg-muted] opacity-50 cursor-not-allowed"
+                  ? "bg-(--fg) hover:opacity-80"
+                  : "bg-(--fg-muted) opacity-50 cursor-not-allowed"
               )}
               data-testid="submit-policy"
             >
@@ -229,17 +229,17 @@ function PolicyPage() {
           }}
           aria-hidden
         />
-        <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-[--fg-muted]">
+        <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-(--fg-muted)">
           POLICY RULES
         </span>
       </div>
       <h2 className="text-2xl font-semibold tracking-tight">Policy</h2>
 
-      {isLoading && <p className="text-[--fg-muted] text-sm">Loading policy…</p>}
+      {isLoading && <p className="text-(--fg-muted) text-sm">Loading policy…</p>}
 
       {!isLoading && rules.length === 0 && (
-        <div className="border border-[--border] bg-[--bg-subtle] p-6 space-y-3 max-w-xl">
-          <p className="text-sm text-[--fg-muted]">
+        <div className="border border-(--border) bg-(--bg-subtle) p-6 space-y-3 max-w-xl">
+          <p className="text-sm text-(--fg-muted)">
             No policy rules loaded. Rules govern which agent writes require your approval before
             they are admitted to your memory graph.
           </p>
@@ -248,7 +248,7 @@ function PolicyPage() {
 
       {!isLoading && rules.length > 0 && (
         <>
-          <p className="text-xs text-[--fg-muted] max-w-xl">
+          <p className="text-xs text-(--fg-muted) max-w-xl">
             Editing a rule proposes a full policy replacement (pending owner approval). Per-rule
             conditional application is not yet wired — all rules apply globally for v0.
           </p>

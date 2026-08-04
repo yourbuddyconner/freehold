@@ -53,7 +53,7 @@ function InboxPage() {
           }}
           aria-hidden
         />
-        <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-[--fg-muted]">
+        <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-(--fg-muted)">
           PENDING PROPOSALS
         </span>
       </div>
@@ -61,17 +61,17 @@ function InboxPage() {
         Inbox{proposals.length > 0 ? ` (${proposals.length})` : ""}
       </h2>
 
-      {isLoading && <p className="text-[--fg-muted] text-sm">Loading proposals…</p>}
+      {isLoading && <p className="text-(--fg-muted) text-sm">Loading proposals…</p>}
 
       {!isLoading && proposals.length === 0 && (
-        <div className="border border-[--border] bg-[--bg-subtle] p-6 space-y-3 max-w-xl">
-          <p className="text-sm text-[--fg-muted]">
+        <div className="border border-(--border) bg-(--bg-subtle) p-6 space-y-3 max-w-xl">
+          <p className="text-sm text-(--fg-muted)">
             No pending proposals. When agents make governed writes — creating entities, proposing
             schema changes — they appear here for your approval.
           </p>
-          <p className="text-sm text-[--fg-muted]">
+          <p className="text-sm text-(--fg-muted)">
             Get started with{" "}
-            <code className="border border-[--border] bg-[--bg-subtle] px-1 py-0.5 font-mono text-[11px]">
+            <code className="border border-(--border) bg-(--bg-subtle) px-1 py-0.5 font-mono text-[11px]">
               freehold mcp setup claude-code
             </code>
           </p>

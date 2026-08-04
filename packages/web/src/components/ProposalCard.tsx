@@ -37,7 +37,7 @@ function AgentMark({ agent }: { agent: string }) {
   return (
     <span
       aria-hidden
-      className="inline-flex h-7 w-7 shrink-0 items-center justify-center bg-[--bg-subtle] border border-[--border] text-[11px] font-bold text-[--fg] font-mono"
+      className="inline-flex h-7 w-7 shrink-0 items-center justify-center bg-(--bg-subtle) border border-(--border) text-[11px] font-bold text-(--fg) font-mono"
     >
       {initials}
     </span>
@@ -86,14 +86,14 @@ function SchemaTypeDefinition({ meta }: { meta: SchemaProposalMeta }) {
   }
 
   return (
-    <div className="border border-[--border] bg-[--bg-subtle] p-3 space-y-2 font-mono text-[11px]">
-      <div className="text-[--fg-muted]">Type definition:</div>
+    <div className="border border-(--border) bg-(--bg-subtle) p-3 space-y-2 font-mono text-[11px]">
+      <div className="text-(--fg-muted)">Type definition:</div>
       <div className="pl-2 space-y-1.5">
-        <div className="text-[--fg]">
+        <div className="text-(--fg)">
           <span className="font-semibold">{meta.name}</span>
           {meta.extends && (
             <>
-              <span className="text-[--fg-muted]"> extends </span>
+              <span className="text-(--fg-muted)"> extends </span>
               <span>{meta.extends}</span>
             </>
           )}
@@ -102,9 +102,9 @@ function SchemaTypeDefinition({ meta }: { meta: SchemaProposalMeta }) {
           <table className="w-full text-[10px] border-collapse ml-2">
             <tbody>
               {Object.entries(attributes).map(([key, value]) => (
-                <tr key={key} className="border-b border-[--border] border-opacity-30">
-                  <td className="py-0.5 pr-2 text-[--fg-muted]">{key}:</td>
-                  <td className="py-0.5 text-[--fg]">
+                <tr key={key} className="border-b border-(--border) border-opacity-30">
+                  <td className="py-0.5 pr-2 text-(--fg-muted)">{key}:</td>
+                  <td className="py-0.5 text-(--fg)">
                     {typeof value === "string" ? value : JSON.stringify(value)}
                   </td>
                 </tr>
@@ -112,7 +112,7 @@ function SchemaTypeDefinition({ meta }: { meta: SchemaProposalMeta }) {
             </tbody>
           </table>
         ) : (
-          <div className="text-[--fg-muted] pl-2">No attributes defined</div>
+          <div className="text-(--fg-muted) pl-2">No attributes defined</div>
         )}
       </div>
     </div>
@@ -132,8 +132,8 @@ export function ProposalCard({
   return (
     <article
       className={cn(
-        "reg-marks relative border p-4 space-y-3 bg-[--bg-subtle]",
-        isSchemaProposal ? "pending-border bg-[#fffbeb] dark:bg-[#1c1408]" : "border-[--border]"
+        "reg-marks relative border p-4 space-y-3 bg-(--bg-subtle)",
+        isSchemaProposal ? "pending-border bg-[#fffbeb] dark:bg-[#1c1408]" : "border-(--border)"
       )}
     >
       {/* Header */}
@@ -141,9 +141,9 @@ export function ProposalCard({
         <AgentMark agent={agent} />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-medium text-[--fg]">{agent}</span>
-            <span className="text-xs text-[--fg-muted]">·</span>
-            <span className="text-xs text-[--fg-muted] italic">{intent}</span>
+            <span className="text-sm font-medium text-(--fg)">{agent}</span>
+            <span className="text-xs text-(--fg-muted)">·</span>
+            <span className="text-xs text-(--fg-muted) italic">{intent}</span>
             {isSchemaProposal && (
               <span
                 data-testid="schema-badge"
@@ -157,7 +157,7 @@ export function ProposalCard({
       </div>
 
       {/* Summary */}
-      <p className="text-sm text-[--fg] leading-relaxed">{summary}</p>
+      <p className="text-sm text-(--fg) leading-relaxed">{summary}</p>
 
       {/* Rules */}
       {rules.length > 0 && (
@@ -165,7 +165,7 @@ export function ProposalCard({
           {rules.map((rule) => (
             <span
               key={rule}
-              className="inline-flex items-center border border-[--border] bg-[--bg-subtle] px-1.5 py-0.5 text-[11px] text-[--fg-muted]"
+              className="inline-flex items-center border border-(--border) bg-(--bg-subtle) px-1.5 py-0.5 text-[11px] text-(--fg-muted)"
             >
               {rule}
             </span>
@@ -187,25 +187,25 @@ export function ProposalCard({
             <button
               type="button"
               disabled={isApproving || isRejecting}
-              className="bg-[--fg] text-white font-mono text-[12px] uppercase tracking-wide px-3 py-1.5 disabled:opacity-50 transition-opacity"
+              className="bg-(--fg) text-white font-mono text-[12px] uppercase tracking-wide px-3 py-1.5 disabled:opacity-50 transition-opacity"
             >
               {isApproving ? "Approving…" : "Approve"}
             </button>
           </Dialog.Trigger>
           <Dialog.Portal>
             <Dialog.Overlay className="fixed inset-0 bg-black/40 z-40" />
-            <Dialog.Content className="fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 w-full max-w-sm bg-white dark:bg-neutral-900 border border-[--border] p-6 shadow-none space-y-4">
-              <Dialog.Title className="text-base font-semibold text-[--fg]">
+            <Dialog.Content className="fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 w-full max-w-sm bg-white dark:bg-neutral-900 border border-(--border) p-6 shadow-none space-y-4">
+              <Dialog.Title className="text-base font-semibold text-(--fg)">
                 Approve proposal
               </Dialog.Title>
-              <Dialog.Description className="text-sm text-[--fg-muted]">
+              <Dialog.Description className="text-sm text-(--fg-muted)">
                 This signs a decision record with your key.
               </Dialog.Description>
               <div className="flex gap-2 justify-end">
                 <Dialog.Close asChild>
                   <button
                     type="button"
-                    className="border border-[--border] text-[--fg-muted] font-mono text-[12px] uppercase px-3 py-1.5 hover:text-[--fg] transition-colors"
+                    className="border border-(--border) text-(--fg-muted) font-mono text-[12px] uppercase px-3 py-1.5 hover:text-(--fg) transition-colors"
                   >
                     Cancel
                   </button>
@@ -214,7 +214,7 @@ export function ProposalCard({
                   <button
                     type="button"
                     onClick={onApprove}
-                    className="bg-[--fg] text-white font-mono text-[12px] uppercase tracking-wide px-3 py-1.5 transition-opacity"
+                    className="bg-(--fg) text-white font-mono text-[12px] uppercase tracking-wide px-3 py-1.5 transition-opacity"
                   >
                     Approve
                   </button>
@@ -229,7 +229,7 @@ export function ProposalCard({
           type="button"
           onClick={onReject}
           disabled={isApproving || isRejecting}
-          className="border border-[--border] font-mono text-[12px] uppercase tracking-wide px-3 py-1.5 text-[--fg-muted] hover:text-[--fg] disabled:opacity-50 transition-colors"
+          className="border border-(--border) font-mono text-[12px] uppercase tracking-wide px-3 py-1.5 text-(--fg-muted) hover:text-(--fg) disabled:opacity-50 transition-colors"
         >
           {isRejecting ? "Rejecting…" : "Reject"}
         </button>

@@ -20,20 +20,20 @@ interface RuleCardProps {
 
 export function RuleCard({ rule, onEdit, className }: RuleCardProps) {
   return (
-    <article className={cn("border border-[--border] bg-[--bg-subtle] p-4 space-y-3", className)}>
+    <article className={cn("border border-(--border) bg-(--bg-subtle) p-4 space-y-3", className)}>
       {/* Title row */}
       <div className="flex items-start justify-between gap-2">
         <div>
-          <h3 className="text-sm font-medium text-[--fg]" data-testid="rule-title">
+          <h3 className="text-sm font-medium text-(--fg)" data-testid="rule-title">
             {rule.title}
           </h3>
-          <p className="text-xs text-[--fg-muted] font-mono mt-0.5">{rule.id}</p>
+          <p className="text-xs text-(--fg-muted) font-mono mt-0.5">{rule.id}</p>
         </div>
         {onEdit && (
           <button
             type="button"
             onClick={onEdit}
-            className="shrink-0 border border-[--border] font-mono text-[12px] uppercase px-2.5 py-1 text-[--fg-muted] hover:text-[--fg] transition-colors"
+            className="shrink-0 border border-(--border) font-mono text-[12px] uppercase px-2.5 py-1 text-(--fg-muted) hover:text-(--fg) transition-colors"
             data-testid={`edit-rule-${rule.id}`}
           >
             › Edit
@@ -43,19 +43,19 @@ export function RuleCard({ rule, onEdit, className }: RuleCardProps) {
 
       {/* Selector / require mono block */}
       {(rule.selector || rule.require) && (
-        <div className="border border-[--border] bg-white dark:bg-neutral-900 p-3 font-mono text-[11px] space-y-1">
+        <div className="border border-(--border) bg-white dark:bg-neutral-900 p-3 font-mono text-[11px] space-y-1">
           {rule.selector && (
             <div>
-              <span className="text-[--fg-muted]">selector: </span>
-              <span className="text-[--fg]" data-testid="rule-selector">
+              <span className="text-(--fg-muted)">selector: </span>
+              <span className="text-(--fg)" data-testid="rule-selector">
                 {rule.selector}
               </span>
             </div>
           )}
           {rule.require && (
             <div>
-              <span className="text-[--fg-muted]">require: </span>
-              <span className="text-[--fg]" data-testid="rule-require">
+              <span className="text-(--fg-muted)">require: </span>
+              <span className="text-(--fg)" data-testid="rule-require">
                 {rule.require}
               </span>
             </div>

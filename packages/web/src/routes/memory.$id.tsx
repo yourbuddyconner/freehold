@@ -45,11 +45,11 @@ export function MemoryDetailPage({ entityId }: MemoryDetailPageProps) {
   const entity = data as EntityData | undefined;
 
   if (isLoading) {
-    return <p className="text-sm text-[--fg-muted]">Loading…</p>;
+    return <p className="text-sm text-(--fg-muted)">Loading…</p>;
   }
 
   if (!entity) {
-    return <p className="text-sm text-[--fg-muted]">Entity not found.</p>;
+    return <p className="text-sm text-(--fg-muted)">Entity not found.</p>;
   }
 
   const attributes = entity.attributes ?? {};
@@ -86,13 +86,13 @@ export function MemoryDetailPage({ entityId }: MemoryDetailPageProps) {
             }}
             aria-hidden
           />
-          <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-[--fg-muted]">
+          <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-(--fg-muted)">
             ENTITY DETAIL
           </span>
         </div>
         <h2 className="text-2xl font-semibold tracking-tight mb-1">Entity detail</h2>
         {entity.type && (
-          <span className="inline-flex items-center border border-[--border] px-1.5 py-0.5 text-[11px] font-mono text-[--fg-muted]">
+          <span className="inline-flex items-center border border-(--border) px-1.5 py-0.5 text-[11px] font-mono text-(--fg-muted)">
             {entity.type}
           </span>
         )}
@@ -101,23 +101,23 @@ export function MemoryDetailPage({ entityId }: MemoryDetailPageProps) {
       {/* Attributes */}
       {Object.keys(attributes).length > 0 && (
         <section>
-          <h3 className="text-sm font-semibold text-[--fg] mb-2">Attributes</h3>
+          <h3 className="text-sm font-semibold text-(--fg) mb-2">Attributes</h3>
           <table className="w-full text-xs border-collapse">
             <thead>
-              <tr className="border-b border-[--border]">
-                <th className="text-left py-1 pr-4 font-mono text-[10px] uppercase tracking-[0.08em] text-[--fg-muted] font-normal w-1/3">
+              <tr className="border-b border-(--border)">
+                <th className="text-left py-1 pr-4 font-mono text-[10px] uppercase tracking-[0.08em] text-(--fg-muted) font-normal w-1/3">
                   Key
                 </th>
-                <th className="text-left py-1 font-mono text-[10px] uppercase tracking-[0.08em] text-[--fg-muted] font-normal">
+                <th className="text-left py-1 font-mono text-[10px] uppercase tracking-[0.08em] text-(--fg-muted) font-normal">
                   Value
                 </th>
               </tr>
             </thead>
             <tbody>
               {Object.entries(attributes).map(([key, val]) => (
-                <tr key={key} className="border-b border-[--border]">
-                  <td className="py-1.5 pr-4 font-mono text-[--fg-muted]">{key}</td>
-                  <td className="py-1.5 text-[--fg] font-mono">
+                <tr key={key} className="border-b border-(--border)">
+                  <td className="py-1.5 pr-4 font-mono text-(--fg-muted)">{key}</td>
+                  <td className="py-1.5 text-(--fg) font-mono">
                     {typeof val === "string" ? val : JSON.stringify(val)}
                   </td>
                 </tr>
@@ -130,12 +130,12 @@ export function MemoryDetailPage({ entityId }: MemoryDetailPageProps) {
       {/* Classifications */}
       {classifications.length > 0 && (
         <section>
-          <h3 className="text-sm font-semibold text-[--fg] mb-2">Classifications</h3>
+          <h3 className="text-sm font-semibold text-(--fg) mb-2">Classifications</h3>
           <div className="flex flex-wrap gap-1.5">
             {classifications.map((c) => (
               <span
                 key={c}
-                className="inline-flex items-center border border-[--border] bg-[--bg-subtle] px-1.5 py-0.5 text-[11px] font-mono text-[--fg-muted]"
+                className="inline-flex items-center border border-(--border) bg-(--bg-subtle) px-1.5 py-0.5 text-[11px] font-mono text-(--fg-muted)"
               >
                 {c}
               </span>
@@ -147,13 +147,13 @@ export function MemoryDetailPage({ entityId }: MemoryDetailPageProps) {
       {/* Edges */}
       {allEdges.length > 0 && (
         <section>
-          <h3 className="text-sm font-semibold text-[--fg] mb-2">Edges</h3>
+          <h3 className="text-sm font-semibold text-(--fg) mb-2">Edges</h3>
           <div className="space-y-3">
             {(Object.entries(edgesByType) as [string, typeof allEdges][]).map(
               ([edgeType, edges]) => (
                 <div key={edgeType}>
-                  <p className="text-xs font-medium text-[--fg-muted] mb-1 font-mono">{edgeType}</p>
-                  <ul className="space-y-1 pl-3 border-l border-[--border]">
+                  <p className="text-xs font-medium text-(--fg-muted) mb-1 font-mono">{edgeType}</p>
+                  <ul className="space-y-1 pl-3 border-l border-(--border)">
                     {edges.map((edge) => (
                       <li
                         key={`${edge.direction}-${edge.targetId}`}
@@ -165,7 +165,7 @@ export function MemoryDetailPage({ entityId }: MemoryDetailPageProps) {
                         <Link
                           to="/memory/$id"
                           params={{ id: edge.targetId }}
-                          className="font-mono text-[--fg] hover:underline"
+                          className="font-mono text-(--fg) hover:underline"
                         >
                           {edge.targetId}
                         </Link>
@@ -182,7 +182,7 @@ export function MemoryDetailPage({ entityId }: MemoryDetailPageProps) {
       {/* Revision history */}
       {entity.revisions && entity.revisions.length > 0 && (
         <section>
-          <h3 className="text-sm font-semibold text-[--fg] mb-2">Revision history</h3>
+          <h3 className="text-sm font-semibold text-(--fg) mb-2">Revision history</h3>
           <LineageTrail revisions={entity.revisions} />
         </section>
       )}

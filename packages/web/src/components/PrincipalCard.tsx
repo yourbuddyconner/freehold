@@ -28,19 +28,19 @@ export function PrincipalCard({ principal, onRevoke, className }: PrincipalCardP
       className={cn(
         "border p-4 space-y-2",
         isRevoked
-          ? "border-[--border] opacity-60 bg-[--bg-subtle]"
-          : "border-[--border] bg-[--bg-subtle]",
+          ? "border-(--border) opacity-60 bg-(--bg-subtle)"
+          : "border-(--border) bg-(--bg-subtle)",
         className
       )}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="space-y-0.5">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-[--fg]" data-testid="principal-name">
+            <span className="text-sm font-medium text-(--fg)" data-testid="principal-name">
               {principal.name ?? principal.id}
             </span>
             {principal.kind && (
-              <span className="border border-[--border] px-1.5 py-0.5 text-[10px] font-mono uppercase text-[--fg-muted]">
+              <span className="border border-(--border) px-1.5 py-0.5 text-[10px] font-mono uppercase text-(--fg-muted)">
                 {KIND_LABELS[principal.kind] ?? principal.kind}
               </span>
             )}
@@ -52,7 +52,7 @@ export function PrincipalCard({ principal, onRevoke, className }: PrincipalCardP
           </div>
           {principal.fingerprint && (
             <p
-              className="text-[11px] font-mono text-[--fg-muted]"
+              className="text-[11px] font-mono text-(--fg-muted)"
               data-testid="principal-fingerprint"
             >
               {principal.fingerprint}

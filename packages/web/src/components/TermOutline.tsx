@@ -54,7 +54,7 @@ function TermNode({ term, terms, childrenMap, rulesByTerm, pendingTerms, depth }
   const isPending = pendingTerms.includes(term.name);
 
   return (
-    <div className={cn(depth > 0 && "pl-4 border-l border-[--border] ml-2")}>
+    <div className={cn(depth > 0 && "pl-4 border-l border-(--border) ml-2")}>
       <div
         className={cn(
           "flex flex-wrap items-center gap-1.5 py-1",
@@ -66,7 +66,7 @@ function TermNode({ term, terms, childrenMap, rulesByTerm, pendingTerms, depth }
           <button
             type="button"
             onClick={() => setExpanded((e) => !e)}
-            className="text-[--fg-muted] hover:text-[--fg] text-xs w-3 shrink-0"
+            className="text-(--fg-muted) hover:text-(--fg) text-xs w-3 shrink-0"
             aria-expanded={expanded}
             aria-label={expanded ? "Collapse" : "Expand"}
           >
@@ -79,7 +79,7 @@ function TermNode({ term, terms, childrenMap, rulesByTerm, pendingTerms, depth }
         <span
           className={cn(
             "text-sm font-medium",
-            isPending ? "text-amber-700 dark:text-amber-300" : "text-[--fg]"
+            isPending ? "text-amber-700 dark:text-amber-300" : "text-(--fg)"
           )}
           data-testid={`term-${term.name}`}
         >
@@ -94,7 +94,7 @@ function TermNode({ term, terms, childrenMap, rulesByTerm, pendingTerms, depth }
 
         {/* Multi-parent DAG link-back */}
         {otherParents.length > 0 && (
-          <span className="text-[11px] text-[--fg-muted]">
+          <span className="text-[11px] text-(--fg-muted)">
             also under: {otherParents.join(", ")}
           </span>
         )}
@@ -103,7 +103,7 @@ function TermNode({ term, terms, childrenMap, rulesByTerm, pendingTerms, depth }
         {rules.map((rule) => (
           <span
             key={rule}
-            className="rounded border border-[--border] bg-[--bg-subtle] px-1 py-0.5 text-[10px] text-[--fg-muted] font-mono"
+            className="rounded border border-(--border) bg-(--bg-subtle) px-1 py-0.5 text-[10px] text-(--fg-muted) font-mono"
           >
             {rule}
           </span>
@@ -140,8 +140,8 @@ export function TermOutline({
 
   if (terms.length === 0) {
     return (
-      <div className={cn("rounded-lg border border-[--border] bg-[--bg-subtle] p-6", className)}>
-        <p className="text-sm text-[--fg-muted]">No taxonomy terms defined.</p>
+      <div className={cn("rounded-lg border border-(--border) bg-(--bg-subtle) p-6", className)}>
+        <p className="text-sm text-(--fg-muted)">No taxonomy terms defined.</p>
       </div>
     );
   }

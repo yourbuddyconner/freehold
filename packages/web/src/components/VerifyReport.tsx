@@ -17,7 +17,7 @@ function LevelRow({ label, description, state, degradedItems = [] }: LevelRowPro
         state === "ok" && "border-[var(--color-status-approved)] bg-[#f0fdf4] dark:bg-[#052e16]",
         state === "degraded" &&
           "border-[var(--color-status-pending)] bg-[#fffbeb] dark:bg-[#1c1408]",
-        (state === "pending" || state === "loading") && "border-[--border] bg-[--bg-subtle]"
+        (state === "pending" || state === "loading") && "border-(--border) bg-(--bg-subtle)"
       )}
     >
       <div className="flex items-center gap-3">
@@ -33,7 +33,7 @@ function LevelRow({ label, description, state, degradedItems = [] }: LevelRowPro
         {(state === "pending" || state === "loading") && (
           <Circle
             className={cn(
-              "h-5 w-5 shrink-0 text-[--fg-muted]",
+              "h-5 w-5 shrink-0 text-(--fg-muted)",
               state === "loading" && "animate-pulse"
             )}
             aria-hidden
@@ -45,13 +45,13 @@ function LevelRow({ label, description, state, degradedItems = [] }: LevelRowPro
               "text-sm font-medium",
               state === "ok" && "text-[var(--color-status-approved)]",
               state === "degraded" && "text-[var(--color-status-pending)]",
-              (state === "pending" || state === "loading") && "text-[--fg-muted]"
+              (state === "pending" || state === "loading") && "text-(--fg-muted)"
             )}
             data-testid={`level-${label.toLowerCase()}`}
           >
             {label}
           </p>
-          <p className="text-xs text-[--fg-muted]">{description}</p>
+          <p className="text-xs text-(--fg-muted)">{description}</p>
         </div>
       </div>
 
@@ -59,7 +59,7 @@ function LevelRow({ label, description, state, degradedItems = [] }: LevelRowPro
       {state === "degraded" && degradedItems.length > 0 && (
         <ul className="mt-2 space-y-1 pl-8">
           {degradedItems.map((item) => (
-            <li key={item.id} className="text-xs text-[--fg-muted] flex gap-2">
+            <li key={item.id} className="text-xs text-(--fg-muted) flex gap-2">
               <a
                 href={`/memory/${item.id}`}
                 className="font-mono text-[var(--color-status-pending)] hover:underline shrink-0"

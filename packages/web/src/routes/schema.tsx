@@ -40,14 +40,14 @@ function SchemaPage() {
           }}
           aria-hidden
         />
-        <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-[--fg-muted]">
+        <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-(--fg-muted)">
           SCHEMA VIEWER
         </span>
       </div>
       <h2 className="text-2xl font-semibold tracking-tight">Schema</h2>
 
       {/* Tab bar */}
-      <div className="flex gap-1 border-b border-[--border]">
+      <div className="flex gap-1 border-b border-(--border)">
         {(["types", "edges", "taxonomy"] as const).map((t) => (
           <button
             key={t}
@@ -58,8 +58,8 @@ function SchemaPage() {
             className={cn(
               "px-4 py-2 border-b-2 -mb-px font-mono text-[11px] uppercase tracking-[0.06em] transition-colors",
               tab === t
-                ? "border-[var(--color-accent)] text-[--fg] font-medium"
-                : "border-transparent text-[--fg-muted] hover:text-[--fg]"
+                ? "border-[var(--color-accent)] text-(--fg) font-medium"
+                : "border-transparent text-(--fg-muted) hover:text-(--fg)"
             )}
           >
             {t}
@@ -72,7 +72,7 @@ function SchemaPage() {
         ))}
       </div>
 
-      {isLoading && <p className="text-[--fg-muted] text-sm">Loading schema…</p>}
+      {isLoading && <p className="text-(--fg-muted) text-sm">Loading schema…</p>}
 
       {!isLoading && tab === "types" && (
         <TypesTab
@@ -132,10 +132,10 @@ function normalizeAttributes(raw: Record<string, unknown> | undefined) {
 function TypesTab({ entityTypes, pendingTypeNames, pendingProposals }: TypesTabProps) {
   if (entityTypes.length === 0 && pendingTypeNames.size === 0) {
     return (
-      <div className="border border-[--border] bg-[--bg-subtle] p-6 space-y-3 max-w-xl">
-        <p className="text-sm text-[--fg-muted]">
+      <div className="border border-(--border) bg-(--bg-subtle) p-6 space-y-3 max-w-xl">
+        <p className="text-sm text-(--fg-muted)">
           No entity types yet. Agents can propose new types via{" "}
-          <code className="border border-[--border] bg-[--bg-subtle] px-1 py-0.5 font-mono text-[11px]">
+          <code className="border border-(--border) bg-(--bg-subtle) px-1 py-0.5 font-mono text-[11px]">
             propose_ontology_change
           </code>
           ; proposals appear in the Inbox for your approval.

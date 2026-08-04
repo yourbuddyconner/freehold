@@ -45,7 +45,7 @@ export const DialogContent = forwardRef<ElementRef<typeof RDialog.Content>, Dial
           ref={ref}
           className={cn(
             "fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2",
-            "bg-[--bg] border border-[--border] rounded-lg shadow-xl",
+            "bg-(--bg) border border-(--border) rounded-lg shadow-xl",
             "p-5 grid gap-4",
             "focus:outline-none",
             className
@@ -71,7 +71,7 @@ export const DialogContent = forwardRef<ElementRef<typeof RDialog.Content>, Dial
             <RDialog.Close
               aria-label="Close"
               className={cn(
-                "absolute right-3 top-3 rounded-sm p-1 text-muted hover:text-[--fg]",
+                "absolute right-3 top-3 rounded-sm p-1 text-muted hover:text-(--fg)",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
               )}
             >

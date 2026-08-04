@@ -67,15 +67,15 @@ function ApiTokenSection() {
 
   return (
     <section className="space-y-3">
-      <h3 className="text-sm font-semibold text-[--fg]">API bearer token</h3>
-      <p className="text-xs text-[--fg-muted]">
+      <h3 className="text-sm font-semibold text-(--fg)">API bearer token</h3>
+      <p className="text-xs text-(--fg-muted)">
         Used to authenticate API and MCP requests to Freehold.{" "}
         <strong className="text-amber-700 dark:text-amber-400">Keep this secret.</strong>
       </p>
       {token ? (
         <div className="relative">
           <code
-            className="block border border-[--border] bg-[--bg-subtle] px-3 py-2 font-mono text-xs text-[--fg] overflow-auto break-all pr-16"
+            className="block border border-(--border) bg-(--bg-subtle) px-3 py-2 font-mono text-xs text-(--fg) overflow-auto break-all pr-16"
             data-testid="api-token"
           >
             {token}
@@ -84,7 +84,7 @@ function ApiTokenSection() {
             type="button"
             onClick={handleCopy}
             aria-label="Copy API token"
-            className="absolute top-1.5 right-2 flex items-center gap-1 border border-[--border] bg-white dark:bg-neutral-900 px-2 py-1 text-[10px] text-[--fg-muted] hover:text-[--fg] transition-colors"
+            className="absolute top-1.5 right-2 flex items-center gap-1 border border-(--border) bg-white dark:bg-neutral-900 px-2 py-1 text-[10px] text-(--fg-muted) hover:text-(--fg) transition-colors"
           >
             {copied ? (
               <Check className="h-3 w-3 text-green-600" aria-hidden />
@@ -95,7 +95,7 @@ function ApiTokenSection() {
           </button>
         </div>
       ) : (
-        <p className="text-xs text-[--fg-muted] italic">
+        <p className="text-xs text-(--fg-muted) italic">
           Token not available — open this page from Freehold (not the Vite dev server without a
           running daemon).
         </p>
@@ -113,32 +113,32 @@ function EmbedderSection() {
 
   return (
     <section className="space-y-3">
-      <h3 className="text-sm font-semibold text-[--fg]">Embedder configuration</h3>
-      {isLoading && <p className="text-xs text-[--fg-muted]">Loading…</p>}
+      <h3 className="text-sm font-semibold text-(--fg)">Embedder configuration</h3>
+      {isLoading && <p className="text-xs text-(--fg-muted)">Loading…</p>}
       {data && (
-        <dl className="border border-[--border] bg-[--bg-subtle] p-3 space-y-2 text-xs">
+        <dl className="border border-(--border) bg-(--bg-subtle) p-3 space-y-2 text-xs">
           <div className="flex gap-4">
-            <dt className="text-[--fg-muted] w-28 shrink-0">Backend</dt>
-            <dd className="font-mono text-[--fg]" data-testid="embedder-backend">
+            <dt className="text-(--fg-muted) w-28 shrink-0">Backend</dt>
+            <dd className="font-mono text-(--fg)" data-testid="embedder-backend">
               {data.embedder}
             </dd>
           </div>
           {data.defaultAgent != null && (
             <div className="flex gap-4">
-              <dt className="text-[--fg-muted] w-28 shrink-0">Default agent</dt>
-              <dd className="font-mono text-[--fg]" data-testid="embedder-default-agent">
+              <dt className="text-(--fg-muted) w-28 shrink-0">Default agent</dt>
+              <dd className="font-mono text-(--fg)" data-testid="embedder-default-agent">
                 {data.defaultAgent}
               </dd>
             </div>
           )}
           <div className="flex gap-4">
-            <dt className="text-[--fg-muted] w-28 shrink-0">Port</dt>
-            <dd className="font-mono text-[--fg]">{data.port}</dd>
+            <dt className="text-(--fg-muted) w-28 shrink-0">Port</dt>
+            <dd className="font-mono text-(--fg)">{data.port}</dd>
           </div>
         </dl>
       )}
       {!isLoading && !data && (
-        <p className="text-xs text-[--fg-muted] italic">
+        <p className="text-xs text-(--fg-muted) italic">
           Could not load session config. Is the daemon running?
         </p>
       )}
@@ -188,8 +188,8 @@ function RegisterAgentSection() {
 
   return (
     <section className="space-y-3">
-      <h3 className="text-sm font-semibold text-[--fg]">Register agent</h3>
-      <p className="text-xs text-[--fg-muted]">
+      <h3 className="text-sm font-semibold text-(--fg)">Register agent</h3>
+      <p className="text-xs text-(--fg-muted)">
         Register a new agent to get an MCP config snippet you can paste into your AI tool.
       </p>
 
@@ -200,7 +200,7 @@ function RegisterAgentSection() {
           </p>
           <div className="relative">
             <pre
-              className="border border-[--border] bg-[--bg-subtle] p-3 font-mono text-xs text-[--fg] overflow-auto"
+              className="border border-(--border) bg-(--bg-subtle) p-3 font-mono text-xs text-(--fg) overflow-auto"
               data-testid="mcp-snippet"
             >
               {snippet}
@@ -209,7 +209,7 @@ function RegisterAgentSection() {
               type="button"
               onClick={() => handleCopy(snippet)}
               aria-label="Copy MCP snippet"
-              className="absolute top-2 right-2 flex items-center gap-1 border border-[--border] bg-white dark:bg-neutral-900 px-2 py-1 text-[10px] text-[--fg-muted] hover:text-[--fg] transition-colors"
+              className="absolute top-2 right-2 flex items-center gap-1 border border-(--border) bg-white dark:bg-neutral-900 px-2 py-1 text-[10px] text-(--fg-muted) hover:text-(--fg) transition-colors"
             >
               {copied ? (
                 <Check className="h-3 w-3 text-green-600" aria-hidden />
@@ -222,7 +222,7 @@ function RegisterAgentSection() {
           <button
             type="button"
             onClick={() => setResult(null)}
-            className="text-xs text-[--fg-muted] underline underline-offset-2 hover:text-[--fg] transition-colors"
+            className="text-xs text-(--fg-muted) underline underline-offset-2 hover:text-(--fg) transition-colors"
           >
             Register another
           </button>
@@ -234,7 +234,7 @@ function RegisterAgentSection() {
             value={agentName}
             onChange={(e) => setAgentName(e.target.value)}
             placeholder="Agent name (e.g. claude-code)"
-            className="flex-1 border border-[--border] bg-white dark:bg-neutral-900 px-3 py-1.5 text-xs text-[--fg] placeholder:text-[--fg-muted] focus:outline-none focus:ring-2 focus:ring-[--fg]/20"
+            className="flex-1 border border-(--border) bg-white dark:bg-neutral-900 px-3 py-1.5 text-xs text-(--fg) placeholder:text-(--fg-muted) focus:outline-none focus:ring-2 focus:ring-(--fg)/20"
             data-testid="agent-name-input"
             onKeyDown={(e) => {
               if (e.key === "Enter" && agentName.trim()) registerMutation.mutate();
@@ -244,7 +244,7 @@ function RegisterAgentSection() {
             type="button"
             onClick={() => registerMutation.mutate()}
             disabled={!agentName.trim() || registerMutation.isPending}
-            className="bg-[--fg] text-white font-mono text-[12px] uppercase tracking-wide px-3 py-1.5 disabled:opacity-50 transition-opacity"
+            className="bg-(--fg) text-white font-mono text-[12px] uppercase tracking-wide px-3 py-1.5 disabled:opacity-50 transition-opacity"
             data-testid="register-agent-btn"
           >
             {registerMutation.isPending ? "Registering…" : "Register"}
@@ -298,8 +298,8 @@ function OntologyInstallSection() {
 
   return (
     <section className="space-y-3">
-      <h3 className="text-sm font-semibold text-[--fg]">Install ontology package</h3>
-      <p className="text-xs text-[--fg-muted]">
+      <h3 className="text-sm font-semibold text-(--fg)">Install ontology package</h3>
+      <p className="text-xs text-(--fg-muted)">
         Paste a Freehold ontology YAML to install. The package contents will be previewed before
         confirming.
       </p>
@@ -310,7 +310,7 @@ function OntologyInstallSection() {
         rows={6}
         placeholder="# Paste ontology YAML here…"
         spellCheck={false}
-        className="w-full border border-[--border] bg-white dark:bg-neutral-900 p-3 font-mono text-xs text-[--fg] placeholder:text-[--fg-muted] resize-y focus:outline-none focus:ring-2 focus:ring-[--fg]/20"
+        className="w-full border border-(--border) bg-white dark:bg-neutral-900 p-3 font-mono text-xs text-(--fg) placeholder:text-(--fg-muted) resize-y focus:outline-none focus:ring-2 focus:ring-(--fg)/20"
         data-testid="ontology-yaml"
       />
 
@@ -318,15 +318,15 @@ function OntologyInstallSection() {
         type="button"
         onClick={() => previewMutation.mutate()}
         disabled={!docsYaml.trim() || previewMutation.isPending}
-        className="border border-[--border] px-3 py-1.5 text-xs font-medium text-[--fg-muted] hover:text-[--fg] hover:bg-[--bg-subtle] disabled:opacity-50 transition-colors"
+        className="border border-(--border) px-3 py-1.5 text-xs font-medium text-(--fg-muted) hover:text-(--fg) hover:bg-(--bg-subtle) disabled:opacity-50 transition-colors"
       >
         Preview
       </button>
 
       {confirmOpen && preview && (
-        <div className="border border-[--border] bg-[--bg-subtle] p-4 space-y-3">
-          <p className="text-xs font-medium text-[--fg]">Schema preview</p>
-          <p className="text-xs text-[--fg-muted]">
+        <div className="border border-(--border) bg-(--bg-subtle) p-4 space-y-3">
+          <p className="text-xs font-medium text-(--fg)">Schema preview</p>
+          <p className="text-xs text-(--fg-muted)">
             No preview available without a server round-trip. Proceed to install?
           </p>
           <div className="flex gap-2">
@@ -334,7 +334,7 @@ function OntologyInstallSection() {
               type="button"
               onClick={() => installMutation.mutate()}
               disabled={installMutation.isPending}
-              className="bg-[--fg] text-white font-mono text-[12px] uppercase tracking-wide px-3 py-1.5 disabled:opacity-50 transition-opacity"
+              className="bg-(--fg) text-white font-mono text-[12px] uppercase tracking-wide px-3 py-1.5 disabled:opacity-50 transition-opacity"
               data-testid="confirm-install"
             >
               {installMutation.isPending ? "Installing…" : "Install"}
@@ -342,7 +342,7 @@ function OntologyInstallSection() {
             <button
               type="button"
               onClick={() => setConfirmOpen(false)}
-              className="border border-[--border] px-3 py-1.5 text-xs font-medium text-[--fg-muted] hover:text-[--fg] transition-colors"
+              className="border border-(--border) px-3 py-1.5 text-xs font-medium text-(--fg-muted) hover:text-(--fg) transition-colors"
             >
               Cancel
             </button>
@@ -383,7 +383,7 @@ function ThemeSection() {
 
   return (
     <section className="space-y-3">
-      <h3 className="text-sm font-semibold text-[--fg]">Appearance</h3>
+      <h3 className="text-sm font-semibold text-(--fg)">Appearance</h3>
       <div className="flex gap-2">
         {THEME_OPTIONS.map(({ value, label }) => (
           <button
@@ -394,8 +394,8 @@ function ThemeSection() {
             className={cn(
               "border px-3 py-1.5 text-xs font-medium transition-colors",
               current === value
-                ? "border-[--fg] text-[--fg] bg-[--border]"
-                : "border-[--border] text-[--fg-muted] hover:text-[--fg] hover:bg-[--bg-subtle]"
+                ? "border-(--fg) text-(--fg) bg-(--border)"
+                : "border-(--border) text-(--fg-muted) hover:text-(--fg) hover:bg-(--bg-subtle)"
             )}
             data-testid={`theme-${value}`}
           >
@@ -454,7 +454,7 @@ function SettingsPage() {
           }}
           aria-hidden
         />
-        <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-[--fg-muted]">
+        <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-(--fg-muted)">
           SETTINGS
         </span>
       </div>
@@ -462,12 +462,12 @@ function SettingsPage() {
 
       {/* Principals */}
       <section className="space-y-3">
-        <h3 className="text-sm font-semibold text-[--fg]">Principals</h3>
+        <h3 className="text-sm font-semibold text-(--fg)">Principals</h3>
 
-        {isLoading && <p className="text-xs text-[--fg-muted]">Loading principals…</p>}
+        {isLoading && <p className="text-xs text-(--fg-muted)">Loading principals…</p>}
 
         {!isLoading && principals.length === 0 && (
-          <p className="text-xs text-[--fg-muted]">No principals registered.</p>
+          <p className="text-xs text-(--fg-muted)">No principals registered.</p>
         )}
 
         {!isLoading && principals.length > 0 && (
@@ -502,18 +502,18 @@ function SettingsPage() {
       >
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 bg-black/40 z-40" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 w-full max-w-sm bg-white dark:bg-neutral-900 border border-[--border] p-6 shadow-xl space-y-4">
-            <Dialog.Title className="text-base font-semibold text-[--fg]">
+          <Dialog.Content className="fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 w-full max-w-sm bg-white dark:bg-neutral-900 border border-(--border) p-6 shadow-xl space-y-4">
+            <Dialog.Title className="text-base font-semibold text-(--fg)">
               Revoke principal
             </Dialog.Title>
-            <Dialog.Description className="text-sm text-[--fg-muted]">
+            <Dialog.Description className="text-sm text-(--fg-muted)">
               Revoking is a governed change — it creates a proposal you approve in the Inbox.
             </Dialog.Description>
             <div className="flex gap-2 justify-end">
               <Dialog.Close asChild>
                 <button
                   type="button"
-                  className="border border-[--border] px-3 py-1.5 text-xs font-medium text-[--fg] hover:bg-[--bg-subtle] transition-colors"
+                  className="border border-(--border) px-3 py-1.5 text-xs font-medium text-(--fg) hover:bg-(--bg-subtle) transition-colors"
                 >
                   Cancel
                 </button>
@@ -531,23 +531,23 @@ function SettingsPage() {
         </Dialog.Portal>
       </Dialog.Root>
 
-      <div className="border-t border-[--border]" />
+      <div className="border-t border-(--border)" />
 
       <ApiTokenSection />
 
-      <div className="border-t border-[--border]" />
+      <div className="border-t border-(--border)" />
 
       <EmbedderSection />
 
-      <div className="border-t border-[--border]" />
+      <div className="border-t border-(--border)" />
 
       <RegisterAgentSection />
 
-      <div className="border-t border-[--border]" />
+      <div className="border-t border-(--border)" />
 
       <OntologyInstallSection />
 
-      <div className="border-t border-[--border]" />
+      <div className="border-t border-(--border)" />
 
       <ThemeSection />
     </div>

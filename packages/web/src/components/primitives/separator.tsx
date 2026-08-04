@@ -12,7 +12,7 @@ export const Separator = forwardRef<
       orientation={orientation}
       decorative={decorative}
       className={cn(
-        "bg-[--border]",
+        "bg-(--border)",
         orientation === "horizontal" ? "h-px w-full" : "h-full w-px",
         className
       )}

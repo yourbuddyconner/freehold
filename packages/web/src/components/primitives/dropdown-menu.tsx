@@ -11,8 +11,8 @@ export const DropdownMenuSub = RDropdown.Sub;
 export const DropdownMenuRadioGroup = RDropdown.RadioGroup;
 
 const MENU_BASE =
-  "z-50 min-w-[10rem] overflow-hidden rounded-md border border-[--border] " +
-  "bg-[--bg] p-1 shadow-lg text-sm " +
+  "z-50 min-w-[10rem] overflow-hidden rounded-md border border-(--border) " +
+  "bg-(--bg) p-1 shadow-lg text-sm " +
   "data-[state=open]:animate-in data-[state=closed]:animate-out " +
   "data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0";
 
@@ -80,7 +80,7 @@ export const DropdownMenuSeparator = forwardRef<
   return (
     <RDropdown.Separator
       ref={ref}
-      className={cn("-mx-1 my-1 h-px bg-[--border]", className)}
+      className={cn("-mx-1 my-1 h-px bg-(--border)", className)}
       {...rest}
     />
   );

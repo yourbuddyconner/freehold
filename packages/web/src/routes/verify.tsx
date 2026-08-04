@@ -56,25 +56,25 @@ function ChangesetTimeline({ entries }: { entries: ChangesetEntry[] }) {
           }}
           aria-hidden
         />
-        <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-[--fg-muted]">
+        <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-(--fg-muted)">
           CHANGESET TIMELINE
         </span>
       </div>
-      <h3 className="text-sm font-semibold tracking-tight text-[--fg] mb-3">Changeset timeline</h3>
-      <div className="border border-[--border] overflow-hidden">
+      <h3 className="text-sm font-semibold tracking-tight text-(--fg) mb-3">Changeset timeline</h3>
+      <div className="border border-(--border) overflow-hidden">
         <table className="w-full text-xs border-collapse">
-          <thead className="bg-[--bg-subtle]">
-            <tr className="border-b border-[--border]">
-              <th className="text-left px-3 py-2 font-mono text-[10px] uppercase tracking-[0.08em] text-[--fg-muted] font-normal">
+          <thead className="bg-(--bg-subtle)">
+            <tr className="border-b border-(--border)">
+              <th className="text-left px-3 py-2 font-mono text-[10px] uppercase tracking-[0.08em] text-(--fg-muted) font-normal">
                 Hash
               </th>
-              <th className="text-left px-3 py-2 font-mono text-[10px] uppercase tracking-[0.08em] text-[--fg-muted] font-normal">
+              <th className="text-left px-3 py-2 font-mono text-[10px] uppercase tracking-[0.08em] text-(--fg-muted) font-normal">
                 Author
               </th>
-              <th className="text-left px-3 py-2 font-mono text-[10px] uppercase tracking-[0.08em] text-[--fg-muted] font-normal">
+              <th className="text-left px-3 py-2 font-mono text-[10px] uppercase tracking-[0.08em] text-(--fg-muted) font-normal">
                 Intent
               </th>
-              <th className="text-right px-3 py-2 font-mono text-[10px] uppercase tracking-[0.08em] text-[--fg-muted] font-normal">
+              <th className="text-right px-3 py-2 font-mono text-[10px] uppercase tracking-[0.08em] text-(--fg-muted) font-normal">
                 Ops
               </th>
             </tr>
@@ -82,13 +82,13 @@ function ChangesetTimeline({ entries }: { entries: ChangesetEntry[] }) {
           <tbody>
             {entries.map((entry, i) => (
               // biome-ignore lint/suspicious/noArrayIndexKey: log entries have no stable id
-              <tr key={i} className="border-b border-[--border]/50 hover:bg-[--bg-subtle]">
-                <td className="px-3 py-2 font-mono text-[--fg-muted]">
+              <tr key={i} className="border-b border-(--border)/50 hover:bg-(--bg-subtle)">
+                <td className="px-3 py-2 font-mono text-(--fg-muted)">
                   {entry.hash ? `${entry.hash.slice(0, 12)}…` : "—"}
                 </td>
-                <td className="px-3 py-2 text-[--fg]">{entry.author ?? "—"}</td>
-                <td className="px-3 py-2 text-[--fg-muted] italic">{entry.intent ?? "—"}</td>
-                <td className="px-3 py-2 text-right text-[--fg-muted]">{entry.ops ?? "—"}</td>
+                <td className="px-3 py-2 text-(--fg)">{entry.author ?? "—"}</td>
+                <td className="px-3 py-2 text-(--fg-muted) italic">{entry.intent ?? "—"}</td>
+                <td className="px-3 py-2 text-right text-(--fg-muted)">{entry.ops ?? "—"}</td>
               </tr>
             ))}
           </tbody>
@@ -129,7 +129,7 @@ function VerifyPage() {
           }}
           aria-hidden
         />
-        <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-[--fg-muted]">
+        <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-(--fg-muted)">
           VERIFICATION
         </span>
       </div>
@@ -139,7 +139,7 @@ function VerifyPage() {
           type="button"
           onClick={() => verifyMutation.mutate()}
           disabled={verifyMutation.isPending}
-          className="bg-[--fg] px-4 py-1.5 text-xs font-mono uppercase tracking-wide font-medium text-white hover:opacity-80 disabled:opacity-50 transition-opacity"
+          className="bg-(--fg) px-4 py-1.5 text-xs font-mono uppercase tracking-wide font-medium text-white hover:opacity-80 disabled:opacity-50 transition-opacity"
           data-testid="verify-run"
         >
           {verifyMutation.isPending ? "Running…" : "Run verification"}
@@ -147,7 +147,7 @@ function VerifyPage() {
       </div>
 
       {!report && !verifyMutation.isPending && (
-        <p className="text-sm text-[--fg-muted]">
+        <p className="text-sm text-(--fg-muted)">
           Click "Run verification" to prove the integrity, authorship, and governance of your memory
           graph.
         </p>
@@ -158,9 +158,9 @@ function VerifyPage() {
           {["Integrity", "Authorship", "Governance"].map((level) => (
             <div
               key={level}
-              className="border border-[--border] bg-[--bg-subtle] p-4 animate-pulse"
+              className="border border-(--border) bg-(--bg-subtle) p-4 animate-pulse"
             >
-              <p className="text-sm text-[--fg-muted]">{level}…</p>
+              <p className="text-sm text-(--fg-muted)">{level}…</p>
             </div>
           ))}
         </div>

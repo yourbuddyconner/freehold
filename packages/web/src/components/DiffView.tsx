@@ -28,20 +28,20 @@ export function DiffView({ diff, className }: DiffViewProps) {
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
-        className="text-[--fg-muted] hover:text-[--fg] underline underline-offset-2 transition-colors"
+        className="text-(--fg-muted) hover:text-(--fg) underline underline-offset-2 transition-colors"
       >
         {open ? "Hide diff" : "Show diff"}
       </button>
       {open && (
-        <div className="mt-2 border border-[--border] bg-[--bg-subtle] p-3 space-y-2 font-mono text-[11px]">
+        <div className="mt-2 border border-(--border) bg-(--bg-subtle) p-3 space-y-2 font-mono text-[11px]">
           {diff.map((entry) => {
             const isAdded = entry.after !== undefined && entry.before === undefined;
 
             return (
               <div key={entry.key} className="space-y-0.5">
-                <span className="text-[--fg-muted]">{entry.key}:</span>
+                <span className="text-(--fg-muted)">{entry.key}:</span>
                 {entry.before !== undefined && (
-                  <div className="pl-2 line-through text-[--fg-muted]">
+                  <div className="pl-2 line-through text-(--fg-muted)">
                     {stringify(entry.before)}
                   </div>
                 )}

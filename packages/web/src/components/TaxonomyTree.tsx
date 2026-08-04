@@ -31,14 +31,14 @@ export function TaxonomyTree({ terms, selected, onSelect }: TaxonomyTreeProps) {
           className={cn(
             "w-full text-left rounded px-2 py-1 text-xs transition-colors",
             isSelected
-              ? "bg-[--border] text-[--fg] font-medium"
-              : "text-[--fg-muted] hover:text-[--fg] hover:bg-[--bg-subtle]"
+              ? "bg-(--border) text-(--fg) font-medium"
+              : "text-(--fg-muted) hover:text-(--fg) hover:bg-(--bg-subtle)"
           )}
         >
           {term.name}
         </button>
         {kids.length > 0 && (
-          <div className="pl-3 border-l border-[--border] ml-2 mt-0.5 space-y-0.5">
+          <div className="pl-3 border-l border-(--border) ml-2 mt-0.5 space-y-0.5">
             {kids.map((kid) => (
               <TermChip key={kid.name} term={kid} />
             ))}
@@ -55,7 +55,7 @@ export function TaxonomyTree({ terms, selected, onSelect }: TaxonomyTreeProps) {
           type="button"
           onClick={() => setCollapsed(false)}
           aria-label="Expand taxonomy"
-          className="text-[--fg-muted] hover:text-[--fg] transition-colors"
+          className="text-(--fg-muted) hover:text-(--fg) transition-colors"
         >
           <ChevronRight className="h-4 w-4" aria-hidden />
         </button>
@@ -64,16 +64,16 @@ export function TaxonomyTree({ terms, selected, onSelect }: TaxonomyTreeProps) {
   }
 
   return (
-    <aside className="w-44 shrink-0 border-r border-[--border] pr-2 space-y-1">
+    <aside className="w-44 shrink-0 border-r border-(--border) pr-2 space-y-1">
       <div className="flex items-center justify-between mb-2">
-        <h3 className="text-xs font-semibold text-[--fg-muted] uppercase tracking-wide">
+        <h3 className="text-xs font-semibold text-(--fg-muted) uppercase tracking-wide">
           Taxonomy
         </h3>
         <button
           type="button"
           onClick={() => setCollapsed(true)}
           aria-label="Collapse taxonomy"
-          className="text-[--fg-muted] hover:text-[--fg] transition-colors"
+          className="text-(--fg-muted) hover:text-(--fg) transition-colors"
         >
           <ChevronLeft className="h-4 w-4" aria-hidden />
         </button>
@@ -82,7 +82,7 @@ export function TaxonomyTree({ terms, selected, onSelect }: TaxonomyTreeProps) {
         {roots.map((term) => (
           <TermChip key={term.name} term={term} />
         ))}
-        {terms.length === 0 && <p className="text-xs text-[--fg-muted] italic">No terms</p>}
+        {terms.length === 0 && <p className="text-xs text-(--fg-muted) italic">No terms</p>}
       </div>
     </aside>
   );

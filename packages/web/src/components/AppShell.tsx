@@ -30,7 +30,7 @@ export function AppShell() {
       {/* Sidebar */}
       <nav
         aria-label="Main navigation"
-        className="w-52 shrink-0 border-r border-[--border] bg-[--bg-subtle] flex flex-col py-4 gap-1"
+        className="w-52 shrink-0 border-r border-(--border) bg-(--bg-subtle) flex flex-col py-4 gap-1"
       >
         <div className="px-4 pb-4">
           <h1 className="text-lg font-semibold tracking-tight font-sans">Freehold</h1>
@@ -41,8 +41,8 @@ export function AppShell() {
             to={to}
             className={cn(
               "flex items-center gap-2.5 mx-2 px-3 py-2 text-sm transition-colors",
-              "text-[--fg-muted] hover:text-[--fg]",
-              "[&.active]:text-[--fg] [&.active]:font-medium [&.active]:border-l-[3px] [&.active]:border-l-[var(--color-accent)] [&.active]:pl-[9px]"
+              "text-(--fg-muted) hover:text-(--fg)",
+              "[&.active]:text-(--fg) [&.active]:font-medium [&.active]:border-l-[3px] [&.active]:border-l-[var(--color-accent)] [&.active]:pl-[9px]"
             )}
             activeProps={{ className: "active" }}
           >

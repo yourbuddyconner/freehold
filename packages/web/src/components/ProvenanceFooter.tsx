@@ -43,17 +43,17 @@ export function ProvenanceFooter({
   return (
     <footer
       className={cn(
-        "flex flex-wrap items-center gap-2 pt-2 mt-2 border-t border-[--border] text-xs text-[--fg-muted]",
+        "flex flex-wrap items-center gap-2 pt-2 mt-2 border-t border-(--border) text-xs text-(--fg-muted)",
         className
       )}
     >
       {/* Author chip */}
-      <span className="inline-flex items-center gap-1 border border-[--border] px-1.5 py-0.5 font-mono text-[10px]">
+      <span className="inline-flex items-center gap-1 border border-(--border) px-1.5 py-0.5 font-mono text-[10px]">
         <span data-testid="provenance-author">{author}</span>
       </span>
 
       {/* Method chip */}
-      <span className="inline-flex items-center gap-1 border border-[--border] px-1.5 py-0.5 font-mono text-[10px]">
+      <span className="inline-flex items-center gap-1 border border-(--border) px-1.5 py-0.5 font-mono text-[10px]">
         <span data-testid="provenance-method">{method}</span>
       </span>
 
@@ -62,7 +62,7 @@ export function ProvenanceFooter({
         {approvalStatus ? (
           <StatusChip status={approvalStatus} href={evidenceHref} label={approvalLabel} />
         ) : (
-          <span className="inline-flex items-center border border-[--border] px-1.5 py-0.5 font-mono text-[10px]">
+          <span className="inline-flex items-center border border-(--border) px-1.5 py-0.5 font-mono text-[10px]">
             {approvalLabel}
           </span>
         )}
