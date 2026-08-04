@@ -121,24 +121,40 @@ function changesetDir(freehold: Freehold): string {
  *
  * Non-UUID node ids (meta/schema nodes) are also included; callers can
  * distinguish them by checking UUID_RE against the key if needed.
+ *
+ * Warnings are collected and returned so callers can surface them rather
+ * than silently dropping changesets. A missing changeset file is always
+ * reported — silent skips during indexing are a data-loss class of bug.
  */
 function collectNodeOps(
   freehold: Freehold,
   log: RawLogEntry[]
-): Map<string, { type: string; author: string; changesetHash: string }> {
+): {
+  nodeMap: Map<string, { type: string; author: string; changesetHash: string }>;
+  warnings: string[];
+} {
   const csDir = changesetDir(freehold);
   const nodeMap = new Map<string, { type: string; author: string; changesetHash: string }>();
+  const warnings: string[] = [];
 
   for (const entry of log) {
     const bareHash = entry.hash.replace("sha256:", "");
     const yamlPath = join(csDir, `${bareHash}.yaml`);
 
-    if (!existsSync(yamlPath)) continue;
+    if (!existsSync(yamlPath)) {
+      warnings.push(
+        `[indexer] changeset file missing for admitted entry ${entry.hash} (intent: "${entry.intent}") — skipping`
+      );
+      continue;
+    }
 
     let yaml: string;
     try {
       yaml = readFileSync(yamlPath, "utf-8");
-    } catch {
+    } catch (err) {
+      warnings.push(
+        `[indexer] failed to read changeset file ${yamlPath}: ${err instanceof Error ? err.message : String(err)} — skipping`
+      );
       continue;
     }
 
@@ -155,7 +171,7 @@ function collectNodeOps(
     }
   }
 
-  return nodeMap;
+  return { nodeMap, warnings };
 }
 
 /**
@@ -185,7 +201,13 @@ export async function syncIndex(freehold: Freehold, embedder: Embedder): Promise
   const newEntries = log.slice(indexedHead);
 
   // Step 4: collect node operations from new changeset files (structural YAML parse)
-  const nodeOps = collectNodeOps(freehold, newEntries);
+  const { nodeMap: nodeOps, warnings } = collectNodeOps(freehold, newEntries);
+
+  // Surface any file-read warnings. A missing changeset during indexing is not
+  // expected in normal operation and indicates a data-integrity issue worth logging.
+  for (const w of warnings) {
+    console.warn(w);
+  }
 
   // Step 5+6: for each node, fetch content via object_get and upsert into objects.
   // Non-UUID node ids (meta schema nodes like "memory/Note@1") are skipped here
@@ -201,7 +223,10 @@ export async function syncIndex(freehold: Freehold, embedder: Embedder): Promise
       const obj = freehold.graph.object_get("node", nodeId) as RawObject | null;
       if (!obj || obj.deleted) continue;
       objContent = obj.content ?? {};
-    } catch {
+    } catch (err) {
+      console.warn(
+        `[indexer] object_get("node", ${nodeId}) threw for changeset ${changesetHash}: ${err instanceof Error ? err.message : String(err)} — skipping node`
+      );
       continue;
     }
 

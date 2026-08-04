@@ -263,12 +263,7 @@ describe("reindex: approved preference row", () => {
     const statement = "prefers quiet workspaces over open-plan offices";
 
     // 1. Propose a preference (held by default under memory policy)
-    const prefResult = await fh.graph.propose_preference(
-      "agent",
-      statement,
-      "soft",
-      undefined
-    );
+    const prefResult = await fh.graph.propose_preference("agent", statement, "soft", undefined);
     expect(prefResult.admission?.Held).toBeDefined();
     const prefHash = prefResult.hash as string;
 
@@ -304,6 +299,75 @@ describe("reindex: approved preference row", () => {
     // contains the query words "quiet" and "workspaces" so it wins both
     // vector (via hashEmbedder similarity) and FTS
     expect(results[0].id).toBe(row.id);
+  });
+});
+
+// ---- Test 6: Regression — alphabetical YAML field order in changeset ----
+//
+// Root cause of the live reindex miss (2026-08-04): the old line-scanner relied
+// on "kind: node" appearing before "id:" in each op block. The WASM YAML
+// serialiser preserves JS object key insertion order, so ops built with
+// attributes before kind produce "attributes → id → kind → …" YAML.
+// The structural js-yaml parser is order-agnostic.
+//
+// This test reproduces the EXACT live delta: an op where JS key order is
+// alphabetical (attributes→id→kind→provenance→type), which was the ordering
+// produced by the real agent tool session that created the live Preference.
+
+describe("reindex: alphabetical YAML field order (live-delta regression)", () => {
+  test("op with attributes-before-kind YAML is indexed after approve → reindex", async () => {
+    const fh = await makeFreehold();
+    const statement = "uses alphabetical op key order — regression guard";
+
+    // Build the op in alphabetical key order (replicates live YAML structure)
+    const nodeId = crypto.randomUUID();
+    const ops = [
+      {
+        create: {
+          attributes: { statement, strength: "soft" },
+          id: nodeId,
+          kind: "node",
+          provenance: {
+            derived_by: "principal:agent",
+            method: "model-assisted",
+            tool: "freehold@0.1",
+          },
+          type: "memory/Preference@1",
+        },
+      },
+    ];
+
+    // 1. Commit via graph.commit() — produces held changeset
+    const raw = (await fh.graph.commit("agent", "Create memory/Preference@1", ops, [], true)) as {
+      Held?: { hash: string };
+    };
+    expect(raw.Held?.hash).toBeDefined();
+    const hash = raw.Held?.hash as string;
+
+    // 2. Approve so the changeset is admitted to the log
+    const result = await approve(fh.graph, "owner", hash);
+    expect(result.status).toBe("admitted");
+
+    // 3. Full reindex (wipes pg and rebuilds from scratch)
+    await reindex(fh as unknown as Freehold, hashEmbedder);
+
+    // 4. The Preference row must exist with correct search_text
+    const { pg } = fh.db;
+    const rows = await pg.query<{ id: string; type: string; search_text: string }>(
+      "SELECT id, type, search_text FROM objects WHERE id = $1",
+      [nodeId]
+    );
+    expect(rows.rows.length).toBe(1);
+    expect(rows.rows[0].search_text).toBe(statement);
+
+    // 5. recall() must surface the preference (was the live-reported failure)
+    const results = await recall(
+      fh as unknown as Freehold,
+      "alphabetical regression",
+      hashEmbedder
+    );
+    const found = results.find((r) => r.id === nodeId);
+    expect(found).toBeDefined();
   });
 });
 
