@@ -91,6 +91,9 @@ const SessionInfo = z
     defaultAgent: z.string().nullable().openapi({ description: "Default MCP agent name, if set" }),
     embedder: z.enum(["transformers", "hash"]).openapi({ description: "Active embedder backend" }),
     port: z.number().openapi({ description: "Freehold's local port" }),
+    owner: z
+      .string()
+      .openapi({ description: "The graph's owner principal; console edits sign as this name" }),
   })
   .openapi("SessionInfo");
 
@@ -138,6 +141,46 @@ const RecallResult = z
     score: z.number(),
   })
   .openapi("RecallResult");
+
+const MemoryIndexEntry = z
+  .object({
+    id: z.string(),
+    type: z.string(),
+    title: z.string().openapi({
+      description: "Display title derived from attributes (title, name, statement, first line)",
+    }),
+    approval: z.string(),
+    author: z.string(),
+    updatedAt: z.string(),
+    terms: z.array(z.string()).openapi({ description: "Taxonomy terms from fold state" }),
+  })
+  .openapi("MemoryIndexEntry");
+
+const GraphNode = z
+  .object({
+    id: z.string(),
+    type: z.string(),
+    title: z.string(),
+    approval: z.string(),
+  })
+  .openapi("GraphNode");
+
+const GraphEdge = z
+  .object({
+    id: z.string(),
+    type: z.string(),
+    from: z.string(),
+    to: z.string(),
+  })
+  .openapi("GraphEdge");
+
+const MemoryGraphView = z
+  .object({
+    nodes: z.array(GraphNode),
+    edges: z.array(GraphEdge),
+    truncated: z.boolean().openapi({ description: "True when the node cap cut the listing short" }),
+  })
+  .openapi("MemoryGraphView");
 
 const VerifyReport = z
   .object({
@@ -341,10 +384,13 @@ function buildRegistry(): OpenAPIRegistry {
     path: "/api/v1/memories",
     summary: "List recent memories",
     description:
-      "Most recently indexed memories, newest first. Same result shape as recall (score is 0). The `status` query param maps to the `approval` field.",
+      "Most recently indexed memories, newest first. Same result shape as recall (score is 0). The `status` query param maps to the `approval` field. With `scope=all`, returns the full workspace index instead — every non-meta node including pending proposals, as MemoryIndexEntry — and the other query params are ignored.",
     security: auth,
     request: {
       query: z.object({
+        scope: z.string().optional().openapi({
+          description: "Set to `all` for the full workspace index (MemoryIndexEntry shape)",
+        }),
         type: z.string().optional(),
         author: z.string().optional(),
         status: z.string().optional(),
@@ -353,9 +399,32 @@ function buildRegistry(): OpenAPIRegistry {
     },
     responses: {
       "200": {
-        description: "Recent memories with provenance",
-        content: { "application/json": { schema: z.object({ results: z.array(RecallResult) }) } },
+        description: "Recent memories with provenance, or the full index with scope=all",
+        content: {
+          "application/json": {
+            schema: z.object({
+              results: z.union([z.array(RecallResult), z.array(MemoryIndexEntry)]),
+            }),
+          },
+        },
       },
+    },
+  });
+
+  // Retrieval — graph export for the workspace canvas
+  registry.registerPath({
+    method: "get",
+    path: "/api/v1/graph",
+    summary: "Memory graph export",
+    description:
+      "All non-meta nodes and the typed edges between saved nodes, for the graph canvas.",
+    security: auth,
+    responses: {
+      "200": {
+        description: "Nodes and edges",
+        content: { "application/json": { schema: MemoryGraphView } },
+      },
+      "401": { description: "Unauthorized" },
     },
   });
 

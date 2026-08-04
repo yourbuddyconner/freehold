@@ -16,5 +16,8 @@ sessionRouter.get("/session", (c) => {
     defaultAgent: config.defaultAgent ?? null,
     embedder: config.embedder,
     port: config.port,
+    // The graph's owner principal — the console signs owner edits as this name.
+    // Graph creation currently hardcodes "owner" (see core/src/graphs.ts).
+    owner: "owner",
   });
 });

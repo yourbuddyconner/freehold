@@ -529,3 +529,4 @@ describe("OpenAPI drift: committed openapi.json must match getOpenApiDoc() outpu
     expect(committedStr).toBe(generatedStr);
   });
 });
+

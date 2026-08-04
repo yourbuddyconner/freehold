@@ -419,11 +419,12 @@ export interface paths {
         };
         /**
          * List recent memories
-         * @description Most recently indexed memories, newest first. Same result shape as recall (score is 0). The `status` query param maps to the `approval` field.
+         * @description Most recently indexed memories, newest first. Same result shape as recall (score is 0). The `status` query param maps to the `approval` field. With `scope=all`, returns the full workspace index instead — every non-meta node including pending proposals, as MemoryIndexEntry — and the other query params are ignored.
          */
         get: {
             parameters: {
                 query?: {
+                    scope?: string;
                     type?: string;
                     author?: string;
                     status?: string;
@@ -435,16 +436,62 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description Recent memories with provenance */
+                /** @description Recent memories with provenance, or the full index with scope=all */
                 200: {
                     headers: {
                         [name: string]: unknown;
                     };
                     content: {
                         "application/json": {
-                            results: components["schemas"]["RecallResult"][];
+                            results: components["schemas"]["RecallResult"][] | components["schemas"]["MemoryIndexEntry"][];
                         };
                     };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/graph": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Memory graph export
+         * @description All non-meta nodes and the typed edges between saved nodes, for the graph canvas.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Nodes and edges */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MemoryGraphView"];
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
                 };
             };
         };
@@ -1364,6 +1411,37 @@ export interface components {
             embedder: "transformers" | "hash";
             /** @description Freehold's local port */
             port: number;
+            /** @description The graph's owner principal; console edits sign as this name */
+            owner: string;
+        };
+        MemoryIndexEntry: {
+            id: string;
+            type: string;
+            /** @description Display title derived from attributes (title, name, statement, first line) */
+            title: string;
+            approval: string;
+            author: string;
+            updatedAt: string;
+            /** @description Taxonomy terms from fold state */
+            terms: string[];
+        };
+        GraphNode: {
+            id: string;
+            type: string;
+            title: string;
+            approval: string;
+        };
+        GraphEdge: {
+            id: string;
+            type: string;
+            from: string;
+            to: string;
+        };
+        MemoryGraphView: {
+            nodes: components["schemas"]["GraphNode"][];
+            edges: components["schemas"]["GraphEdge"][];
+            /** @description True when the node cap cut the listing short */
+            truncated: boolean;
         };
     };
     responses: never;

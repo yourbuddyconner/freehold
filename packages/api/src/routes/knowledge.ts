@@ -82,9 +82,14 @@ knowledgeRouter.patch("/entities/:id", async (c) => {
     }
     return c.json(result);
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Update failed";
+    // allod-wasm rejections are plain strings, not Error instances
+    const message =
+      err instanceof Error ? err.message : typeof err === "string" ? err : String(err);
     if (message.includes("not found")) {
       return apiError(c, 404, ERROR_CODES.NOT_FOUND, message);
+    }
+    if (message.includes("prior-revision mismatch")) {
+      return apiError(c, 409, ERROR_CODES.CONFLICT, message);
     }
     return apiError(c, 400, ERROR_CODES.VALIDATION, message);
   }

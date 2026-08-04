@@ -1,4 +1,11 @@
-import { getEntity, recall, recentMemories, traverse } from "@freehold/core";
+import {
+  getEntity,
+  memoryGraph,
+  memoryIndex,
+  recall,
+  recentMemories,
+  traverse,
+} from "@freehold/core";
 import { Hono } from "hono";
 import { ERROR_CODES, apiError } from "../errors.js";
 import type { AppEnv } from "../types.js";
@@ -26,6 +33,11 @@ retrievalRouter.get("/recall", async (c) => {
 });
 
 retrievalRouter.get("/memories", async (c) => {
+  if (c.req.query("scope") === "all") {
+    const fh = c.get("freehold");
+    const results = await memoryIndex(fh);
+    return c.json({ results });
+  }
   const type = c.req.query("type");
   const author = c.req.query("author");
   const status = c.req.query("status");
@@ -42,6 +54,12 @@ retrievalRouter.get("/memories", async (c) => {
     limit
   );
   return c.json({ results });
+});
+
+retrievalRouter.get("/graph", async (c) => {
+  const fh = c.get("freehold");
+  const view = await memoryGraph(fh);
+  return c.json(view);
 });
 
 retrievalRouter.get("/entities/:id", async (c) => {

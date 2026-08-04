@@ -32,7 +32,10 @@
             "description": "Free-text note content"
           }
         },
-        "required": ["agent", "content"]
+        "required": [
+          "agent",
+          "content"
+        ]
       },
       "CreateEntityBody": {
         "type": "object",
@@ -52,7 +55,11 @@
             "type": "string"
           }
         },
-        "required": ["agent", "type", "attributes"]
+        "required": [
+          "agent",
+          "type",
+          "attributes"
+        ]
       },
       "UpdateEntityBody": {
         "type": "object",
@@ -72,7 +79,11 @@
             "description": "Hash of the changeset being superseded"
           }
         },
-        "required": ["agent", "type", "attributes"]
+        "required": [
+          "agent",
+          "type",
+          "attributes"
+        ]
       },
       "RelateBody": {
         "type": "object",
@@ -97,7 +108,12 @@
             "type": "boolean"
           }
         },
-        "required": ["agent", "from", "to", "edgeType"]
+        "required": [
+          "agent",
+          "from",
+          "to",
+          "edgeType"
+        ]
       },
       "ClassifyBody": {
         "type": "object",
@@ -112,7 +128,11 @@
             "type": "string"
           }
         },
-        "required": ["agent", "nodeId", "term"]
+        "required": [
+          "agent",
+          "nodeId",
+          "term"
+        ]
       },
       "AttachDocumentBody": {
         "type": "object",
@@ -130,7 +150,11 @@
             "type": "string"
           }
         },
-        "required": ["agent", "entityId", "content"]
+        "required": [
+          "agent",
+          "entityId",
+          "content"
+        ]
       },
       "RegisterAgentBody": {
         "type": "object",
@@ -139,7 +163,9 @@
             "type": "string"
           }
         },
-        "required": ["name"]
+        "required": [
+          "name"
+        ]
       },
       "ProposeOntologyBody": {
         "type": "object",
@@ -154,7 +180,11 @@
             "type": "string"
           }
         },
-        "required": ["agent", "packageName", "ontologyYaml"]
+        "required": [
+          "agent",
+          "packageName",
+          "ontologyYaml"
+        ]
       },
       "InstallOntologyBody": {
         "type": "object",
@@ -163,7 +193,9 @@
             "type": "string"
           }
         },
-        "required": ["docsYaml"]
+        "required": [
+          "docsYaml"
+        ]
       },
       "PolicyBody": {
         "type": "object",
@@ -174,7 +206,10 @@
         "properties": {
           "status": {
             "type": "string",
-            "enum": ["saved", "pending"]
+            "enum": [
+              "saved",
+              "pending"
+            ]
           },
           "hash": {
             "type": "string"
@@ -187,7 +222,10 @@
             }
           }
         },
-        "required": ["status", "hash"]
+        "required": [
+          "status",
+          "hash"
+        ]
       },
       "RememberResponse": {
         "allOf": [
@@ -239,14 +277,24 @@
                 "before": {},
                 "after": {}
               },
-              "required": ["key"]
+              "required": [
+                "key"
+              ]
             }
           },
           "isSchemaProposal": {
             "type": "boolean"
           }
         },
-        "required": ["hash", "agent", "intent", "summary", "rules", "diff", "isSchemaProposal"]
+        "required": [
+          "hash",
+          "agent",
+          "intent",
+          "summary",
+          "rules",
+          "diff",
+          "isSchemaProposal"
+        ]
       },
       "RecallResult": {
         "type": "object",
@@ -262,7 +310,10 @@
             "type": "string"
           },
           "method": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Provenance method (model-assisted, manual, etc.) or null for unrecorded"
           },
           "approval": {
@@ -276,7 +327,15 @@
             "type": "number"
           }
         },
-        "required": ["id", "type", "author", "method", "approval", "changeset", "score"]
+        "required": [
+          "id",
+          "type",
+          "author",
+          "method",
+          "approval",
+          "changeset",
+          "score"
+        ]
       },
       "VerifyReport": {
         "type": "object",
@@ -299,11 +358,16 @@
                   "type": "string"
                 }
               },
-              "required": ["id", "reason"]
+              "required": [
+                "id",
+                "reason"
+              ]
             }
           }
         },
-        "required": ["ok"]
+        "required": [
+          "ok"
+        ]
       },
       "SchemaDescription": {
         "type": "object",
@@ -327,7 +391,9 @@
                   "type": "string"
                 }
               },
-              "required": ["name"]
+              "required": [
+                "name"
+              ]
             }
           },
           "edgeTypes": {
@@ -345,7 +411,9 @@
                   "type": "string"
                 }
               },
-              "required": ["name"]
+              "required": [
+                "name"
+              ]
             }
           },
           "terms": {
@@ -360,30 +428,163 @@
                   "type": "string"
                 }
               },
-              "required": ["name"]
+              "required": [
+                "name"
+              ]
             }
           }
         },
-        "required": ["entityTypes", "edgeTypes", "terms"]
+        "required": [
+          "entityTypes",
+          "edgeTypes",
+          "terms"
+        ]
       },
       "SessionInfo": {
         "type": "object",
         "properties": {
           "defaultAgent": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Default MCP agent name, if set"
           },
           "embedder": {
             "type": "string",
-            "enum": ["transformers", "hash"],
+            "enum": [
+              "transformers",
+              "hash"
+            ],
             "description": "Active embedder backend"
           },
           "port": {
             "type": "number",
             "description": "Freehold's local port"
+          },
+          "owner": {
+            "type": "string",
+            "description": "The graph's owner principal; console edits sign as this name"
           }
         },
-        "required": ["defaultAgent", "embedder", "port"]
+        "required": [
+          "defaultAgent",
+          "embedder",
+          "port",
+          "owner"
+        ]
+      },
+      "MemoryIndexEntry": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string",
+            "description": "Display title derived from attributes (title, name, statement, first line)"
+          },
+          "approval": {
+            "type": "string"
+          },
+          "author": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "terms": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Taxonomy terms from fold state"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "title",
+          "approval",
+          "author",
+          "updatedAt",
+          "terms"
+        ]
+      },
+      "GraphNode": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "approval": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "title",
+          "approval"
+        ]
+      },
+      "GraphEdge": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "from",
+          "to"
+        ]
+      },
+      "MemoryGraphView": {
+        "type": "object",
+        "properties": {
+          "nodes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GraphNode"
+            }
+          },
+          "edges": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GraphEdge"
+            }
+          },
+          "truncated": {
+            "type": "boolean",
+            "description": "True when the node cap cut the listing short"
+          }
+        },
+        "required": [
+          "nodes",
+          "edges",
+          "truncated"
+        ]
       }
     },
     "parameters": {}
@@ -402,10 +603,14 @@
                   "properties": {
                     "status": {
                       "type": "string",
-                      "enum": ["ok"]
+                      "enum": [
+                        "ok"
+                      ]
                     }
                   },
-                  "required": ["status"]
+                  "required": [
+                    "status"
+                  ]
                 }
               }
             }
@@ -686,13 +891,22 @@
     "/api/v1/memories": {
       "get": {
         "summary": "List recent memories",
-        "description": "Most recently indexed memories, newest first. Same result shape as recall (score is 0). The `status` query param maps to the `approval` field.",
+        "description": "Most recently indexed memories, newest first. Same result shape as recall (score is 0). The `status` query param maps to the `approval` field. With `scope=all`, returns the full workspace index instead — every non-meta node including pending proposals, as MemoryIndexEntry — and the other query params are ignored.",
         "security": [
           {
             "bearerAuth": []
           }
         ],
         "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Set to `all` for the full workspace index (MemoryIndexEntry shape)"
+            },
+            "required": false,
+            "name": "scope",
+            "in": "query"
+          },
           {
             "schema": {
               "type": "string"
@@ -729,23 +943,61 @@
         ],
         "responses": {
           "200": {
-            "description": "Recent memories with provenance",
+            "description": "Recent memories with provenance, or the full index with scope=all",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
                   "properties": {
                     "results": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/RecallResult"
-                      }
+                      "anyOf": [
+                        {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/RecallResult"
+                          }
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/MemoryIndexEntry"
+                          }
+                        }
+                      ]
                     }
                   },
-                  "required": ["results"]
+                  "required": [
+                    "results"
+                  ]
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/v1/graph": {
+      "get": {
+        "summary": "Memory graph export",
+        "description": "All non-meta nodes and the typed edges between saved nodes, for the graph canvas.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Nodes and edges",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryGraphView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
           }
         }
       }
@@ -810,7 +1062,9 @@
                       }
                     }
                   },
-                  "required": ["results"]
+                  "required": [
+                    "results"
+                  ]
                 }
               }
             }
@@ -852,7 +1106,11 @@
           {
             "schema": {
               "type": "string",
-              "enum": ["out", "in", "both"]
+              "enum": [
+                "out",
+                "in",
+                "both"
+              ]
             },
             "required": false,
             "name": "direction",
@@ -900,7 +1158,9 @@
                       }
                     }
                   },
-                  "required": ["proposals"]
+                  "required": [
+                    "proposals"
+                  ]
                 }
               }
             }

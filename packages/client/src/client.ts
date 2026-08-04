@@ -25,6 +25,10 @@ export type VerifyReport = Schemas["VerifyReport"];
 export type SchemaDescription = Schemas["SchemaDescription"];
 
 export type SessionInfo = Schemas["SessionInfo"];
+export type MemoryIndexEntry = Schemas["MemoryIndexEntry"];
+export type MemoryGraphView = Schemas["MemoryGraphView"];
+export type GraphNode = Schemas["GraphNode"];
+export type GraphEdge = Schemas["GraphEdge"];
 
 export type RememberBody = Schemas["RememberBody"];
 export type CreateEntityBody = Schemas["CreateEntityBody"];
@@ -196,6 +200,18 @@ export class FreeholdClient {
     return this.fetch<{ results: RecallResult[] }>("GET", "/api/v1/memories", {
       query: { type: opts.type, author: opts.author, status: opts.status, limit: opts.limit },
     });
+  }
+
+  /** GET /api/v1/memories?scope=all — full workspace index for the tree */
+  async memoryIndex(): Promise<{ results: MemoryIndexEntry[] }> {
+    return this.fetch<{ results: MemoryIndexEntry[] }>("GET", "/api/v1/memories", {
+      query: { scope: "all" },
+    });
+  }
+
+  /** GET /api/v1/graph — nodes and edges for the graph canvas */
+  async graph(): Promise<MemoryGraphView> {
+    return this.fetch<MemoryGraphView>("GET", "/api/v1/graph");
   }
 
   /** GET /api/v1/recall */
