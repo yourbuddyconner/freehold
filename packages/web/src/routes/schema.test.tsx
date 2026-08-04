@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider, createMemoryHistory, createRouter } from "@tanstack/react-router";
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import type React from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as hooks from "~/lib/hooks";
 import { routeTree } from "~/routes/../routeTree.gen";
@@ -14,117 +15,119 @@ vi.mock("~/lib/hooks", () => ({
   usePolicy: vi.fn(),
   useLog: vi.fn(),
   usePrincipals: vi.fn(),
+  useMemoryIndex: vi.fn(),
+  useMemoryGraph: vi.fn(),
+  useUpdateMemory: vi.fn(),
+  useSession: vi.fn(),
 }));
 
 vi.mock("~/lib/api", () => ({
   apiClient: {
     proposals: vi.fn(),
-    approve: vi.fn().mockResolvedValue({}),
-    reject: vi.fn().mockResolvedValue({}),
-    recall: vi.fn(),
-    getEntity: vi.fn(),
     schema: vi.fn(),
-    getPolicy: vi.fn(),
-    log: vi.fn(),
-    principals: vi.fn(),
-    proposePolicy: vi.fn().mockResolvedValue({}),
-    registerAgent: vi.fn().mockResolvedValue({}),
-    installOntology: vi.fn().mockResolvedValue({}),
-    verify: vi.fn().mockResolvedValue({ ok: true }),
   },
+}));
+
+// React Flow needs real DOM measurement; stub it with clickable node buttons.
+interface FlowStubProps {
+  nodes: Array<{ id: string; data: Record<string, unknown> }>;
+  edges: Array<{ id: string; label?: string }>;
+  onNodeClick?: (e: unknown, node: { id: string }) => void;
+  children?: React.ReactNode;
+}
+vi.mock("@xyflow/react", () => ({
+  ReactFlow: ({ nodes, edges, onNodeClick, children }: FlowStubProps) => (
+    <div data-testid="flow-stub">
+      {nodes.map((n) => (
+        <button type="button" key={n.id} onClick={(e) => onNodeClick?.(e, n)}>
+          {String((n.data as { shortName?: string }).shortName ?? n.id)}
+        </button>
+      ))}
+      <ul>
+        {edges.map((e) => (
+          <li key={e.id} data-testid={`flow-edge-${e.id}`}>
+            {e.label ?? e.id}
+          </li>
+        ))}
+      </ul>
+      {children}
+    </div>
+  ),
+  Background: () => null,
+  Handle: () => null,
+  Position: { Top: "top", Bottom: "bottom" },
 }));
 
 const schemaFixture = {
   entityTypes: [
     {
-      name: "Preference",
-      package: "memory",
-      attributes: {
-        value: { type: "string", required: true },
-        context: { type: "string", required: false },
-      },
+      name: "core/Person",
+      package: "core",
+      attributes: { name: { type: "string", required: true } },
     },
     {
-      name: "Colleague",
-      package: "memory",
+      name: "claude-workspace/Colleague",
+      package: "claude-workspace",
       extends: "core/Person",
-      attributes: {
-        slack_id: { type: "string", required: false },
-      },
+      attributes: { slack_id: { type: "string", required: false } },
+    },
+    {
+      name: "memory/Preference",
+      package: "memory",
+      attributes: { statement: { type: "string", required: true } },
     },
   ],
   edgeTypes: [
-    { name: "related_to", domain: "Preference", range: "Preference" },
-    { name: "knows", domain: "Colleague", range: "Colleague" },
+    {
+      name: "claude-workspace/mentioned_in",
+      domain: "claude-workspace/Colleague",
+      range: "memory/Preference",
+    },
   ],
-  terms: [
-    { name: "work" },
-    { name: "personal" },
-    { name: "meeting", parent: "work" },
-    // multi-parent: "sync" is under both "work" and "meeting"
-    { name: "sync", parent: "work" },
-    { name: "sync", parent: "meeting" },
-  ],
+  terms: [{ name: "work" }, { name: "personal" }, { name: "meeting", parent: "work" }],
 };
+
+const emptyQuery = { isLoading: false, isError: false, error: null };
 
 function setupHooks(
   overrides: { schema?: typeof schemaFixture; pendingProposals?: unknown[] } = {}
 ) {
   vi.mocked(hooks.usePending).mockReturnValue({
     data: { proposals: overrides.pendingProposals ?? [] },
-    isLoading: false,
-    isError: false,
-    error: null,
+    ...emptyQuery,
   } as unknown as ReturnType<typeof hooks.usePending>);
-
   vi.mocked(hooks.useSchema).mockReturnValue({
     data: overrides.schema ?? { entityTypes: [], edgeTypes: [], terms: [] },
-    isLoading: false,
-    isError: false,
-    error: null,
+    ...emptyQuery,
   } as unknown as ReturnType<typeof hooks.useSchema>);
-
   vi.mocked(hooks.useRecall).mockReturnValue({
     data: { results: [] },
-    isLoading: false,
-    isError: false,
-    error: null,
+    ...emptyQuery,
   } as unknown as ReturnType<typeof hooks.useRecall>);
-
   vi.mocked(hooks.useVerify).mockReturnValue({
     data: undefined,
-    isLoading: false,
-    isError: false,
-    error: null,
+    ...emptyQuery,
   } as unknown as ReturnType<typeof hooks.useVerify>);
-
   vi.mocked(hooks.useEntity).mockReturnValue({
     data: undefined,
-    isLoading: false,
-    isError: false,
-    error: null,
+    ...emptyQuery,
   } as unknown as ReturnType<typeof hooks.useEntity>);
-
   vi.mocked(hooks.usePolicy).mockReturnValue({
     data: { rules: [] },
-    isLoading: false,
-    isError: false,
-    error: null,
+    ...emptyQuery,
   } as unknown as ReturnType<typeof hooks.usePolicy>);
-
   vi.mocked(hooks.useLog).mockReturnValue({
     data: { entries: [] },
-    isLoading: false,
-    isError: false,
-    error: null,
+    ...emptyQuery,
   } as unknown as ReturnType<typeof hooks.useLog>);
-
   vi.mocked(hooks.usePrincipals).mockReturnValue({
     data: { principals: [] },
-    isLoading: false,
-    isError: false,
-    error: null,
+    ...emptyQuery,
   } as unknown as ReturnType<typeof hooks.usePrincipals>);
+  vi.mocked(hooks.useMemoryIndex).mockReturnValue({
+    data: { results: [] },
+    ...emptyQuery,
+  } as unknown as ReturnType<typeof hooks.useMemoryIndex>);
 }
 
 async function renderSchema(
@@ -145,87 +148,59 @@ async function renderSchema(
   });
 }
 
-describe("Schema viewer", () => {
+describe("Schema ontology map", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it("renders Types tab by default with entity type cards", async () => {
+  it("renders every entity type as a node", async () => {
     await renderSchema({ schema: schemaFixture });
-    // Both types visible
-    const names = screen.getAllByTestId("type-name").map((n) => n.textContent);
-    expect(names).toContain("Preference");
-    expect(names).toContain("Colleague");
+    const map = within(screen.getByTestId("ontology-map"));
+    expect(map.getByRole("button", { name: "Person" })).toBeInTheDocument();
+    expect(map.getByRole("button", { name: "Colleague" })).toBeInTheDocument();
+    expect(map.getByRole("button", { name: "Preference" })).toBeInTheDocument();
   });
 
-  it("shows inheritance breadcrumb for Colleague ← core/Person", async () => {
+  it("draws the inheritance edge and the labeled relation edge", async () => {
     await renderSchema({ schema: schemaFixture });
-    expect(screen.getByText("core/Person")).toBeInTheDocument();
+    expect(screen.getByTestId("flow-edge-x:claude-workspace/Colleague")).toBeInTheDocument();
+    expect(screen.getByTestId("flow-edge-r:claude-workspace/mentioned_in")).toHaveTextContent(
+      "mentioned_in"
+    );
   });
 
-  it("shows attribute table for Preference with value and context", async () => {
+  it("clicking a type opens its detail panel with attributes and relations", async () => {
     await renderSchema({ schema: schemaFixture });
-    expect(screen.getByText("value")).toBeInTheDocument();
-    expect(screen.getByText("context")).toBeInTheDocument();
+    await act(async () => {
+      fireEvent.click(
+        within(screen.getByTestId("ontology-map")).getByRole("button", { name: "Colleague" })
+      );
+    });
+    const detail = screen.getByTestId("type-detail");
+    expect(detail).toHaveTextContent("claude-workspace/Colleague");
+    expect(detail).toHaveTextContent("slack_id");
+    expect(detail).toHaveTextContent("mentioned_in");
+  });
+
+  it("detail panel lists subtypes for a parent type", async () => {
+    await renderSchema({ schema: schemaFixture });
+    await act(async () => {
+      fireEvent.click(
+        within(screen.getByTestId("ontology-map")).getByRole("button", { name: "Person" })
+      );
+    });
+    expect(screen.getByTestId("type-detail")).toHaveTextContent("claude-workspace/Colleague");
+  });
+
+  it("shows the taxonomy tree below the map", async () => {
+    await renderSchema({ schema: schemaFixture });
+    expect(screen.getByText("Taxonomy")).toBeInTheDocument();
+    expect(screen.getByText("work")).toBeInTheDocument();
+    expect(screen.getByText("meeting")).toBeInTheDocument();
   });
 
   it("shows empty state when no types exist", async () => {
     await renderSchema();
-    expect(screen.getByText(/agents can propose new types/i)).toBeInTheDocument();
-  });
-
-  it("switches to Edges tab and shows domain→range table", async () => {
-    await renderSchema({ schema: schemaFixture });
-    const edgesTab = screen.getByRole("tab", { name: /edges/i });
-    await act(async () => {
-      fireEvent.click(edgesTab);
-    });
-    expect(screen.getByText("related_to")).toBeInTheDocument();
-    expect(screen.getByText("knows")).toBeInTheDocument();
-    // Domain and range columns — multiple "Preference" elements OK here
-    const cells = screen.getAllByText("Preference");
-    expect(cells.length).toBeGreaterThan(0);
-    const colleagueCells = screen.getAllByText("Colleague");
-    expect(colleagueCells.length).toBeGreaterThan(0);
-  });
-
-  it("switches to Taxonomy tab and shows term outline", async () => {
-    await renderSchema({ schema: schemaFixture });
-    const taxonomyTab = screen.getByRole("tab", { name: /taxonomy/i });
-    await act(async () => {
-      fireEvent.click(taxonomyTab);
-    });
-    // Root terms
-    expect(screen.getByTestId("term-work")).toBeInTheDocument();
-    expect(screen.getByTestId("term-personal")).toBeInTheDocument();
-    // Nested: meeting is under work
-    expect(screen.getByTestId("term-meeting")).toBeInTheDocument();
-  });
-
-  it("taxonomy tab shows multi-parent terms under each parent", async () => {
-    await renderSchema({ schema: schemaFixture });
-    const taxonomyTab = screen.getByRole("tab", { name: /taxonomy/i });
-    await act(async () => {
-      fireEvent.click(taxonomyTab);
-    });
-    // sync appears under both work and meeting — two instances
-    const syncs = screen.getAllByTestId("term-sync");
-    expect(syncs.length).toBeGreaterThanOrEqual(2);
-  });
-
-  it("shows pending amber badge for schema proposals", async () => {
-    const pendingProposal = {
-      hash: "abc",
-      agent: "claude-code",
-      intent: "add type",
-      summary: "Adds NewType",
-      rules: [] as string[],
-      diff: [{ key: "NewType", after: { attributes: { foo: "string" } } }],
-      isSchemaProposal: true,
-    };
-    await renderSchema({ schema: schemaFixture, pendingProposals: [pendingProposal] });
-    // The pending type card should be rendered
-    const pendingBadges = screen.getAllByText("Pending");
-    expect(pendingBadges.length).toBeGreaterThan(0);
+    expect(screen.getByText(/no entity types yet/i)).toBeInTheDocument();
   });
 });

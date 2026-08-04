@@ -15,99 +15,89 @@ vi.mock("~/lib/hooks", () => ({
   usePolicy: vi.fn(),
   useLog: vi.fn(),
   usePrincipals: vi.fn(),
+  useMemoryIndex: vi.fn(),
+  useMemoryGraph: vi.fn(),
+  useUpdateMemory: vi.fn(),
+  useSession: vi.fn(),
 }));
 
 vi.mock("~/lib/api", () => ({
   apiClient: {
     proposals: vi.fn(),
-    approve: vi.fn().mockResolvedValue({}),
-    reject: vi.fn().mockResolvedValue({}),
-    recall: vi.fn(),
-    getEntity: vi.fn(),
-    schema: vi.fn(),
     getPolicy: vi.fn(),
-    log: vi.fn(),
-    principals: vi.fn(),
-    proposePolicy: vi.fn().mockResolvedValue({}),
-    registerAgent: vi.fn().mockResolvedValue({}),
-    installOntology: vi.fn().mockResolvedValue({}),
-    verify: vi.fn().mockResolvedValue({ ok: true }),
+    proposePolicy: vi.fn(),
   },
 }));
 
-const policyFixture = {
+const definition = {
+  policy: "memory-local",
+  version: 1,
+  default_posture: "restricted",
+  roles: { owner: ["principal:owner"] },
   rules: [
     {
-      id: "require-attribution",
-      title: "Require attribution",
-      selector: "entity.*",
-      require: "agent != 'anonymous'",
+      name: "scratch-is-free",
+      require: { schema_valid: true },
+      select: { all: [{ author_kind: "agent" }, { region: "workspace/scratch" }] },
     },
     {
-      id: "no-pii",
-      title: "No PII without consent",
-      selector: "entity.Preference",
-      require: "consent == true",
+      name: "agent-writes-are-proposals",
+      require: { reviewers: { quorum: 1, role: "owner" } },
+      select: { all: [{ author_kind: "agent" }, { not: { region: "workspace/scratch" } }] },
+    },
+    {
+      name: "model-assisted-needs-signed-envelope",
+      require: { attestation_required: { attester_class: "indexer" } },
+      select: { all: [{ basis: "model-assisted" }, { not: { region: "workspace/scratch" } }] },
     },
   ],
 };
 
+const policyFixture = {
+  name: "memory-baseline",
+  definition: JSON.stringify(definition),
+  rules: definition.rules,
+};
+
+const emptyQuery = { isLoading: false, isError: false, error: null };
+
 function setupHooks(policyData: unknown = policyFixture) {
   vi.mocked(hooks.usePolicy).mockReturnValue({
     data: policyData,
-    isLoading: false,
-    isError: false,
-    error: null,
+    ...emptyQuery,
   } as unknown as ReturnType<typeof hooks.usePolicy>);
-
   vi.mocked(hooks.usePending).mockReturnValue({
     data: { proposals: [] },
-    isLoading: false,
-    isError: false,
-    error: null,
+    ...emptyQuery,
   } as unknown as ReturnType<typeof hooks.usePending>);
-
   vi.mocked(hooks.useSchema).mockReturnValue({
     data: { entityTypes: [], edgeTypes: [], terms: [] },
-    isLoading: false,
-    isError: false,
-    error: null,
+    ...emptyQuery,
   } as unknown as ReturnType<typeof hooks.useSchema>);
-
   vi.mocked(hooks.useRecall).mockReturnValue({
     data: { results: [] },
-    isLoading: false,
-    isError: false,
-    error: null,
+    ...emptyQuery,
   } as unknown as ReturnType<typeof hooks.useRecall>);
-
   vi.mocked(hooks.useVerify).mockReturnValue({
     data: undefined,
-    isLoading: false,
-    isError: false,
-    error: null,
+    ...emptyQuery,
   } as unknown as ReturnType<typeof hooks.useVerify>);
-
   vi.mocked(hooks.useEntity).mockReturnValue({
     data: undefined,
-    isLoading: false,
-    isError: false,
-    error: null,
+    ...emptyQuery,
   } as unknown as ReturnType<typeof hooks.useEntity>);
-
   vi.mocked(hooks.useLog).mockReturnValue({
     data: { entries: [] },
-    isLoading: false,
-    isError: false,
-    error: null,
+    ...emptyQuery,
   } as unknown as ReturnType<typeof hooks.useLog>);
-
   vi.mocked(hooks.usePrincipals).mockReturnValue({
     data: { principals: [] },
-    isLoading: false,
-    isError: false,
-    error: null,
+    ...emptyQuery,
   } as unknown as ReturnType<typeof hooks.usePrincipals>);
+  vi.mocked(hooks.useMemoryIndex).mockReturnValue({
+    data: { results: [] },
+    ...emptyQuery,
+  } as unknown as ReturnType<typeof hooks.useMemoryIndex>);
 }
 
 async function renderPolicy(policyData: unknown = policyFixture) {
@@ -130,99 +120,92 @@ async function renderPolicy(policyData: unknown = policyFixture) {
 describe("Policy", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(apiClient.proposePolicy).mockResolvedValue({
+      status: "pending",
+      hash: "sha256:abc",
+    } as never);
   });
 
-  it("renders rule cards with plain title and mono block", async () => {
+  it("shows the decision summary with the default posture and roles", async () => {
     await renderPolicy();
-    expect(screen.getAllByTestId("rule-title")[0]).toHaveTextContent("Require attribution");
-    expect(screen.getAllByTestId("rule-title")[1]).toHaveTextContent("No PII without consent");
+    const summary = screen.getByTestId("policy-summary");
+    expect(summary).toHaveTextContent(/matches no rule falls to the default posture/i);
+    expect(summary).toHaveTextContent("restricted");
+    expect(summary).toHaveTextContent("owner = owner");
   });
 
-  it("shows selector and require in mono block", async () => {
+  it("renders each rule in plain language with its outcome chip", async () => {
     await renderPolicy();
-    expect(screen.getAllByTestId("rule-selector")[0]).toHaveTextContent("entity.*");
-    expect(screen.getAllByTestId("rule-require")[0]).toHaveTextContent("agent != 'anonymous'");
+    const scratch = screen.getByTestId("rule-scratch-is-free");
+    expect(scratch).toHaveTextContent(
+      /When an agent wrote it and it is classified in the workspace\/scratch region/
+    );
+    expect(scratch).toHaveTextContent(/saves immediately after passing schema validation/i);
+    expect(scratch).toHaveTextContent("Saves");
+
+    const proposals = screen.getByTestId("rule-agent-writes-are-proposals");
+    expect(proposals).toHaveTextContent(/outside the workspace\/scratch region/);
+    expect(proposals).toHaveTextContent(/waits in the Inbox for your approval/i);
+    expect(proposals).toHaveTextContent("Your review");
+
+    const envelope = screen.getByTestId("rule-model-assisted-needs-signed-envelope");
+    expect(envelope).toHaveTextContent(/signed envelope from the indexer/i);
+  });
+
+  it("drills down into the raw definition", async () => {
+    await renderPolicy();
+    const scratch = screen.getByTestId("rule-scratch-is-free");
+    const toggle = scratch.querySelector('[aria-expanded="false"]') as HTMLElement;
+    await act(async () => {
+      fireEvent.click(toggle);
+    });
+    expect(scratch).toHaveTextContent('"schema_valid": true');
   });
 
   it("shows empty state when no rules", async () => {
-    await renderPolicy({ rules: [] });
+    await renderPolicy({ name: "x", definition: JSON.stringify({ rules: [] }), rules: [] });
     expect(screen.getByText(/no policy rules loaded/i)).toBeInTheDocument();
   });
 
-  it("opens edit drawer when Edit button is clicked", async () => {
+  it("edits a rule inline and proposes the changed policy", async () => {
     await renderPolicy();
-    const editButtons = screen.getAllByTestId("edit-rule-require-attribution");
     await act(async () => {
-      fireEvent.click(editButtons[0]);
+      fireEvent.click(screen.getByTestId("edit-rule-scratch-is-free"));
     });
-    // Drawer should be visible
-    expect(screen.getByLabelText("Policy YAML")).toBeInTheDocument();
-  });
+    const textarea = screen.getByLabelText("Edit rule scratch-is-free") as HTMLTextAreaElement;
+    expect(textarea.value).toContain("scratch-is-free");
 
-  it("submit button disabled when YAML unchanged", async () => {
-    await renderPolicy();
-    const editBtn = screen.getByTestId("edit-rule-require-attribution");
+    const edited = JSON.parse(textarea.value);
+    edited.require = { reviewers: { quorum: 1, role: "owner" } };
     await act(async () => {
-      fireEvent.click(editBtn);
+      fireEvent.change(textarea, { target: { value: JSON.stringify(edited, null, 2) } });
     });
-    const submitBtn = screen.getByTestId("submit-policy");
-    expect(submitBtn).toBeDisabled();
-  });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("save-rule-scratch-is-free"));
+    });
 
-  it("submit button enabled after editing YAML", async () => {
-    await renderPolicy();
-    const editBtn = screen.getByTestId("edit-rule-require-attribution");
-    await act(async () => {
-      fireEvent.click(editBtn);
-    });
-    const textarea = screen.getByLabelText("Policy YAML");
-    await act(async () => {
-      fireEvent.change(textarea, {
-        target: { value: "rules:\n  - id: changed\n    title: Changed" },
-      });
-    });
-    const submitBtn = screen.getByTestId("submit-policy");
-    expect(submitBtn).not.toBeDisabled();
-  });
-
-  it("submitting creates a proposal and routes to inbox", async () => {
-    await renderPolicy();
-    const editBtn = screen.getByTestId("edit-rule-require-attribution");
-    await act(async () => {
-      fireEvent.click(editBtn);
-    });
-    const textarea = screen.getByLabelText("Policy YAML");
-    await act(async () => {
-      fireEvent.change(textarea, {
-        target: { value: "rules:\n  - id: changed\n    title: Changed" },
-      });
-    });
-    const submitBtn = screen.getByTestId("submit-policy");
-    await act(async () => {
-      fireEvent.click(submitBtn);
-    });
     await waitFor(() => {
-      expect(vi.mocked(apiClient.proposePolicy)).toHaveBeenCalled();
+      expect(apiClient.proposePolicy).toHaveBeenCalledTimes(1);
     });
+    const arg = vi.mocked(apiClient.proposePolicy).mock.calls[0][0] as { policy_yaml: string };
+    const proposed = JSON.parse(arg.policy_yaml);
+    expect(proposed.default_posture).toBe("restricted");
+    const rule = proposed.rules.find((r: { name: string }) => r.name === "scratch-is-free");
+    expect(rule.require).toEqual({ reviewers: { quorum: 1, role: "owner" } });
+    // Pending banner links to the Inbox
+    expect(screen.getByText(/pending in the/i)).toBeInTheDocument();
   });
 
-  it("diff preview appears when YAML is changed", async () => {
+  it("disables propose while the draft is invalid JSON", async () => {
     await renderPolicy();
-    const editBtn = screen.getByTestId("edit-rule-require-attribution");
     await act(async () => {
-      fireEvent.click(editBtn);
+      fireEvent.click(screen.getByTestId("edit-rule-scratch-is-free"));
     });
-    const textarea = screen.getByLabelText("Policy YAML");
+    const textarea = screen.getByLabelText("Edit rule scratch-is-free");
     await act(async () => {
-      fireEvent.change(textarea, {
-        target: { value: "rules:\n  - id: changed\n    title: Changed" },
-      });
+      fireEvent.change(textarea, { target: { value: "{ not json" } });
     });
-    const diffToggle = screen.getByRole("button", { name: /show diff preview/i });
-    expect(diffToggle).toBeInTheDocument();
-    await act(async () => {
-      fireEvent.click(diffToggle);
-    });
-    expect(screen.getByText(/Before → After/)).toBeInTheDocument();
+    expect(screen.getByTestId("save-rule-scratch-is-free")).toBeDisabled();
+    expect(screen.getByText(/not valid json yet/i)).toBeInTheDocument();
   });
 });
