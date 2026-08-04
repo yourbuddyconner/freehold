@@ -41,13 +41,13 @@ describe("ProvenanceFooter", () => {
     expect(screen.getByTestId("provenance-approval")).toHaveTextContent("Approved");
   });
 
-  it("renders held status with amber palette class when approvalStatus=held", () => {
-    render(<ProvenanceFooter {...props} approvalLabel="Held" approvalStatus="held" />);
+  it("renders pending status with amber palette class when approvalStatus=pending", () => {
+    render(<ProvenanceFooter {...props} approvalLabel="Pending" approvalStatus="pending" />);
     const badge = screen.getByTestId("provenance-approval");
-    expect(badge).toHaveTextContent("Held");
-    // StatusChip must apply the held palette class
+    expect(badge).toHaveTextContent("Pending");
+    // StatusChip must apply the pending palette class
     const chip = badge.firstElementChild as HTMLElement;
-    expect(chip?.className).toContain("status-held");
+    expect(chip?.className).toContain("status-pending");
   });
 
   it("renders rejected status with red palette class when approvalStatus=rejected", () => {

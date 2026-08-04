@@ -9,7 +9,7 @@ interface RecallResult {
   author: string;
   // `method` is the provenance method from the indexed object, or null for unrecorded
   method: string | null;
-  // `approval` is the raw value from the index: "admitted", "held", "rejected", etc.
+  // `approval` is the raw value from the index: "saved", "pending", "rejected", etc.
   approval: string;
   changeset: string;
   score: number;
@@ -27,16 +27,16 @@ function renderContent(content: unknown): string {
 
 /** Map the raw indexed approval string to a StatusKind for the StatusChip colour coding. */
 function approvalToStatus(approval: string): StatusKind | undefined {
-  if (approval === "admitted") return "approved";
-  if (approval === "held") return "held";
+  if (approval === "saved") return "approved";
+  if (approval === "pending") return "pending";
   if (approval === "rejected") return "rejected";
   return undefined;
 }
 
 /** Human-readable label for the approval status from the index. */
 function approvalToLabel(approval: string): string {
-  if (approval === "admitted") return "Approved";
-  if (approval === "held") return "Held";
+  if (approval === "saved") return "Saved";
+  if (approval === "pending") return "Pending";
   if (approval === "rejected") return "Rejected";
   return approval;
 }

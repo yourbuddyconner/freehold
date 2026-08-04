@@ -104,7 +104,7 @@ describe("SIGKILL recovery", () => {
     });
     const preKillBody = (await preKillRes.json()) as { status: string; noteId: string };
     expect(preKillRes.status).toBe(200);
-    expect(preKillBody.status).toBe("admitted");
+    expect(preKillBody.status).toBe("saved");
     const preKillNoteId = preKillBody.noteId;
 
     // Fire a burst of writes without awaiting — SIGKILL arrives while writes are in flight

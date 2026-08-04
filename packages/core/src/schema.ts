@@ -118,14 +118,14 @@ function parseInstallAdmission(raw: unknown): OntologyProposalResult {
   if (raw && typeof raw === "object") {
     if ("Admitted" in (raw as object)) {
       const r = raw as { Admitted: { hash: string; matched_rules: string[] } };
-      return { status: "admitted", hash: r.Admitted.hash };
+      return { status: "saved", hash: r.Admitted.hash };
     }
     if ("Held" in (raw as object)) {
       const r = raw as { Held: { hash: string; checklist: unknown } };
-      return { status: "held", hash: r.Held.hash };
+      return { status: "pending", hash: r.Held.hash };
     }
   }
-  return { status: "admitted", hash: "" };
+  return { status: "saved", hash: "" };
 }
 
 /**

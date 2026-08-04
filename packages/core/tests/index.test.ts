@@ -90,11 +90,11 @@ describe("syncIndex", () => {
   test("index after memory loop has note + preference rows with correct approval", async () => {
     const fh = await makeFreehold();
 
-    // 1. Create a scratch note — admitted immediately
+    // 1. Create a scratch note — saved immediately
     const noteResult = await remember(fh.graph, "agent", "I love drinking tea in the morning");
-    expect(noteResult.status).toBe("admitted");
+    expect(noteResult.status).toBe("saved");
 
-    // 2. Create a preference (held by default under memory policy)
+    // 2. Create a preference (pending by default under memory policy)
     const prefResult = await fh.graph.propose_preference(
       "agent",
       "prefers tea over coffee",
@@ -105,7 +105,7 @@ describe("syncIndex", () => {
 
     // 3. Approve the preference
     const approveResult = await approve(fh.graph, "owner", prefResult.hash as string);
-    expect(approveResult.status).toBe("admitted");
+    expect(approveResult.status).toBe("approved");
 
     // 4. Sync the index
     await syncIndex(fh as unknown as Freehold, hashEmbedder);
@@ -116,9 +116,9 @@ describe("syncIndex", () => {
       "SELECT id, type, approval FROM objects ORDER BY created_at"
     );
     expect(rows.rows.length).toBeGreaterThanOrEqual(1);
-    // All indexed rows should have approval = 'admitted' (log() only includes admitted)
+    // All indexed rows should have approval = 'saved' (log() only includes saved/approved changesets)
     for (const row of rows.rows) {
-      expect(row.approval).toBe("admitted");
+      expect(row.approval).toBe("saved");
     }
 
     // Check indexed_head is updated
@@ -186,7 +186,7 @@ describe("recall", () => {
 
     // Create an agent-authored note (should have method = "model-assisted" from provenance)
     const noteResult = await remember(fh.graph, "agent", "an agent note");
-    expect(noteResult.status).toBe("admitted");
+    expect(noteResult.status).toBe("saved");
 
     // Sync the index
     await syncIndex(fh as unknown as Freehold, hashEmbedder);
@@ -262,14 +262,14 @@ describe("reindex: approved preference row", () => {
     const fh = await makeFreehold();
     const statement = "prefers quiet workspaces over open-plan offices";
 
-    // 1. Propose a preference (held by default under memory policy)
+    // 1. Propose a preference (pending by default under memory policy)
     const prefResult = await fh.graph.propose_preference("agent", statement, "soft", undefined);
     expect(prefResult.admission?.Held).toBeDefined();
     const prefHash = prefResult.hash as string;
 
-    // 2. Owner approves — this admits the preference node via decide()
+    // 2. Owner approves — this saves the preference node via decide()
     const approveResult = await approve(fh.graph, "owner", prefHash);
-    expect(approveResult.status).toBe("admitted");
+    expect(approveResult.status).toBe("approved");
 
     // 3. Full reindex (wipes pg and rebuilds from scratch)
     await reindex(fh as unknown as Freehold, hashEmbedder);
@@ -286,7 +286,7 @@ describe("reindex: approved preference row", () => {
     expect(prefRows.rows.length).toBe(1);
     const row = prefRows.rows[0];
     expect(row.search_text).toBe(statement);
-    expect(row.approval).toBe("admitted");
+    expect(row.approval).toBe("saved");
 
     // 5. recall() finds the preference ranked above unrelated rows
     //    (words from the statement overlap with the FTS/embedding query)
@@ -344,9 +344,9 @@ describe("reindex: alphabetical YAML field order (live-delta regression)", () =>
     expect(raw.Held?.hash).toBeDefined();
     const hash = raw.Held?.hash as string;
 
-    // 2. Approve so the changeset is admitted to the log
+    // 2. Approve so the changeset is saved to the log
     const result = await approve(fh.graph, "owner", hash);
-    expect(result.status).toBe("admitted");
+    expect(result.status).toBe("approved");
 
     // 3. Full reindex (wipes pg and rebuilds from scratch)
     await reindex(fh as unknown as Freehold, hashEmbedder);

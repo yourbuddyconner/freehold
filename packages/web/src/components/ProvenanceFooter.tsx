@@ -7,7 +7,7 @@ interface ProvenanceFooterProps {
   author: string;
   /** `manual` | `model-assisted` + optional tool name. */
   method: string;
-  /** Approval status label (e.g. "Approved", "Held", "Pending"). */
+  /** Approval status label (e.g. "Approved", "Pending", "Rejected"). */
   approvalLabel: string;
   /** StatusKind for the approval badge — drives the colour via StatusChip. */
   approvalStatus?: StatusKind;

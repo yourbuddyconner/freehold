@@ -6,9 +6,9 @@
  * via a bridge that converts MCP tool definitions to pi-agent AgentTool format.
  *
  * Scenario:
- *   1. remember → admitted
- *   2. create_entity (preference) → held by governance
- *   3. pending_approvals → sees the held proposal
+ *   1. remember → saved
+ *   2. create_entity (preference) → pending by governance
+ *   3. pending_approvals → sees the pending proposal
  *   4. test harness approves via HTTP
  *   5. recall → content + provenance present
  *
@@ -261,7 +261,7 @@ describe("pi-agent E2E scenario", () => {
               if (event.toolName === "remember" && typeof parsed.noteId === "string") {
                 admittedNoteId = parsed.noteId;
               }
-              if (event.toolName === "create_entity" && parsed.status === "held") {
+              if (event.toolName === "create_entity" && parsed.status === "pending") {
                 // create_entity returns { status, nodeId, changeset } — the changeset IS the proposal hash
                 heldProposalHash =
                   typeof parsed.changeset === "string"
@@ -367,11 +367,11 @@ describe("pi-agent E2E scenario", () => {
     }
 
     // -----------------------------------------------------------------------
-    // Assertion on held proposal hash — Preference@1 must have been held
+    // Assertion on pending proposal hash — Preference@1 must have been pending
     // -----------------------------------------------------------------------
-    // heldProposalHash is set when create_entity returns status=held.
+    // heldProposalHash is set when create_entity returns status=pending.
     // Under the memory-baseline policy, Preference@1 writes require owner review.
-    // If for some reason it was admitted, heldProposalHash will be undefined — that is
+    // If for some reason it was saved, heldProposalHash will be undefined — that is
     // acceptable only if pending_approvals returned empty (already approved by harness).
     if (heldProposalHash) {
       expect(typeof heldProposalHash).toBe("string");

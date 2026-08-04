@@ -110,7 +110,7 @@ describe("daemon persistence across restart", () => {
     });
     expect(res.status).toBe(200);
     const body = (await res.json()) as { status: string; noteId: string };
-    expect(body.status).toBe("admitted");
+    expect(body.status).toBe("saved");
     expect(typeof body.noteId).toBe("string");
     noteId = body.noteId;
   }, 15_000);

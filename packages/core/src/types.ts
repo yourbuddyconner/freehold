@@ -1,6 +1,6 @@
 // Shared types consumed throughout core + re-exported
 
-export type AdmissionStatus = "admitted" | "held";
+export type AdmissionStatus = "saved" | "pending";
 
 export interface Admission {
   status: AdmissionStatus;

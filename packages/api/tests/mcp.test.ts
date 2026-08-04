@@ -6,10 +6,10 @@
  *
  * Covered:
  *   - tools/list returns exactly 12 tools
- *   - remember → admitted
+ *   - remember → saved
  *   - create_entity → typed result
- *   - propose_ontology_change → held
- *   - pending_approvals shows the held proposal
+ *   - propose_ontology_change → pending
+ *   - pending_approvals shows the pending proposal
  *   - describe_schema lists memory/Note
  *   - recall round-trips an admitted write
  *   - auth rejected without bearer token
@@ -146,7 +146,7 @@ describe("tools/list", () => {
 // ---------------------------------------------------------------------------
 
 describe("remember", () => {
-  test("admitted — returns status + noteId", async () => {
+  test("saved — returns status + noteId", async () => {
     const res = await client().callTool({
       name: "remember",
       arguments: { content: "Test memory note" },
@@ -157,7 +157,7 @@ describe("remember", () => {
       noteId: string;
       changeset: string;
     };
-    expect(body.status).toBe("admitted");
+    expect(body.status).toBe("saved");
     expect(typeof body.noteId).toBe("string");
     expect(body.noteId.length).toBeGreaterThan(0);
   });
@@ -171,7 +171,7 @@ describe("create_entity", () => {
     });
     const content = res.content as Array<{ type: string; text: string }>;
     const body = JSON.parse(content[0].text) as { status: string; nodeId: string };
-    expect(["admitted", "held"]).toContain(body.status);
+    expect(["saved", "pending"]).toContain(body.status);
     expect(typeof body.nodeId).toBe("string");
   });
 });
@@ -183,7 +183,7 @@ describe("create_entity", () => {
 let proposalHash: string | undefined;
 
 describe("propose_ontology_change", () => {
-  test("held — schema changes require owner review", async () => {
+  test("pending — schema changes require owner review", async () => {
     const ontologyYaml =
       "ontology: custom-test\nentity_types:\n  Widget:\n    attributes:\n      label:\n        type: string\n        required: true";
     const res = await client().callTool({
@@ -192,14 +192,14 @@ describe("propose_ontology_change", () => {
     });
     const content = res.content as Array<{ type: string; text: string }>;
     const body = JSON.parse(content[0].text) as { status: string; hash: string };
-    expect(body.status).toBe("held");
+    expect(body.status).toBe("pending");
     expect(typeof body.hash).toBe("string");
     proposalHash = body.hash;
   });
 });
 
 describe("pending_approvals", () => {
-  test("shows the held schema proposal", async () => {
+  test("shows the pending schema proposal", async () => {
     const res = await client().callTool({
       name: "pending_approvals",
       arguments: { agent: "test-agent" },
@@ -235,7 +235,7 @@ describe("describe_schema", () => {
 // ---------------------------------------------------------------------------
 
 describe("recall", () => {
-  test("finds an admitted remember write", async () => {
+  test("finds a saved remember write", async () => {
     const unique = `unique-recall-${Date.now()}`;
     // Write via remember
     await client().callTool({ name: "remember", arguments: { content: unique } });
@@ -289,7 +289,7 @@ describe("GET /api/v1/policy", () => {
 });
 
 describe("POST /api/v1/policy", () => {
-  test("returns held proposal with policy YAML", async () => {
+  test("returns pending proposal with policy YAML", async () => {
     const res = await fetch(`http://127.0.0.1:${port}/api/v1/policy`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -300,7 +300,7 @@ describe("POST /api/v1/policy", () => {
     });
     expect(res.status).toBe(200);
     const body = (await res.json()) as { status: string; hash: string };
-    expect(body.status).toBe("held");
+    expect(body.status).toBe("pending");
     expect(typeof body.hash).toBe("string");
   });
 

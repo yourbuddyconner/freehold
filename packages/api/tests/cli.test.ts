@@ -1,7 +1,7 @@
 /**
  * F5 CLI tests:
- *   1. Founding loop — spawn daemon, drive CLI commands, assert flow works
- *   2. Exit-code matrix — held→2, bad token→4, daemon down→5
+ *   1. Core flow — spawn daemon, drive CLI commands, assert flow works
+ *   2. Exit-code matrix — pending→2, bad token→4, daemon down→5
  *   3. Import-boundary — CLI files must not import @freehold/core directly
  *      (exception: commands/serve.ts is explicitly exempt)
  *   4. Client drift — generate.ts output must match src/types.ts
@@ -89,10 +89,10 @@ async function waitForDaemon(port: number, maxWait = 15_000): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// Test suite 1: Founding loop
+// Test suite 1: Core flow
 // ---------------------------------------------------------------------------
 
-describe("Founding loop (daemon + CLI)", () => {
+describe("Core flow (daemon + CLI)", () => {
   let home: string;
   let port: number;
   let token: string;
@@ -142,7 +142,7 @@ describe("Founding loop (daemon + CLI)", () => {
     expect(parsed).toEqual({ status: "ok" });
   });
 
-  test("remember stores a note (admitted or held)", () => {
+  test("remember stores a note (saved or pending)", () => {
     const { code, stdout } = runCli(
       ["remember", "I prefer morning meetings", "--agent", "cli-test"],
       { FREEHOLD_HOME: home }
@@ -159,7 +159,7 @@ describe("Founding loop (daemon + CLI)", () => {
     expect(code).toBe(0);
     const parsed = JSON.parse(stdout.trim());
     expect(parsed).toHaveProperty("status");
-    expect(parsed.status).toBe("admitted");
+    expect(parsed.status).toBe("saved");
   });
 
   test("recall returns results array", () => {
@@ -220,7 +220,7 @@ describe("Exit-code matrix", () => {
     if (home) rmSync(home, { recursive: true, force: true });
   });
 
-  test("held response → exit code 2", async () => {
+  test("pending response → exit code 2", async () => {
     // Register a new agent so entity writes can be tested
     const token = JSON.parse(readFileSync(join(home, "config.json"), "utf-8")).token as string;
     const heldTestAgent = `held-test-agent-${Date.now()}`;

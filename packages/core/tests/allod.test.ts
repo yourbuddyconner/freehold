@@ -1,7 +1,7 @@
 /**
  * Task F1 acceptance test: createGraph / openGraph wiring.
  *
- * Asserts the full founding loop through the @freehold/core wrappers:
+ * Asserts the full write-approve-recall flow through the @freehold/core wrappers:
  *   createGraph → principal_add → note (admitted) →
  *   propose_preference (held) → decide (approve) →
  *   verify().ok → openGraph → same state_hash
@@ -14,7 +14,7 @@ import { describe, expect, test } from "vitest";
 import { createGraph, openGraph } from "../src/allod.js";
 
 describe("@freehold/core allod wiring", () => {
-  test("founding loop: create, govern, persist, reopen", async () => {
+  test("write, approve, persist, reopen", async () => {
     const graphDir = mkdtempSync(join(tmpdir(), "freehold-test-"));
 
     // --- Phase 1: create a new graph ---

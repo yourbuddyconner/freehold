@@ -22,10 +22,10 @@ type AllodAdmission = AllodAdmitted | AllodHeld;
 
 function parseAdmission(raw: AllodAdmission): Admission {
   if ("Admitted" in raw) {
-    return { status: "admitted", hash: raw.Admitted.hash };
+    return { status: "saved", hash: raw.Admitted.hash };
   }
-  // Thread through checklist (proposal + rule) so HTTP + MCP callers can surface the held state
-  return { status: "held", hash: raw.Held.hash, proposal: raw.Held.checklist, rule: undefined };
+  // Thread through checklist (proposal + rule) so HTTP + MCP callers can surface the pending state
+  return { status: "pending", hash: raw.Held.hash, proposal: raw.Held.checklist, rule: undefined };
 }
 
 // ---- Op builders (mirrors the Rust helpers) ----
@@ -114,7 +114,7 @@ function classificationOp(subject: string, term: string, assertedBy: string, bas
 // ---- Public API ----
 
 export interface RememberResult {
-  status: "admitted" | "held";
+  status: "saved" | "pending";
   noteId: string;
   changeset: string;
 }
@@ -138,7 +138,7 @@ export async function remember(
 }
 
 export interface CreateEntityResult {
-  status: "admitted" | "held";
+  status: "saved" | "pending";
   nodeId: string;
   changeset: string;
 }
@@ -187,7 +187,7 @@ export async function createEntity(
 }
 
 export interface UpdateEntityResult {
-  status: "admitted" | "held";
+  status: "saved" | "pending";
   changeset: string;
 }
 
@@ -217,7 +217,7 @@ export async function updateEntity(
 }
 
 export interface RelateResult {
-  status: "admitted" | "held";
+  status: "saved" | "pending";
   edgeId: string;
   changeset: string;
 }
@@ -239,10 +239,10 @@ export async function relate(
   const ops: unknown[] = [
     createEdgeOp(edgeId, edgeType, `node:${fromId}`, `node:${toId}`, attributes),
   ];
-  // Add scratch classification on the edge itself to admit the changeset under
+  // Add scratch classification on the edge itself to save the changeset under
   // the scratch-is-free rule. Policy region check is per-op: the edge op needs
   // to have workspace/scratch@1 in its own region set (via a classification op
-  // whose subject is edge:<edgeId>) to be admitted without owner review.
+  // whose subject is edge:<edgeId>) to be saved without owner review.
   if (options?.scratch !== false) {
     ops.push(
       classificationOp(
@@ -259,7 +259,7 @@ export async function relate(
 }
 
 export interface ClassifyResult {
-  status: "admitted" | "held";
+  status: "saved" | "pending";
   changeset: string;
 }
 
@@ -278,7 +278,7 @@ export async function classifyEntity(
 }
 
 export interface AttachDocumentResult {
-  status: "admitted" | "held";
+  status: "saved" | "pending";
   docNodeId: string;
   changeset: string;
 }
@@ -316,7 +316,7 @@ export async function attachDocument(
 
   const ops: unknown[] = [
     { create: docContent },
-    // Classify the document as scratch so the changeset is admitted under scratch-is-free.
+    // Classify the document as scratch so the changeset is saved under scratch-is-free.
     // Note: allod edge endpoints must reference node-kind objects, so the document↔entity
     // relationship is expressed via the commit message instead of an edge op.
     classificationOp(

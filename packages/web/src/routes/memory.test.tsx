@@ -116,7 +116,7 @@ describe("Memory browser", () => {
   it("status filter chips render", async () => {
     await renderMemory();
     expect(screen.getByRole("button", { name: "approved" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "held" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "pending" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "rejected" })).toBeInTheDocument();
   });
 

@@ -428,7 +428,7 @@ function SettingsPage() {
     setRevokeError(null);
     // Revocation is a governed change: propose a policy amendment via the real API shape.
     // The API requires { policy_yaml: string }. We encode the intent as YAML so the
-    // allod policy engine can record it as a held proposal.
+    // allod policy engine can record it as a pending-approval proposal.
     const policyYaml = `# Revoke principal ${target.id}\nrevoke:\n  principal: "${target.id}"\n`;
     apiClient
       .proposePolicy({ policy_yaml: policyYaml })

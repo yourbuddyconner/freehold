@@ -39,7 +39,7 @@ export function TypeCard({
     <article
       className={cn(
         "reg-marks relative border p-4 space-y-3 bg-[--bg-subtle]",
-        pending ? "held-border bg-[#fffbeb] dark:bg-[#1c1408]" : "border-[--border]",
+        pending ? "pending-border bg-[#fffbeb] dark:bg-[#1c1408]" : "border-[--border]",
         className
       )}
     >

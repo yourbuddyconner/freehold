@@ -15,7 +15,7 @@ function LevelRow({ label, description, state, degradedItems = [] }: LevelRowPro
       className={cn(
         "border p-4 space-y-2",
         state === "ok" && "border-[var(--color-status-approved)] bg-[#f0fdf4] dark:bg-[#052e16]",
-        state === "degraded" && "border-[var(--color-status-held)] bg-[#fffbeb] dark:bg-[#1c1408]",
+        state === "degraded" && "border-[var(--color-status-pending)] bg-[#fffbeb] dark:bg-[#1c1408]",
         (state === "pending" || state === "loading") && "border-[--border] bg-[--bg-subtle]"
       )}
     >
@@ -27,7 +27,7 @@ function LevelRow({ label, description, state, degradedItems = [] }: LevelRowPro
           />
         )}
         {state === "degraded" && (
-          <XCircle className="h-5 w-5 shrink-0 text-[var(--color-status-held)]" aria-hidden />
+          <XCircle className="h-5 w-5 shrink-0 text-[var(--color-status-pending)]" aria-hidden />
         )}
         {(state === "pending" || state === "loading") && (
           <Circle
@@ -43,7 +43,7 @@ function LevelRow({ label, description, state, degradedItems = [] }: LevelRowPro
             className={cn(
               "text-sm font-medium",
               state === "ok" && "text-[var(--color-status-approved)]",
-              state === "degraded" && "text-[var(--color-status-held)]",
+              state === "degraded" && "text-[var(--color-status-pending)]",
               (state === "pending" || state === "loading") && "text-[--fg-muted]"
             )}
             data-testid={`level-${label.toLowerCase()}`}
@@ -61,7 +61,7 @@ function LevelRow({ label, description, state, degradedItems = [] }: LevelRowPro
             <li key={item.id} className="text-xs text-[--fg-muted] flex gap-2">
               <a
                 href={`/memory/${item.id}`}
-                className="font-mono text-[var(--color-status-held)] hover:underline shrink-0"
+                className="font-mono text-[var(--color-status-pending)] hover:underline shrink-0"
               >
                 {item.id.slice(0, 12)}…
               </a>
@@ -99,7 +99,7 @@ export function VerifyReport({ report, className }: VerifyReportProps) {
           "border px-4 py-3 text-sm font-medium",
           overallOk
             ? "border-[var(--color-status-approved)] bg-[#f0fdf4] text-[var(--color-status-approved)] dark:bg-[#052e16]"
-            : "border-[var(--color-status-held)] bg-[#fffbeb] text-[var(--color-status-held)] dark:bg-[#1c1408]"
+            : "border-[var(--color-status-pending)] bg-[#fffbeb] text-[var(--color-status-pending)] dark:bg-[#1c1408]"
         )}
         data-testid="verify-summary"
       >

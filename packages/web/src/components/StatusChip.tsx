@@ -1,11 +1,11 @@
 import { cn } from "~/lib/cn";
 
-export type StatusKind = "approved" | "held" | "degraded" | "rejected";
+export type StatusKind = "approved" | "pending" | "degraded" | "rejected";
 
 const STATUS_CLASSES: Record<StatusKind, string> = {
   approved:
     "bg-[var(--color-status-approved-bg)] text-[var(--color-status-approved)] border-[var(--color-status-approved)]",
-  held: "bg-[var(--color-status-held-bg)] text-[var(--color-status-held)] border-[var(--color-status-held)]",
+  pending: "bg-[var(--color-status-pending-bg)] text-[var(--color-status-pending)] border-[var(--color-status-pending)]",
   degraded:
     "bg-[var(--color-status-degraded-bg)] text-[var(--color-status-degraded)] border-[var(--color-status-degraded)]",
   rejected:
@@ -14,7 +14,7 @@ const STATUS_CLASSES: Record<StatusKind, string> = {
 
 const STATUS_LABELS: Record<StatusKind, string> = {
   approved: "Approved",
-  held: "Held",
+  pending: "Pending",
   degraded: "Degraded",
   rejected: "Rejected",
 };

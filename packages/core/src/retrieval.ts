@@ -126,7 +126,7 @@ function getObject(graph: AllodGraph, kind: string, id: string): RawObject | nul
 }
 
 /**
- * Walk the admitted changeset log (via allod-wasm log()) to find revision
+ * Walk the saved changeset log (via allod-wasm log()) to find revision
  * entries for a given node ID. Because log() only returns ChangesetSummary
  * (hash, author, op_count, intent), we derive RevisionViews from changesets
  * whose intent mentions the node ID or intent matches create/update patterns.

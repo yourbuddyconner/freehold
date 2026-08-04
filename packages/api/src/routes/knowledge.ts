@@ -29,7 +29,7 @@ knowledgeRouter.post("/remember", async (c) => {
   const fh = c.get("freehold");
   const embedder = c.get("embedder");
   const result = await remember(fh.graph, agent, content);
-  if (result.status === "admitted") {
+  if (result.status === "saved") {
     await syncIndex(fh, embedder);
   }
   return c.json(result);
@@ -52,7 +52,7 @@ knowledgeRouter.post("/entities", async (c) => {
   const fh = c.get("freehold");
   const embedder = c.get("embedder");
   const result = await createEntity(fh.graph, agent, type, attributes, { classification });
-  if (result.status === "admitted") {
+  if (result.status === "saved") {
     await syncIndex(fh, embedder);
   }
   return c.json(result);
@@ -77,7 +77,7 @@ knowledgeRouter.patch("/entities/:id", async (c) => {
   const embedder = c.get("embedder");
   try {
     const result = await updateEntity(fh.graph, agent, nodeId, type, attributes, prior ?? null);
-    if (result.status === "admitted") {
+    if (result.status === "saved") {
       await syncIndex(fh, embedder);
     }
     return c.json(result);
@@ -111,7 +111,7 @@ knowledgeRouter.post("/relations", async (c) => {
   const result = await relate(fh.graph, agent, from, to, edgeType, attributes, {
     scratch: scratch ?? true,
   });
-  if (result.status === "admitted") {
+  if (result.status === "saved") {
     await syncIndex(fh, embedder);
   }
   return c.json(result);
@@ -133,7 +133,7 @@ knowledgeRouter.post("/classifications", async (c) => {
   const fh = c.get("freehold");
   const embedder = c.get("embedder");
   const result = await classifyEntity(fh.graph, agent, nodeId, term);
-  if (result.status === "admitted") {
+  if (result.status === "saved") {
     await syncIndex(fh, embedder);
   }
   return c.json(result);
@@ -157,7 +157,7 @@ knowledgeRouter.post("/documents", async (c) => {
   const fh = c.get("freehold");
   const embedder = c.get("embedder");
   const result = await attachDocument(fh.graph, agent, entityId, content, title, media_type);
-  if (result.status === "admitted") {
+  if (result.status === "saved") {
     await syncIndex(fh, embedder);
   }
   return c.json(result);

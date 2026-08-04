@@ -8,7 +8,7 @@
  * Exit codes:
  *   0 = ok
  *   1 = other error
- *   2 = held (proposal held, not committed)
+ *   2 = pending (write is pending owner approval, not yet committed)
  *   3 = policy-rejected
  *   4 = auth failure (401/403)
  *   5 = unreachable (network error / ECONNREFUSED)

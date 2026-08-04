@@ -1,5 +1,5 @@
 /**
- * F4 contract tests: founding loop over HTTP, auth, held shape, openapi coverage.
+ * F4 contract tests: core flow over HTTP, auth, pending shape, openapi coverage.
  *
  * All tests use hashEmbedder and a temp FREEHOLD_HOME — never the real home.
  * The Hono app is tested in-process via app.request() — no port is bound.
@@ -97,7 +97,7 @@ describe("Auth middleware", () => {
   });
 });
 
-describe("Founding loop", () => {
+describe("Core flow", () => {
   let agentName: string;
   let proposalHash: string | undefined;
 
@@ -117,28 +117,28 @@ describe("Founding loop", () => {
     });
     expect(status).toBe(200);
     const b = body as { status: string; noteId: string; changeset: string };
-    expect(b.status).toBe("admitted");
+    expect(b.status).toBe("saved");
     expect(typeof b.noteId).toBe("string");
     expect(typeof b.changeset).toBe("string");
   });
 
-  test("POST /api/v1/entities — governed Preference entity write is held (no scratch classification)", async () => {
-    // Preference without workspace/scratch@1 classification goes through governance → held
+  test("POST /api/v1/entities — governed Preference entity write is pending (no scratch classification)", async () => {
+    // Preference without workspace/scratch@1 classification goes through governance → pending
     const { status, body } = await req("POST", "/api/v1/entities", {
       agent: agentName,
       type: "memory/Preference@1",
       attributes: { statement: "prefers morning meetings", strength: "soft" },
-      // No classification → governed by default → should be held under memory-baseline
+      // No classification → governed by default → should be pending under memory-baseline
     });
     expect(status).toBe(200);
     const b = body as { status: string; nodeId: string; changeset: string };
-    // Under memory-baseline policy, Preference writes without scratch classification are held
-    expect(b.status).toBe("held");
+    // Under memory-baseline policy, Preference writes without scratch classification are pending
+    expect(b.status).toBe("pending");
     expect(typeof b.changeset).toBe("string");
     proposalHash = b.changeset;
   });
 
-  test("GET /api/v1/proposals — proposals array contains the held entity proposal", async () => {
+  test("GET /api/v1/proposals — proposals array contains the pending entity proposal", async () => {
     const { status, body } = await req("GET", "/api/v1/proposals");
     expect(status).toBe(200);
     const b = body as { proposals: Array<{ hash: string; summary: string; rules: string[] }> };
@@ -150,12 +150,12 @@ describe("Founding loop", () => {
     expect(typeof found?.hash).toBe("string");
   });
 
-  test("POST /api/v1/proposals/:hash/approve — approve the held Preference proposal", async () => {
-    // proposalHash is always defined because the preceding entity test asserts status=held
+  test("POST /api/v1/proposals/:hash/approve — approve the pending Preference proposal", async () => {
+    // proposalHash is always defined because the preceding entity test asserts status=pending
     const { status, body } = await req("POST", `/api/v1/proposals/${proposalHash}/approve`);
     expect(status).toBe(200);
     const b = body as { status: string };
-    expect(b.status).toBe("admitted");
+    expect(b.status).toBe("approved");
   });
 
   test("POST /api/v1/proposals/:hash/reject — reject a held proposal and return {status:'rejected'}", async () => {
@@ -170,7 +170,7 @@ describe("Founding loop", () => {
     });
     expect(entityStatus).toBe(200);
     const entityB = entityBody as { status: string; changeset: string };
-    expect(entityB.status).toBe("held");
+    expect(entityB.status).toBe("pending");
     const rejectHash = entityB.changeset;
 
     // Reject the proposal
@@ -228,8 +228,8 @@ describe("Founding loop", () => {
   });
 });
 
-describe("held shape is 200, not an error", () => {
-  test("POST /api/v1/entities returns 200 whether admitted or held", async () => {
+describe("pending shape is 200, not an error", () => {
+  test("POST /api/v1/entities returns 200 whether saved or pending", async () => {
     const agentName2 = `held-test-agent-${Date.now()}`;
     await req("POST", "/api/v1/agents", { name: agentName2 });
 
@@ -240,7 +240,7 @@ describe("held shape is 200, not an error", () => {
     });
     expect(status).toBe(200);
     const b = body as { status: string };
-    expect(b.status === "admitted" || b.status === "held").toBe(true);
+    expect(b.status === "saved" || b.status === "pending").toBe(true);
   });
 });
 
@@ -399,13 +399,13 @@ rules:
 
   let policyHash: string | undefined;
 
-  test("POST /policy returns held with a real changeset hash", async () => {
+  test("POST /policy returns pending with a real changeset hash", async () => {
     const { status, body } = await req("POST", "/api/v1/policy", {
       policy_yaml: newPolicyYaml,
     });
     expect(status).toBe(200);
     const b = body as { status: string; hash: string };
-    expect(b.status).toBe("held");
+    expect(b.status).toBe("pending");
     // Real changeset hash from allod (not a synthetic sha256: prefix)
     expect(typeof b.hash).toBe("string");
     expect(b.hash.length).toBeGreaterThan(0);

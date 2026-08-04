@@ -23,7 +23,7 @@ describe("retrieval", () => {
 
   test("getEntity returns an EntityView for a node that exists", async () => {
     const note = await remember(graph, "agent", "hello world");
-    expect(note.status).toBe("admitted");
+    expect(note.status).toBe("saved");
 
     // Use object_get to verify the node exists, then check getEntity
     const entity = getEntity(graph, note.noteId);
@@ -43,7 +43,7 @@ describe("retrieval", () => {
     // traverse returns EntityView[] of nodes reachable from fromId
     // With depth=1 and no known traversable edges, result is empty (honest about limits)
     const note1 = await remember(graph, "agent", "first note content");
-    expect(note1.status).toBe("admitted");
+    expect(note1.status).toBe("saved");
 
     const result = traverse(graph, note1.noteId, ["memory/relates_to@1"], "out", 1);
     expect(Array.isArray(result)).toBe(true);
@@ -61,8 +61,8 @@ describe("retrieval", () => {
     const note1 = await remember(graph, "agent", "first note content");
     const note2 = await remember(graph, "agent", "second note content");
 
-    expect(note1.status).toBe("admitted");
-    expect(note2.status).toBe("admitted");
+    expect(note1.status).toBe("saved");
+    expect(note2.status).toBe("saved");
 
     await relate(graph, "agent", note1.noteId, note2.noteId, "memory/relates_to@1");
 
@@ -84,8 +84,8 @@ describe("retrieval", () => {
     // Create two nodes
     const noteA = await remember(graph, "agent", "note A content");
     const noteB = await remember(graph, "agent", "note B content");
-    expect(noteA.status).toBe("admitted");
-    expect(noteB.status).toBe("admitted");
+    expect(noteA.status).toBe("saved");
+    expect(noteB.status).toBe("saved");
 
     // Classify noteA with workspace/scratch@1 (already done by remember, so it should be there)
     // Create an edge from noteA to noteB
@@ -119,9 +119,9 @@ describe("retrieval", () => {
     const noteA = await remember(graph, "agent", "node A");
     const noteB = await remember(graph, "agent", "node B");
     const noteC = await remember(graph, "agent", "node C");
-    expect(noteA.status).toBe("admitted");
-    expect(noteB.status).toBe("admitted");
-    expect(noteC.status).toBe("admitted");
+    expect(noteA.status).toBe("saved");
+    expect(noteB.status).toBe("saved");
+    expect(noteC.status).toBe("saved");
 
     await relate(graph, "agent", noteA.noteId, noteB.noteId, "memory/relates_to@1");
     await relate(graph, "agent", noteB.noteId, noteC.noteId, "memory/relates_to@1");

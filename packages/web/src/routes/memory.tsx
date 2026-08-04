@@ -26,7 +26,7 @@ function MemoryLayout() {
 }
 
 const TYPE_FILTERS = ["entity", "document", "event"] as const;
-const STATUS_FILTERS = ["approved", "held", "rejected"] as const;
+const STATUS_FILTERS = ["approved", "pending", "rejected"] as const;
 
 const AUTHOR_FILTERS = ["claude-code"] as const;
 

@@ -23,9 +23,9 @@ describe("knowledge", () => {
     await graph.principal_add("agent", "agent", "owner");
   });
 
-  test("remember returns admitted with noteId and changeset", async () => {
+  test("remember returns saved with noteId and changeset", async () => {
     const result = await remember(graph, "agent", "likes coffee");
-    expect(result.status).toBe("admitted");
+    expect(result.status).toBe("saved");
     expect(typeof result.noteId).toBe("string");
     expect(result.noteId.length).toBeGreaterThan(0);
     expect(typeof result.changeset).toBe("string");
@@ -37,8 +37,8 @@ describe("knowledge", () => {
       statement: "prefers dark mode",
       strength: "soft",
     });
-    // Preference nodes without scratch classification are held for owner review
-    expect(result.status).toBe("held");
+    // Preference nodes without scratch classification are pending owner review
+    expect(result.status).toBe("pending");
     expect(typeof result.nodeId).toBe("string");
     expect(typeof result.changeset).toBe("string");
   });
@@ -51,12 +51,12 @@ describe("knowledge", () => {
       { content: "a scratch note" },
       { classification: "workspace/scratch@1" }
     );
-    expect(result.status).toBe("admitted");
+    expect(result.status).toBe("saved");
     expect(typeof result.nodeId).toBe("string");
   });
 
-  test("updateEntity after creating and admitting a scratch note", async () => {
-    // Create a scratch note (admitted)
+  test("updateEntity after creating and saving a scratch note", async () => {
+    // Create a scratch note (saved immediately)
     const created = await createEntity(
       graph,
       "agent",
@@ -64,14 +64,14 @@ describe("knowledge", () => {
       { content: "original content" },
       { classification: "workspace/scratch@1" }
     );
-    expect(created.status).toBe("admitted");
+    expect(created.status).toBe("saved");
 
     // Pass typeRef and let updateEntity auto-fetch the node's rev
     const updated = await updateEntity(graph, "agent", created.nodeId, "memory/Note@1", {
       content: "updated content",
     });
-    // Update of a scratch note should also be admitted or held (policy dependent)
-    expect(["admitted", "held"]).toContain(updated.status);
+    // Update of a scratch note should also be saved or pending (policy dependent)
+    expect(["saved", "pending"]).toContain(updated.status);
     expect(typeof updated.changeset).toBe("string");
   });
 
@@ -80,8 +80,8 @@ describe("knowledge", () => {
     const note2 = await remember(graph, "agent", "second note");
 
     const result = await relate(graph, "agent", note1.noteId, note2.noteId, "memory/relates_to@1");
-    // Relating two scratch notes should be admitted
-    expect(["admitted", "held"]).toContain(result.status);
+    // Relating two scratch notes should be saved or pending (policy dependent)
+    expect(["saved", "pending"]).toContain(result.status);
     expect(typeof result.edgeId).toBe("string");
     expect(result.edgeId.length).toBeGreaterThan(0);
   });
@@ -92,7 +92,7 @@ describe("knowledge", () => {
     // or use a different available term — workspace/scratch@1 is already on notes
     // We just verify the call completes without error
     const result = await classifyEntity(graph, "agent", note.noteId, "workspace/scratch@1");
-    expect(["admitted", "held"]).toContain(result.status);
+    expect(["saved", "pending"]).toContain(result.status);
   });
 
   test("attachDocument creates a document-kind object with content_hash", async () => {
@@ -104,7 +104,7 @@ describe("knowledge", () => {
       "This is the document content",
       "My Document"
     );
-    expect(["admitted", "held"]).toContain(result.status);
+    expect(["saved", "pending"]).toContain(result.status);
     expect(typeof result.docNodeId).toBe("string");
     expect(result.docNodeId.length).toBeGreaterThan(0);
 
@@ -136,7 +136,7 @@ describe("knowledge", () => {
       "HTML Doc",
       "text/html"
     );
-    expect(["admitted", "held"]).toContain(result.status);
+    expect(["saved", "pending"]).toContain(result.status);
 
     const docObj = (
       graph as unknown as {
@@ -158,7 +158,7 @@ describe("knowledge", () => {
     try {
       const result = await relate(graph, "agent", note.noteId, fakeTargetId, "memory/relates_to@1");
       // If it doesn't throw, the result should still be structurally valid
-      expect(["admitted", "held"]).toContain(result.status);
+      expect(["saved", "pending"]).toContain(result.status);
     } catch (err) {
       // Throwing is acceptable — the MCP layer catches it
       expect(err).toBeDefined();

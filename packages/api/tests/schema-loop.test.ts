@@ -3,7 +3,7 @@
  * owner approves it, agent instantiates the new type, relates it to a note,
  * describe_schema shows the extension.
  *
- * Tests the full cycle: propose → held → approve → admitted → create entity → relate → describe.
+ * Tests the full cycle: propose → pending → approve → saved → create entity → relate → describe.
  *
  * This is an in-process test (no daemon spawn) using hashEmbedder.
  */
@@ -62,7 +62,7 @@ describe("Schema loop (spec exit criterion 2)", () => {
   let colleagueNodeId: string | undefined;
   let noteNodeId: string | undefined;
 
-  test("propose Colleague extends core/Person with slack_id — held", async () => {
+  test("propose Colleague extends core/Person with slack_id — pending", async () => {
     const ontologyYaml = `ontology: custom
 entity_types:
   Colleague:
@@ -85,7 +85,7 @@ edge_types:
     });
     expect(status).toBe(200);
     const b = body as { status: string; hash: string };
-    expect(b.status).toBe("held");
+    expect(b.status).toBe("pending");
     expect(typeof b.hash).toBe("string");
     expect(b.hash.length).toBeGreaterThan(0);
     ontologyProposalHash = b.hash;
@@ -102,12 +102,12 @@ edge_types:
     expect(found?.isSchemaProposal).toBe(true);
   });
 
-  test("owner approves the schema proposal — admitted", async () => {
+  test("owner approves the schema proposal — approved", async () => {
     if (!ontologyProposalHash) return;
     const { status, body } = await req("POST", `/api/v1/proposals/${ontologyProposalHash}/approve`);
     expect(status).toBe(200);
     const b = body as { status: string };
-    expect(b.status === "admitted" || b.status === "still-unmet").toBe(true);
+    expect(b.status === "approved" || b.status === "incomplete").toBe(true);
   });
 
   test("describe_schema shows custom/Colleague after approval", async () => {
@@ -134,11 +134,11 @@ edge_types:
     });
     expect(status).toBe(200);
     const b = body as { status: string; nodeId: string; changeset: string };
-    expect(b.status === "admitted" || b.status === "held").toBe(true);
+    expect(b.status === "saved" || b.status === "pending").toBe(true);
     expect(typeof b.nodeId).toBe("string");
     colleagueNodeId = b.nodeId;
-    // If held, approve it so we can relate
-    if (b.status === "held") {
+    // If pending, approve it so we can relate
+    if (b.status === "pending") {
       await req("POST", `/api/v1/proposals/${b.changeset}/approve`);
     }
   });
@@ -150,7 +150,7 @@ edge_types:
     });
     expect(status).toBe(200);
     const b = body as { status: string; noteId: string };
-    expect(b.status).toBe("admitted");
+    expect(b.status).toBe("saved");
     noteNodeId = b.noteId;
   });
 
@@ -162,7 +162,7 @@ edge_types:
       content: "Second note about Alice — referenced from the schema loop test",
     });
     const n2 = note2Body as { status: string; noteId: string };
-    expect(n2.status).toBe("admitted");
+    expect(n2.status).toBe("saved");
     const noteNodeId2 = n2.noteId;
 
     if (!noteNodeId || !noteNodeId2) return;
@@ -176,7 +176,7 @@ edge_types:
     });
     expect(status).toBe(200);
     const b = body as { status: string };
-    expect(b.status === "admitted" || b.status === "held").toBe(true);
+    expect(b.status === "saved" || b.status === "pending").toBe(true);
   });
 
   test("describe_schema still shows custom/Colleague after instantiation", async () => {

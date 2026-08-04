@@ -182,7 +182,7 @@ function checkIsSchemaProposal(ops: RawOp[]): boolean {
 // ---- Public API ----
 
 /**
- * List pending (held) proposals from the graph, each enriched with
+ * List proposals pending approval from the graph, each enriched with
  * a plain-language summary, op-level diff, matched policy rule names,
  * and a schema-proposal flag.
  */
@@ -228,7 +228,7 @@ export function pending(graph: AllodGraph): ProposalView[] {
 }
 
 export interface ApproveResult {
-  status: "admitted" | "rejected" | "still-unmet";
+  status: "approved" | "rejected" | "incomplete";
   hash: string;
   degraded?: string[];
   unmet?: string[];
@@ -239,11 +239,11 @@ export interface ApproveResult {
  *
  * allod serializes outcomes in three shapes:
  *   - Bare string "Rejected" → {status:"rejected"}
- *   - Object {Admitted:{degraded:[...]}} → {status:"admitted", degraded}
- *   - Object {StillUnmet:{unmet:[...]}} → {status:"still-unmet", unmet}
+ *   - Object {Admitted:{degraded:[...]}} → {status:"approved", degraded}
+ *   - Object {StillUnmet:{unmet:[...]}} → {status:"incomplete", unmet}
  */
 function parseDecisionOutcome(raw: unknown): {
-  status: "admitted" | "rejected" | "still-unmet";
+  status: "approved" | "rejected" | "incomplete";
   degraded?: string[];
   unmet?: string[];
 } {
@@ -256,7 +256,7 @@ function parseDecisionOutcome(raw: unknown): {
     // {Admitted:{degraded:[...]}}
     if ("Admitted" in raw) {
       const admitted = (raw as { Admitted?: { degraded?: string[] } }).Admitted;
-      return { status: "admitted", degraded: admitted?.degraded };
+      return { status: "approved", degraded: admitted?.degraded };
     }
     // {Rejected:{...}} — empty object for reject variant
     if ("Rejected" in raw) {
@@ -265,12 +265,12 @@ function parseDecisionOutcome(raw: unknown): {
     // {StillUnmet:{unmet:[...]}}
     if ("StillUnmet" in raw) {
       const stillUnmet = (raw as { StillUnmet?: { unmet?: string[] } }).StillUnmet;
-      return { status: "still-unmet", unmet: stillUnmet?.unmet };
+      return { status: "incomplete", unmet: stillUnmet?.unmet };
     }
   }
 
   // Fallback (shouldn't happen with valid allod outcomes)
-  return { status: "admitted" };
+  return { status: "approved" };
 }
 
 /**

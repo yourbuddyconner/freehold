@@ -60,8 +60,8 @@ entity_types:
         required: true`;
 
     const result = await proposeOntologyChange(graph, "owner", "custom", ontologyYaml);
-    // Schema proposals go through policy — owner-signed are admitted, agent-signed are held
-    expect(["admitted", "held"]).toContain(result.status);
+    // Schema proposals go through policy — owner-signed are saved, agent-signed are pending
+    expect(["saved", "pending"]).toContain(result.status);
     // Hash should be a non-empty string
     expect(typeof result.hash).toBe("string");
   });
@@ -89,8 +89,8 @@ entity_types:
     const result = await installOntology(graph, ontologyYaml);
     // installOntology resolves the owner from graph state and signs as the owner.
     // Under the memory policy, schema changes still require a decision record even
-    // for the owner, so this may be Held — or Admitted if the policy is trivially met.
-    expect(["admitted", "held"]).toContain(result.status);
+    // for the owner, so this may be pending — or saved if the policy is trivially met.
+    expect(["saved", "pending"]).toContain(result.status);
     expect(typeof result.hash).toBe("string");
     // The result is Admission-shaped
     expect(result).toHaveProperty("status");

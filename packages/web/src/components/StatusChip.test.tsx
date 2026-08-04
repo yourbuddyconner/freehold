@@ -5,7 +5,7 @@ import { StatusChip } from "./StatusChip";
 describe("StatusChip", () => {
   it.each([
     ["approved", "Approved"],
-    ["held", "Held"],
+    ["pending", "Pending"],
     ["degraded", "Degraded"],
     ["rejected", "Rejected"],
   ] as const)("renders %s status", (status, label) => {
@@ -21,15 +21,15 @@ describe("StatusChip", () => {
   });
 
   it("renders as a link when href is provided", () => {
-    render(<StatusChip status="held" href="/proposals/abc123" />);
+    render(<StatusChip status="pending" href="/proposals/abc123" />);
     const chip = screen.getByRole("link");
     expect(chip).toHaveAttribute("href", "/proposals/abc123");
   });
 
   it("renders as a non-interactive span when href is omitted", () => {
-    render(<StatusChip status="held" />);
+    render(<StatusChip status="pending" />);
     expect(screen.queryByRole("link")).not.toBeInTheDocument();
-    expect(screen.getByText("Held")).toBeInTheDocument();
+    expect(screen.getByText("Pending")).toBeInTheDocument();
   });
 
   it("approved chip has approved-palette class reference", () => {
@@ -39,9 +39,9 @@ describe("StatusChip", () => {
     expect(el.className).toContain("status-approved");
   });
 
-  it("held chip has held-palette class reference", () => {
-    const { container } = render(<StatusChip status="held" href="/e" />);
+  it("pending chip has pending-palette class reference", () => {
+    const { container } = render(<StatusChip status="pending" href="/e" />);
     const el = container.firstChild as HTMLElement;
-    expect(el.className).toContain("status-held");
+    expect(el.className).toContain("status-pending");
   });
 });

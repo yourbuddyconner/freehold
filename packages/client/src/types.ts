@@ -1247,7 +1247,7 @@ export interface components {
         PolicyBody: Record<string, never>;
         AdmissionResponse: {
             /** @enum {string} */
-            status: "admitted" | "held";
+            status: "saved" | "pending";
             hash: string;
             proposal?: unknown;
             rule?: string[];
@@ -1274,12 +1274,12 @@ export interface components {
             type: string;
             content?: unknown;
             author: string;
+            /** @description Provenance method (model-assisted, manual, etc.) or null for unrecorded */
+            method: string | null;
             /** @description approval field; maps from the `status` query parameter */
             approval: string;
             changeset: string;
             score: number;
-            /** @description Method from the object's provenance, or null for unrecorded (owner-authored) */
-            method: string | null;
         };
         VerifyReport: {
             ok: boolean;

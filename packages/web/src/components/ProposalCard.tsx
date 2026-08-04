@@ -133,7 +133,7 @@ export function ProposalCard({
     <article
       className={cn(
         "reg-marks relative border p-4 space-y-3 bg-[--bg-subtle]",
-        isSchemaProposal ? "held-border bg-[#fffbeb] dark:bg-[#1c1408]" : "border-[--border]"
+        isSchemaProposal ? "pending-border bg-[#fffbeb] dark:bg-[#1c1408]" : "border-[--border]"
       )}
     >
       {/* Header */}

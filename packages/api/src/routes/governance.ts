@@ -53,7 +53,7 @@ governanceRouter.post("/proposals/:hash/approve", async (c) => {
   // SAFETY: single-token model — bearer possession implies owner authority until multi-principal auth lands (post-v0).
   try {
     const result = await approve(fh.graph, "owner", hash);
-    if (result.status === "admitted") {
+    if (result.status === "approved") {
       await syncIndex(fh, embedder);
     }
     return c.json(result);

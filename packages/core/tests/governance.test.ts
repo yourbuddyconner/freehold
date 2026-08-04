@@ -24,12 +24,12 @@ describe("governance", () => {
   });
 
   test("pending() returns a ProposalView array with derived summary, diff, and rules", async () => {
-    // Create a held proposal by creating a Preference without scratch classification
+    // Create a pending proposal by creating a Preference without scratch classification
     const created = await createEntity(graph, "agent", "memory/Preference@1", {
       statement: "prefers dark mode",
       strength: "soft",
     });
-    expect(created.status).toBe("held");
+    expect(created.status).toBe("pending");
 
     const proposals = pending(graph);
     expect(Array.isArray(proposals)).toBe(true);
@@ -89,7 +89,7 @@ describe("governance", () => {
     expect(target).toBeDefined();
 
     const result = await approve(graph, "owner", prefResult.hash as string);
-    expect(result.status).toBe("admitted");
+    expect(result.status).toBe("approved");
 
     // Proposal should no longer be pending
     const after = pending(graph);

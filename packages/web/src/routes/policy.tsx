@@ -249,7 +249,7 @@ function PolicyPage() {
       {!isLoading && rules.length > 0 && (
         <>
           <p className="text-xs text-[--fg-muted] max-w-xl">
-            Editing a rule proposes a full policy replacement (held for owner approval). Per-rule
+            Editing a rule proposes a full policy replacement (pending owner approval). Per-rule
             conditional application is not yet wired — all rules apply globally for v0.
           </p>
           <ul className="space-y-3 max-w-2xl">

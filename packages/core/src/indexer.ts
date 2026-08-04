@@ -235,7 +235,7 @@ export async function syncIndex(freehold: Freehold, embedder: Embedder): Promise
 
     // Extract method from provenance, with fallback to null for owner-authored objects
     // (they carry no provenance stamp). Log entries' ops carry provenance for agent writes;
-    // only admitted changesets are indexed, so approval is always "admitted".
+    // only saved (approved) changesets are indexed, so approval is always "saved".
     const provenance = objContent.provenance as Record<string, unknown> | undefined;
     const method = (provenance?.method as string) ?? null;
 
@@ -260,7 +260,7 @@ export async function syncIndex(freehold: Freehold, embedder: Embedder): Promise
         JSON.stringify(objContent),
         author,
         method,
-        "admitted",
+        "saved",
         changesetHash,
         searchText,
       ]

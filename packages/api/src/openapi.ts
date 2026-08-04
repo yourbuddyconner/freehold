@@ -98,7 +98,7 @@ const SessionInfo = z
 
 const AdmissionResponse = z
   .object({
-    status: z.enum(["admitted", "held"]),
+    status: z.enum(["saved", "pending"]),
     hash: z.string(),
     proposal: z.unknown().optional(),
     rule: z.array(z.string()).optional(),

@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS objects (
   content jsonb NOT NULL DEFAULT '{}',
   author text NOT NULL DEFAULT '',
   method text DEFAULT NULL,
-  approval text NOT NULL DEFAULT 'admitted',
+  approval text NOT NULL DEFAULT 'saved',
   changeset text NOT NULL DEFAULT '',
   search_text text NOT NULL DEFAULT '',
   created_at timestamptz NOT NULL DEFAULT now(),
@@ -180,6 +180,14 @@ export async function openDb(pgDir: string): Promise<DbHandle> {
     await pg.exec("ALTER TABLE objects ALTER COLUMN method DROP NOT NULL");
   } catch {
     // Constraint may not exist on fresh databases; that's fine
+  }
+
+  // Migrate: rename approval value 'admitted' → 'saved' for existing databases created
+  // before the status string rename. Idempotent: rows already holding 'saved' are unaffected.
+  try {
+    await pg.exec("UPDATE objects SET approval='saved' WHERE approval='admitted'");
+  } catch {
+    // No-op if the table doesn't exist yet (handled by the schema DDL above)
   }
 
   return { pg };

@@ -62,7 +62,7 @@ function registerTools(
     "remember",
     {
       description:
-        "Store a scratch note in the graph. Ergonomic fast path — admitted immediately under the memory policy.",
+        "Store a scratch note in the graph. Ergonomic fast path — saves it instantly under the memory policy.",
       inputSchema: {
         content: z.string().describe("The text content of the note to remember"),
         agent: z
@@ -74,7 +74,7 @@ function registerTools(
     async ({ content, agent }) => {
       const by = resolveAgent(agent, config);
       const result = await remember(fh.graph, by, content);
-      if (result.status === "admitted") {
+      if (result.status === "saved") {
         await syncIndex(fh, embedder);
       }
       return {
@@ -99,8 +99,8 @@ function registerTools(
       description:
         "Create a typed entity node with optional classification and edge. " +
         "The entity creation is one atomic changeset. If a relate parameter is provided, " +
-        "the edge is created in a SEPARATE changeset after the entity is admitted — " +
-        "full atomicity across both is post-v0. If the entity is held, the edge is not created.",
+        "the edge is created in a SEPARATE changeset after the entity is saved — " +
+        "full atomicity across both is post-v0. If the entity write is pending approval, the edge is not created.",
       inputSchema: {
         type: z.string().describe("Entity type ref, e.g. memory/Preference@1"),
         attributes: z.record(z.unknown()).describe("Key/value attributes for the entity"),
@@ -122,7 +122,7 @@ function registerTools(
         classification: classify,
       });
       let edgeWarning: string | undefined;
-      if (result.status === "admitted") {
+      if (result.status === "saved") {
         await syncIndex(fh, embedder);
         if (rel) {
           try {
@@ -181,7 +181,7 @@ function registerTools(
         attributes as Record<string, unknown>,
         prior
       );
-      if (result.status === "admitted") {
+      if (result.status === "saved") {
         await syncIndex(fh, embedder);
       }
       return {
@@ -204,8 +204,8 @@ function registerTools(
     {
       description:
         "Create a typed directed edge between two entities. " +
-        "By default edges are classified workspace/scratch@1 and admitted immediately (scratch=true). " +
-        "Pass scratch=false to route the edge through governance — the edge will be held for owner review.",
+        "By default edges are classified workspace/scratch@1 and saved instantly (scratch=true). " +
+        "Pass scratch=false to route the edge through governance — the edge will require owner approval.",
       inputSchema: {
         from: z.string().describe("Source node bare UUID"),
         to: z.string().describe("Target node bare UUID"),
@@ -215,8 +215,8 @@ function registerTools(
           .boolean()
           .optional()
           .describe(
-            "If true (default), the edge is admitted immediately as scratch. " +
-              "If false, the edge proposal is held for owner approval."
+            "If true (default), the edge is saved instantly as scratch. " +
+              "If false, the edge proposal requires owner approval."
           ),
         agent: z.string().optional().describe("Agent principal name"),
       },
@@ -252,7 +252,7 @@ function registerTools(
     "classify",
     {
       description:
-        "Place a node, edge, or document in the taxonomy. Classification routes policy — this can be held.",
+        "Place a node, edge, or document in the taxonomy. Classification routes policy — this can be pending approval.",
       inputSchema: {
         subject: z.string().describe("Node bare UUID to classify"),
         term: z.string().describe("Classification term, e.g. workspace/personal@1"),
@@ -295,7 +295,7 @@ function registerTools(
     async ({ entity_id, content, media_type, title, agent }) => {
       const by = resolveAgent(agent, config);
       const result = await attachDocument(fh.graph, by, entity_id, content, title, media_type);
-      if (result.status === "admitted") {
+      if (result.status === "saved") {
         await syncIndex(fh, embedder);
       }
       return {
@@ -328,7 +328,7 @@ function registerTools(
           .object({
             type: z.string().optional().describe("Filter by entity type ref"),
             author: z.string().optional().describe("Filter by author principal name"),
-            approval: z.string().optional().describe("Filter by approval status (admitted/held)"),
+            approval: z.string().optional().describe("Filter by approval status (saved/pending)"),
           })
           .optional(),
         limit: z.number().int().min(1).max(100).optional().describe("Max results (default 10)"),
@@ -406,7 +406,7 @@ function registerTools(
   server.registerTool(
     "pending_approvals",
     {
-      description: "List the agent's own held proposals awaiting owner approval.",
+      description: "List the agent's own writes that are pending owner approval.",
       inputSchema: {
         agent: z
           .string()
@@ -447,7 +447,7 @@ function registerTools(
     "propose_ontology_change",
     {
       description:
-        "Propose a schema change (add entity type, edge type, or taxonomy term). Always held for owner review.",
+        "Propose a schema change (add entity type, edge type, or taxonomy term). Always requires your approval before it is installed.",
       inputSchema: {
         package_name: z.string().describe("Ontology package name, e.g. 'custom' or 'myapp'"),
         ontology_yaml: z

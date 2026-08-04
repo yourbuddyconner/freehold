@@ -64,10 +64,11 @@ export function makeClient(opts: BaseOpts): FreeholdClient {
 }
 
 /**
- * Check if an admission response is "held" and exit 2 if so.
+ * Check if an admission response is "pending" (pending approval) and exit 2 if so.
+ * Exit code 2 means the write was accepted but is waiting for owner approval.
  */
 export function checkHeld(result: { status?: string }): void {
-  if (result.status === "held") {
+  if (result.status === "pending") {
     process.exit(2);
   }
 }
