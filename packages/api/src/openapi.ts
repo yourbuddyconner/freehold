@@ -1,62 +1,593 @@
 import { writeFileSync } from "node:fs";
+import {
+  OpenAPIRegistry,
+  OpenApiGeneratorV31,
+  extendZodWithOpenApi,
+} from "@asteasolutions/zod-to-openapi";
+import { z } from "zod";
 
-const ROUTES: Array<[string, string, string, boolean]> = [
-  ["get", "/health", "Health check", false],
-  ["get", "/api/v1/openapi.json", "OpenAPI specification", false],
-  ["post", "/api/v1/remember", "Write a scratch note", true],
-  ["post", "/api/v1/entities", "Create an entity", true],
-  ["patch", "/api/v1/entities/{id}", "Update an entity", true],
-  ["post", "/api/v1/relations", "Create a relation (edge)", true],
-  ["post", "/api/v1/classifications", "Add a classification", true],
-  ["post", "/api/v1/documents", "Attach a document", true],
-  ["get", "/api/v1/recall", "Hybrid semantic recall", true],
-  ["get", "/api/v1/entities/{id}", "Get an entity by ID", true],
-  ["get", "/api/v1/entities/{id}/traverse", "Traverse from an entity", true],
-  ["get", "/api/v1/proposals", "List pending proposals", true],
-  ["post", "/api/v1/proposals/{hash}/approve", "Approve a proposal", true],
-  ["post", "/api/v1/proposals/{hash}/reject", "Reject a proposal", true],
-  ["get", "/api/v1/verify", "Verify the graph integrity", true],
-  ["post", "/api/v1/reindex", "Rebuild the search index", true],
-  ["get", "/api/v1/principals", "List principals", true],
-  ["post", "/api/v1/agents", "Register a new agent", true],
-  ["get", "/api/v1/schema", "Describe the schema", true],
-  ["post", "/api/v1/schema/proposals", "Propose an ontology change", true],
-  ["post", "/api/v1/schema/install", "Install an ontology (owner)", true],
-  ["get", "/api/v1/policy", "Get policy rules", true],
-  ["post", "/api/v1/policy", "Propose a policy change", true],
-  ["get", "/api/v1/log", "Get the changeset log", true],
-];
+// Required: extend zod with .openapi() metadata method
+extendZodWithOpenApi(z);
 
-const bearerScheme = {
-  bearerAuth: {
+// ---- Request body schemas (mirrored from route files) ----
+
+const RememberBody = z
+  .object({
+    agent: z.string().openapi({ description: "Agent name performing the write" }),
+    content: z.string().openapi({ description: "Free-text note content" }),
+  })
+  .openapi("RememberBody");
+
+const CreateEntityBody = z
+  .object({
+    agent: z.string(),
+    type: z.string().openapi({ description: "Entity type ref, e.g. memory/Preference@1" }),
+    attributes: z.record(z.unknown()),
+    classification: z.string().optional(),
+  })
+  .openapi("CreateEntityBody");
+
+const UpdateEntityBody = z
+  .object({
+    agent: z.string(),
+    type: z.string(),
+    attributes: z.record(z.unknown()),
+    prior: z.string().optional().openapi({ description: "Hash of the changeset being superseded" }),
+  })
+  .openapi("UpdateEntityBody");
+
+const RelateBody = z
+  .object({
+    agent: z.string(),
+    from: z.string(),
+    to: z.string(),
+    edgeType: z.string(),
+    attributes: z.record(z.unknown()).optional(),
+    scratch: z.boolean().optional(),
+  })
+  .openapi("RelateBody");
+
+const ClassifyBody = z
+  .object({
+    agent: z.string(),
+    nodeId: z.string(),
+    term: z.string(),
+  })
+  .openapi("ClassifyBody");
+
+const AttachDocumentBody = z
+  .object({
+    agent: z.string(),
+    entityId: z.string(),
+    content: z.string(),
+    title: z.string().optional(),
+  })
+  .openapi("AttachDocumentBody");
+
+const RegisterAgentBody = z
+  .object({
+    name: z.string(),
+  })
+  .openapi("RegisterAgentBody");
+
+const ProposeOntologyBody = z
+  .object({
+    agent: z.string(),
+    packageName: z.string(),
+    ontologyYaml: z.string(),
+  })
+  .openapi("ProposeOntologyBody");
+
+const InstallOntologyBody = z
+  .object({
+    docsYaml: z.string(),
+  })
+  .openapi("InstallOntologyBody");
+
+const PolicyBody = z.object({}).passthrough().openapi("PolicyBody");
+
+// ---- Response schemas ----
+
+const AdmissionResponse = z
+  .object({
+    status: z.enum(["admitted", "held"]),
+    hash: z.string(),
+    proposal: z.unknown().optional(),
+    rule: z.array(z.string()).optional(),
+  })
+  .openapi("AdmissionResponse");
+
+const RememberResponse = AdmissionResponse.extend({
+  noteId: z.string().optional(),
+  changeset: z.string().optional(),
+}).openapi("RememberResponse");
+
+const ProposalView = z
+  .object({
+    hash: z.string(),
+    agent: z.string(),
+    intent: z.string(),
+    summary: z.string(),
+    rules: z.array(z.string()),
+    diff: z.array(z.object({ key: z.string(), before: z.unknown(), after: z.unknown() })),
+    isSchemaProposal: z.boolean(),
+  })
+  .openapi("ProposalView");
+
+const RecallResult = z
+  .object({
+    id: z.string(),
+    type: z.string(),
+    content: z.unknown(),
+    author: z.string(),
+    approval: z
+      .string()
+      .openapi({ description: "approval field; maps from the `status` query parameter" }),
+    changeset: z.string(),
+    score: z.number(),
+  })
+  .openapi("RecallResult");
+
+const VerifyReport = z
+  .object({
+    ok: z.boolean(),
+    stateHash: z.string().optional(),
+    degraded: z.array(z.object({ id: z.string(), reason: z.string() })).optional(),
+  })
+  .openapi("VerifyReport");
+
+const SchemaDescription = z
+  .object({
+    entityTypes: z.array(
+      z.object({
+        name: z.string(),
+        package: z.string().optional(),
+        attributes: z.record(z.unknown()).optional(),
+        extends: z.string().optional(),
+      })
+    ),
+    edgeTypes: z.array(
+      z.object({
+        name: z.string(),
+        domain: z.string().optional(),
+        range: z.string().optional(),
+      })
+    ),
+    terms: z.array(
+      z.object({
+        name: z.string(),
+        parent: z.string().optional(),
+      })
+    ),
+  })
+  .openapi("SchemaDescription");
+
+// ---- Registry setup ----
+
+function buildRegistry(): OpenAPIRegistry {
+  const registry = new OpenAPIRegistry();
+
+  // Security scheme
+  registry.registerComponent("securitySchemes", "bearerAuth", {
     type: "http",
     scheme: "bearer",
-    bearerFormat: "JWT",
-  },
-};
+    bearerFormat: "token",
+  });
+
+  // Register schemas as components
+  registry.register("RememberBody", RememberBody);
+  registry.register("CreateEntityBody", CreateEntityBody);
+  registry.register("UpdateEntityBody", UpdateEntityBody);
+  registry.register("RelateBody", RelateBody);
+  registry.register("ClassifyBody", ClassifyBody);
+  registry.register("AttachDocumentBody", AttachDocumentBody);
+  registry.register("RegisterAgentBody", RegisterAgentBody);
+  registry.register("ProposeOntologyBody", ProposeOntologyBody);
+  registry.register("InstallOntologyBody", InstallOntologyBody);
+  registry.register("PolicyBody", PolicyBody);
+  registry.register("AdmissionResponse", AdmissionResponse);
+  registry.register("RememberResponse", RememberResponse);
+  registry.register("ProposalView", ProposalView);
+  registry.register("RecallResult", RecallResult);
+  registry.register("VerifyReport", VerifyReport);
+  registry.register("SchemaDescription", SchemaDescription);
+
+  const auth = [{ bearerAuth: [] }];
+
+  // ---- Routes ----
+
+  // Health
+  registry.registerPath({
+    method: "get",
+    path: "/health",
+    summary: "Health check",
+    responses: {
+      "200": {
+        description: "Service is up",
+        content: { "application/json": { schema: z.object({ status: z.literal("ok") }) } },
+      },
+    },
+  });
+
+  // Knowledge — remember
+  registry.registerPath({
+    method: "post",
+    path: "/api/v1/remember",
+    summary: "Write a scratch note",
+    security: auth,
+    request: {
+      body: { required: true, content: { "application/json": { schema: RememberBody } } },
+    },
+    responses: {
+      "200": {
+        description: "Admission result",
+        content: { "application/json": { schema: RememberResponse } },
+      },
+      "400": { description: "Validation error" },
+      "401": { description: "Unauthorized" },
+    },
+  });
+
+  // Knowledge — create entity
+  registry.registerPath({
+    method: "post",
+    path: "/api/v1/entities",
+    summary: "Create an entity",
+    security: auth,
+    request: {
+      body: { required: true, content: { "application/json": { schema: CreateEntityBody } } },
+    },
+    responses: {
+      "200": {
+        description: "Admission result",
+        content: { "application/json": { schema: AdmissionResponse } },
+      },
+      "400": { description: "Validation error" },
+      "401": { description: "Unauthorized" },
+    },
+  });
+
+  // Knowledge — update entity
+  registry.registerPath({
+    method: "patch",
+    path: "/api/v1/entities/{id}",
+    summary: "Update an entity",
+    security: auth,
+    request: {
+      params: z.object({ id: z.string() }),
+      body: { required: true, content: { "application/json": { schema: UpdateEntityBody } } },
+    },
+    responses: {
+      "200": {
+        description: "Admission result",
+        content: { "application/json": { schema: AdmissionResponse } },
+      },
+      "400": { description: "Validation error" },
+      "401": { description: "Unauthorized" },
+      "404": { description: "Entity not found" },
+    },
+  });
+
+  // Knowledge — relate
+  registry.registerPath({
+    method: "post",
+    path: "/api/v1/relations",
+    summary: "Create a relation (edge)",
+    security: auth,
+    request: { body: { required: true, content: { "application/json": { schema: RelateBody } } } },
+    responses: {
+      "200": {
+        description: "Admission result",
+        content: { "application/json": { schema: AdmissionResponse } },
+      },
+      "400": { description: "Validation error" },
+      "401": { description: "Unauthorized" },
+    },
+  });
+
+  // Knowledge — classify
+  registry.registerPath({
+    method: "post",
+    path: "/api/v1/classifications",
+    summary: "Add a classification",
+    security: auth,
+    request: {
+      body: { required: true, content: { "application/json": { schema: ClassifyBody } } },
+    },
+    responses: {
+      "200": {
+        description: "Admission result",
+        content: { "application/json": { schema: AdmissionResponse } },
+      },
+      "400": { description: "Validation error" },
+      "401": { description: "Unauthorized" },
+    },
+  });
+
+  // Knowledge — attach document
+  registry.registerPath({
+    method: "post",
+    path: "/api/v1/documents",
+    summary: "Attach a document",
+    security: auth,
+    request: {
+      body: { required: true, content: { "application/json": { schema: AttachDocumentBody } } },
+    },
+    responses: {
+      "200": {
+        description: "Admission result",
+        content: { "application/json": { schema: AdmissionResponse } },
+      },
+      "400": { description: "Validation error" },
+      "401": { description: "Unauthorized" },
+    },
+  });
+
+  // Retrieval — recall
+  registry.registerPath({
+    method: "get",
+    path: "/api/v1/recall",
+    summary: "Hybrid semantic recall",
+    description:
+      "Semantic + full-text search fused via RRF. The `status` query param maps to the `approval` field in RecallResult.",
+    security: auth,
+    request: {
+      query: z.object({
+        q: z.string().openapi({ description: "Search query (required)" }),
+        type: z.string().optional(),
+        author: z.string().optional(),
+        status: z
+          .string()
+          .optional()
+          .openapi({
+            description: "Filter by approval state — maps to the `approval` field on RecallResult",
+          }),
+      }),
+    },
+    responses: {
+      "200": {
+        description: "Recall results with provenance",
+        content: { "application/json": { schema: z.object({ results: z.array(RecallResult) }) } },
+      },
+      "400": { description: "Missing query parameter q" },
+      "401": { description: "Unauthorized" },
+    },
+  });
+
+  // Retrieval — get entity
+  registry.registerPath({
+    method: "get",
+    path: "/api/v1/entities/{id}",
+    summary: "Get an entity by ID",
+    security: auth,
+    request: { params: z.object({ id: z.string() }) },
+    responses: {
+      "200": { description: "Entity view" },
+      "401": { description: "Unauthorized" },
+      "404": { description: "Entity not found" },
+    },
+  });
+
+  // Retrieval — traverse
+  registry.registerPath({
+    method: "get",
+    path: "/api/v1/entities/{id}/traverse",
+    summary: "Traverse from an entity",
+    security: auth,
+    request: {
+      params: z.object({ id: z.string() }),
+      query: z.object({
+        edgeTypes: z.string().optional(),
+        direction: z.enum(["out", "in", "both"]).optional(),
+        depth: z.string().optional(),
+      }),
+    },
+    responses: {
+      "200": { description: "Traversal results" },
+      "401": { description: "Unauthorized" },
+    },
+  });
+
+  // Governance — proposals
+  registry.registerPath({
+    method: "get",
+    path: "/api/v1/proposals",
+    summary: "List pending proposals",
+    security: auth,
+    responses: {
+      "200": {
+        description: "Pending proposals",
+        content: { "application/json": { schema: z.object({ proposals: z.array(ProposalView) }) } },
+      },
+      "401": { description: "Unauthorized" },
+    },
+  });
+
+  // Governance — approve
+  registry.registerPath({
+    method: "post",
+    path: "/api/v1/proposals/{hash}/approve",
+    summary: "Approve a proposal",
+    security: auth,
+    request: { params: z.object({ hash: z.string() }) },
+    responses: {
+      "200": { description: "Approval result" },
+      "401": { description: "Unauthorized" },
+      "404": { description: "Proposal not found" },
+    },
+  });
+
+  // Governance — reject
+  registry.registerPath({
+    method: "post",
+    path: "/api/v1/proposals/{hash}/reject",
+    summary: "Reject a proposal",
+    security: auth,
+    request: { params: z.object({ hash: z.string() }) },
+    responses: {
+      "200": { description: "Rejection result" },
+      "401": { description: "Unauthorized" },
+      "404": { description: "Proposal not found" },
+    },
+  });
+
+  // Governance — verify
+  registry.registerPath({
+    method: "get",
+    path: "/api/v1/verify",
+    summary: "Verify the graph integrity",
+    security: auth,
+    responses: {
+      "200": {
+        description: "Integrity report",
+        content: { "application/json": { schema: VerifyReport } },
+      },
+      "401": { description: "Unauthorized" },
+    },
+  });
+
+  // Governance — reindex
+  registry.registerPath({
+    method: "post",
+    path: "/api/v1/reindex",
+    summary: "Rebuild the search index",
+    security: auth,
+    responses: {
+      "200": { description: "Reindex complete" },
+      "401": { description: "Unauthorized" },
+    },
+  });
+
+  // Governance — principals
+  registry.registerPath({
+    method: "get",
+    path: "/api/v1/principals",
+    summary: "List principals",
+    security: auth,
+    responses: {
+      "200": { description: "Principals list" },
+      "401": { description: "Unauthorized" },
+    },
+  });
+
+  // Governance — register agent
+  registry.registerPath({
+    method: "post",
+    path: "/api/v1/agents",
+    summary: "Register a new agent",
+    security: auth,
+    request: {
+      body: { required: true, content: { "application/json": { schema: RegisterAgentBody } } },
+    },
+    responses: {
+      "200": { description: "Agent registration result" },
+      "400": { description: "Validation error" },
+      "401": { description: "Unauthorized" },
+    },
+  });
+
+  // Schema — describe
+  registry.registerPath({
+    method: "get",
+    path: "/api/v1/schema",
+    summary: "Describe the schema",
+    security: auth,
+    responses: {
+      "200": {
+        description: "Schema description",
+        content: { "application/json": { schema: SchemaDescription } },
+      },
+      "401": { description: "Unauthorized" },
+    },
+  });
+
+  // Schema — propose ontology
+  registry.registerPath({
+    method: "post",
+    path: "/api/v1/schema/proposals",
+    summary: "Propose an ontology change",
+    security: auth,
+    request: {
+      body: { required: true, content: { "application/json": { schema: ProposeOntologyBody } } },
+    },
+    responses: {
+      "200": { description: "Proposal result" },
+      "400": { description: "Validation error" },
+      "401": { description: "Unauthorized" },
+    },
+  });
+
+  // Schema — install ontology
+  registry.registerPath({
+    method: "post",
+    path: "/api/v1/schema/install",
+    summary: "Install an ontology (owner)",
+    security: auth,
+    request: {
+      body: { required: true, content: { "application/json": { schema: InstallOntologyBody } } },
+    },
+    responses: {
+      "200": { description: "Install result" },
+      "400": { description: "Validation error" },
+      "401": { description: "Unauthorized" },
+    },
+  });
+
+  // Policy — get
+  registry.registerPath({
+    method: "get",
+    path: "/api/v1/policy",
+    summary: "Get policy rules",
+    security: auth,
+    responses: {
+      "200": { description: "Policy rules list" },
+      "401": { description: "Unauthorized" },
+    },
+  });
+
+  // Policy — propose
+  registry.registerPath({
+    method: "post",
+    path: "/api/v1/policy",
+    summary: "Propose a policy change",
+    security: auth,
+    request: { body: { required: true, content: { "application/json": { schema: PolicyBody } } } },
+    responses: {
+      "200": { description: "Policy proposal result" },
+      "400": { description: "Invalid JSON body" },
+      "401": { description: "Unauthorized" },
+    },
+  });
+
+  // Log
+  registry.registerPath({
+    method: "get",
+    path: "/api/v1/log",
+    summary: "Get the changeset log",
+    security: auth,
+    responses: {
+      "200": { description: "Changeset log entries" },
+      "401": { description: "Unauthorized" },
+    },
+  });
+
+  // OpenAPI spec itself
+  registry.registerPath({
+    method: "get",
+    path: "/api/v1/openapi.json",
+    summary: "OpenAPI specification",
+    responses: {
+      "200": { description: "This document" },
+    },
+  });
+
+  return registry;
+}
 
 export function getOpenApiDoc(): object {
-  const paths: Record<string, Record<string, object>> = {};
-
-  for (const [method, path, summary, requiresAuth] of ROUTES) {
-    if (!paths[path]) paths[path] = {};
-    const operation: Record<string, unknown> = {
-      summary,
-      responses: {
-        "200": { description: "Success" },
-        "400": { description: "Validation error" },
-        "401": { description: "Unauthorized" },
-        "404": { description: "Not found" },
-        "409": { description: "Policy rejected" },
-      },
-    };
-    if (requiresAuth) {
-      operation.security = [{ bearerAuth: [] }];
-    }
-    paths[path][method] = operation;
-  }
-
-  return {
+  const registry = buildRegistry();
+  const generator = new OpenApiGeneratorV31(registry.definitions);
+  return generator.generateDocument({
     openapi: "3.1.0",
     info: {
       title: "Freehold API",
@@ -64,11 +595,7 @@ export function getOpenApiDoc(): object {
       description: "Governed memory backend for AI agents, built on the Allod format.",
     },
     servers: [{ url: "http://127.0.0.1:8710", description: "Local daemon" }],
-    components: {
-      securitySchemes: bearerScheme,
-    },
-    paths,
-  };
+  });
 }
 
 export function writeOpenApi(outPath: string): void {

@@ -229,4 +229,55 @@ describe("OpenAPI document coverage", () => {
     expect(typeof doc.info.version).toBe("string");
     expect(doc.servers.length).toBeGreaterThan(0);
   });
+
+  test("mutating routes have requestBody schemas defined", () => {
+    const doc = getOpenApiDoc() as {
+      paths: Record<string, Record<string, {
+        requestBody?: { content?: { "application/json"?: { schema?: unknown } } }
+      }>>;
+    };
+
+    const mutatingRoutes: Array<[string, string]> = [
+      ["post", "/api/v1/remember"],
+      ["post", "/api/v1/entities"],
+      ["patch", "/api/v1/entities/{id}"],
+      ["post", "/api/v1/relations"],
+      ["post", "/api/v1/classifications"],
+      ["post", "/api/v1/documents"],
+      ["post", "/api/v1/agents"],
+      ["post", "/api/v1/schema/proposals"],
+      ["post", "/api/v1/schema/install"],
+    ];
+
+    for (const [method, path] of mutatingRoutes) {
+      const op = doc.paths[path]?.[method];
+      expect(op, `Missing operation ${method.toUpperCase()} ${path}`).toBeDefined();
+      const schema = op?.requestBody?.content?.["application/json"]?.schema;
+      expect(schema, `Missing requestBody schema for ${method.toUpperCase()} ${path}`).toBeDefined();
+    }
+  });
+
+  test("typed response schemas exist for key routes", () => {
+    const doc = getOpenApiDoc() as {
+      paths: Record<string, Record<string, {
+        responses?: Record<string, { content?: { "application/json"?: { schema?: unknown } } }>
+      }>>;
+    };
+
+    const typedRoutes: Array<[string, string]> = [
+      ["post", "/api/v1/remember"],
+      ["post", "/api/v1/entities"],
+      ["get", "/api/v1/proposals"],
+      ["get", "/api/v1/recall"],
+      ["get", "/api/v1/verify"],
+      ["get", "/api/v1/schema"],
+    ];
+
+    for (const [method, path] of typedRoutes) {
+      const op = doc.paths[path]?.[method];
+      expect(op, `Missing operation ${method.toUpperCase()} ${path}`).toBeDefined();
+      const schema = op?.responses?.["200"]?.content?.["application/json"]?.schema;
+      expect(schema, `Missing 200 response schema for ${method.toUpperCase()} ${path}`).toBeDefined();
+    }
+  });
 });

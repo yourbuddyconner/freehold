@@ -16,9 +16,424 @@
       "bearerAuth": {
         "type": "http",
         "scheme": "bearer",
-        "bearerFormat": "JWT"
+        "bearerFormat": "token"
       }
-    }
+    },
+    "schemas": {
+      "RememberBody": {
+        "type": "object",
+        "properties": {
+          "agent": {
+            "type": "string",
+            "description": "Agent name performing the write"
+          },
+          "content": {
+            "type": "string",
+            "description": "Free-text note content"
+          }
+        },
+        "required": [
+          "agent",
+          "content"
+        ]
+      },
+      "CreateEntityBody": {
+        "type": "object",
+        "properties": {
+          "agent": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "description": "Entity type ref, e.g. memory/Preference@1"
+          },
+          "attributes": {
+            "type": "object",
+            "additionalProperties": {}
+          },
+          "classification": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "agent",
+          "type",
+          "attributes"
+        ]
+      },
+      "UpdateEntityBody": {
+        "type": "object",
+        "properties": {
+          "agent": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "attributes": {
+            "type": "object",
+            "additionalProperties": {}
+          },
+          "prior": {
+            "type": "string",
+            "description": "Hash of the changeset being superseded"
+          }
+        },
+        "required": [
+          "agent",
+          "type",
+          "attributes"
+        ]
+      },
+      "RelateBody": {
+        "type": "object",
+        "properties": {
+          "agent": {
+            "type": "string"
+          },
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "edgeType": {
+            "type": "string"
+          },
+          "attributes": {
+            "type": "object",
+            "additionalProperties": {}
+          },
+          "scratch": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "agent",
+          "from",
+          "to",
+          "edgeType"
+        ]
+      },
+      "ClassifyBody": {
+        "type": "object",
+        "properties": {
+          "agent": {
+            "type": "string"
+          },
+          "nodeId": {
+            "type": "string"
+          },
+          "term": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "agent",
+          "nodeId",
+          "term"
+        ]
+      },
+      "AttachDocumentBody": {
+        "type": "object",
+        "properties": {
+          "agent": {
+            "type": "string"
+          },
+          "entityId": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "agent",
+          "entityId",
+          "content"
+        ]
+      },
+      "RegisterAgentBody": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "ProposeOntologyBody": {
+        "type": "object",
+        "properties": {
+          "agent": {
+            "type": "string"
+          },
+          "packageName": {
+            "type": "string"
+          },
+          "ontologyYaml": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "agent",
+          "packageName",
+          "ontologyYaml"
+        ]
+      },
+      "InstallOntologyBody": {
+        "type": "object",
+        "properties": {
+          "docsYaml": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "docsYaml"
+        ]
+      },
+      "PolicyBody": {
+        "type": "object",
+        "properties": {}
+      },
+      "AdmissionResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "admitted",
+              "held"
+            ]
+          },
+          "hash": {
+            "type": "string"
+          },
+          "proposal": {},
+          "rule": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "status",
+          "hash"
+        ]
+      },
+      "RememberResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/AdmissionResponse"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "noteId": {
+                "type": "string"
+              },
+              "changeset": {
+                "type": "string"
+              }
+            }
+          }
+        ]
+      },
+      "ProposalView": {
+        "type": "object",
+        "properties": {
+          "hash": {
+            "type": "string"
+          },
+          "agent": {
+            "type": "string"
+          },
+          "intent": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "rules": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "diff": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string"
+                },
+                "before": {},
+                "after": {}
+              },
+              "required": [
+                "key"
+              ]
+            }
+          },
+          "isSchemaProposal": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "hash",
+          "agent",
+          "intent",
+          "summary",
+          "rules",
+          "diff",
+          "isSchemaProposal"
+        ]
+      },
+      "RecallResult": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "content": {},
+          "author": {
+            "type": "string"
+          },
+          "approval": {
+            "type": "string",
+            "description": "approval field; maps from the `status` query parameter"
+          },
+          "changeset": {
+            "type": "string"
+          },
+          "score": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "author",
+          "approval",
+          "changeset",
+          "score"
+        ]
+      },
+      "VerifyReport": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "stateHash": {
+            "type": "string"
+          },
+          "degraded": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "reason": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "reason"
+              ]
+            }
+          }
+        },
+        "required": [
+          "ok"
+        ]
+      },
+      "SchemaDescription": {
+        "type": "object",
+        "properties": {
+          "entityTypes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "package": {
+                  "type": "string"
+                },
+                "attributes": {
+                  "type": "object",
+                  "additionalProperties": {}
+                },
+                "extends": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name"
+              ]
+            }
+          },
+          "edgeTypes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "domain": {
+                  "type": "string"
+                },
+                "range": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name"
+              ]
+            }
+          },
+          "terms": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "parent": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name"
+              ]
+            }
+          }
+        },
+        "required": [
+          "entityTypes",
+          "edgeTypes",
+          "terms"
+        ]
+      }
+    },
+    "parameters": {}
   },
   "paths": {
     "/health": {
@@ -26,7 +441,143 @@
         "summary": "Health check",
         "responses": {
           "200": {
-            "description": "Success"
+            "description": "Service is up",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "ok"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "status"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/remember": {
+      "post": {
+        "summary": "Write a scratch note",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RememberBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Admission result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RememberResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/entities": {
+      "post": {
+        "summary": "Create an entity",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateEntityBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Admission result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdmissionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/entities/{id}": {
+      "patch": {
+        "summary": "Update an entity",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateEntityBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Admission result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdmissionResponse"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error"
@@ -35,10 +586,625 @@
             "description": "Unauthorized"
           },
           "404": {
-            "description": "Not found"
+            "description": "Entity not found"
+          }
+        }
+      },
+      "get": {
+        "summary": "Get an entity by ID",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Entity view"
           },
-          "409": {
-            "description": "Policy rejected"
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Entity not found"
+          }
+        }
+      }
+    },
+    "/api/v1/relations": {
+      "post": {
+        "summary": "Create a relation (edge)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RelateBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Admission result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdmissionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/classifications": {
+      "post": {
+        "summary": "Add a classification",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClassifyBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Admission result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdmissionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/documents": {
+      "post": {
+        "summary": "Attach a document",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AttachDocumentBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Admission result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdmissionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/recall": {
+      "get": {
+        "summary": "Hybrid semantic recall",
+        "description": "Semantic + full-text search fused via RRF. The `status` query param maps to the `approval` field in RecallResult.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Search query (required)"
+            },
+            "required": true,
+            "name": "q",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "type",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "author",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Filter by approval state — maps to the `approval` field on RecallResult"
+            },
+            "required": false,
+            "name": "status",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Recall results with provenance",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/RecallResult"
+                      }
+                    }
+                  },
+                  "required": [
+                    "results"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing query parameter q"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/entities/{id}/traverse": {
+      "get": {
+        "summary": "Traverse from an entity",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "edgeTypes",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "out",
+                "in",
+                "both"
+              ]
+            },
+            "required": false,
+            "name": "direction",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "depth",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Traversal results"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/proposals": {
+      "get": {
+        "summary": "List pending proposals",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Pending proposals",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "proposals": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ProposalView"
+                      }
+                    }
+                  },
+                  "required": [
+                    "proposals"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/proposals/{hash}/approve": {
+      "post": {
+        "summary": "Approve a proposal",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "hash",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Approval result"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Proposal not found"
+          }
+        }
+      }
+    },
+    "/api/v1/proposals/{hash}/reject": {
+      "post": {
+        "summary": "Reject a proposal",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "hash",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Rejection result"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Proposal not found"
+          }
+        }
+      }
+    },
+    "/api/v1/verify": {
+      "get": {
+        "summary": "Verify the graph integrity",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Integrity report",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerifyReport"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/reindex": {
+      "post": {
+        "summary": "Rebuild the search index",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Reindex complete"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/principals": {
+      "get": {
+        "summary": "List principals",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Principals list"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/agents": {
+      "post": {
+        "summary": "Register a new agent",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterAgentBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Agent registration result"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/schema": {
+      "get": {
+        "summary": "Describe the schema",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Schema description",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SchemaDescription"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/schema/proposals": {
+      "post": {
+        "summary": "Propose an ontology change",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProposeOntologyBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Proposal result"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/schema/install": {
+      "post": {
+        "summary": "Install an ontology (owner)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InstallOntologyBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Install result"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/policy": {
+      "get": {
+        "summary": "Get policy rules",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Policy rules list"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      },
+      "post": {
+        "summary": "Propose a policy change",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PolicyBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Policy proposal result"
+          },
+          "400": {
+            "description": "Invalid JSON body"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/log": {
+      "get": {
+        "summary": "Get the changeset log",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Changeset log entries"
+          },
+          "401": {
+            "description": "Unauthorized"
           }
         }
       }
@@ -48,612 +1214,11 @@
         "summary": "OpenAPI specification",
         "responses": {
           "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Validation error"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "404": {
-            "description": "Not found"
-          },
-          "409": {
-            "description": "Policy rejected"
+            "description": "This document"
           }
         }
       }
-    },
-    "/api/v1/remember": {
-      "post": {
-        "summary": "Write a scratch note",
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Validation error"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "404": {
-            "description": "Not found"
-          },
-          "409": {
-            "description": "Policy rejected"
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
-      }
-    },
-    "/api/v1/entities": {
-      "post": {
-        "summary": "Create an entity",
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Validation error"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "404": {
-            "description": "Not found"
-          },
-          "409": {
-            "description": "Policy rejected"
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
-      }
-    },
-    "/api/v1/entities/{id}": {
-      "patch": {
-        "summary": "Update an entity",
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Validation error"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "404": {
-            "description": "Not found"
-          },
-          "409": {
-            "description": "Policy rejected"
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
-      },
-      "get": {
-        "summary": "Get an entity by ID",
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Validation error"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "404": {
-            "description": "Not found"
-          },
-          "409": {
-            "description": "Policy rejected"
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
-      }
-    },
-    "/api/v1/relations": {
-      "post": {
-        "summary": "Create a relation (edge)",
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Validation error"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "404": {
-            "description": "Not found"
-          },
-          "409": {
-            "description": "Policy rejected"
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
-      }
-    },
-    "/api/v1/classifications": {
-      "post": {
-        "summary": "Add a classification",
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Validation error"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "404": {
-            "description": "Not found"
-          },
-          "409": {
-            "description": "Policy rejected"
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
-      }
-    },
-    "/api/v1/documents": {
-      "post": {
-        "summary": "Attach a document",
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Validation error"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "404": {
-            "description": "Not found"
-          },
-          "409": {
-            "description": "Policy rejected"
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
-      }
-    },
-    "/api/v1/recall": {
-      "get": {
-        "summary": "Hybrid semantic recall",
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Validation error"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "404": {
-            "description": "Not found"
-          },
-          "409": {
-            "description": "Policy rejected"
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
-      }
-    },
-    "/api/v1/entities/{id}/traverse": {
-      "get": {
-        "summary": "Traverse from an entity",
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Validation error"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "404": {
-            "description": "Not found"
-          },
-          "409": {
-            "description": "Policy rejected"
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
-      }
-    },
-    "/api/v1/proposals": {
-      "get": {
-        "summary": "List pending proposals",
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Validation error"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "404": {
-            "description": "Not found"
-          },
-          "409": {
-            "description": "Policy rejected"
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
-      }
-    },
-    "/api/v1/proposals/{hash}/approve": {
-      "post": {
-        "summary": "Approve a proposal",
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Validation error"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "404": {
-            "description": "Not found"
-          },
-          "409": {
-            "description": "Policy rejected"
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
-      }
-    },
-    "/api/v1/proposals/{hash}/reject": {
-      "post": {
-        "summary": "Reject a proposal",
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Validation error"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "404": {
-            "description": "Not found"
-          },
-          "409": {
-            "description": "Policy rejected"
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
-      }
-    },
-    "/api/v1/verify": {
-      "get": {
-        "summary": "Verify the graph integrity",
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Validation error"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "404": {
-            "description": "Not found"
-          },
-          "409": {
-            "description": "Policy rejected"
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
-      }
-    },
-    "/api/v1/reindex": {
-      "post": {
-        "summary": "Rebuild the search index",
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Validation error"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "404": {
-            "description": "Not found"
-          },
-          "409": {
-            "description": "Policy rejected"
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
-      }
-    },
-    "/api/v1/principals": {
-      "get": {
-        "summary": "List principals",
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Validation error"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "404": {
-            "description": "Not found"
-          },
-          "409": {
-            "description": "Policy rejected"
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
-      }
-    },
-    "/api/v1/agents": {
-      "post": {
-        "summary": "Register a new agent",
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Validation error"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "404": {
-            "description": "Not found"
-          },
-          "409": {
-            "description": "Policy rejected"
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
-      }
-    },
-    "/api/v1/schema": {
-      "get": {
-        "summary": "Describe the schema",
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Validation error"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "404": {
-            "description": "Not found"
-          },
-          "409": {
-            "description": "Policy rejected"
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
-      }
-    },
-    "/api/v1/schema/proposals": {
-      "post": {
-        "summary": "Propose an ontology change",
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Validation error"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "404": {
-            "description": "Not found"
-          },
-          "409": {
-            "description": "Policy rejected"
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
-      }
-    },
-    "/api/v1/schema/install": {
-      "post": {
-        "summary": "Install an ontology (owner)",
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Validation error"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "404": {
-            "description": "Not found"
-          },
-          "409": {
-            "description": "Policy rejected"
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
-      }
-    },
-    "/api/v1/policy": {
-      "get": {
-        "summary": "Get policy rules",
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Validation error"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "404": {
-            "description": "Not found"
-          },
-          "409": {
-            "description": "Policy rejected"
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
-      },
-      "post": {
-        "summary": "Propose a policy change",
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Validation error"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "404": {
-            "description": "Not found"
-          },
-          "409": {
-            "description": "Policy rejected"
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
-      }
-    },
-    "/api/v1/log": {
-      "get": {
-        "summary": "Get the changeset log",
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Validation error"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "404": {
-            "description": "Not found"
-          },
-          "409": {
-            "description": "Policy rejected"
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
-      }
     }
-  }
+  },
+  "webhooks": {}
 }

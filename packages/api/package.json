@@ -22,6 +22,7 @@
     "serve": "tsx src/serve.ts"
   },
   "dependencies": {
+    "@asteasolutions/zod-to-openapi": "^7.3.4",
     "@freehold/core": "workspace:*",
     "@hono/node-server": "^1.13.7",
     "@hono/zod-openapi": "^0.18.4",
