@@ -116,6 +116,12 @@ jobs:
             sleep 1
           done
 
+          # Register the CI agent before it writes
+          curl -sf -X POST "http://127.0.0.1:$PORT/api/v1/agents" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $TOKEN" \
+            -d '{"name":"ci-agent"}' > /dev/null
+
           # Write some knowledge via the API
           curl -sf -X POST "http://127.0.0.1:$PORT/api/v1/remember" \
             -H "Content-Type: application/json" \
