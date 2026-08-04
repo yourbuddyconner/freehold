@@ -3,8 +3,8 @@
  *
  * Steps:
  *   1. Spawn daemon on a temp FREEHOLD_HOME (embedder=hash)
- *   2. Execute 10 sequential POST /api/v1/remember writes
- *   3. SIGKILL the daemon mid-write (after write #10)
+ *   2. Fire 20 concurrent POST /api/v1/remember writes without awaiting
+ *   3. SIGKILL the daemon 50ms later — while writes are in flight
  *   4. Wait briefly, respawn on the same FREEHOLD_HOME
  *   5. GET /api/v1/verify — assert ok
  *   6. POST /api/v1/reindex — assert ok
@@ -97,9 +97,9 @@ afterAll(() => {
 
 describe("SIGKILL recovery", () => {
   test("restarts cleanly after mid-write SIGKILL; verify + reindex succeed", async () => {
-    // Step 1: write loop — 10 sequential POSTs
-    for (let i = 0; i < 10; i++) {
-      const res = await fetch(`http://127.0.0.1:${port}/api/v1/remember`, {
+    // Fire a burst of writes without awaiting — SIGKILL arrives while writes are in flight
+    const writeFn = (i: number) =>
+      fetch(`http://127.0.0.1:${port}/api/v1/remember`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -109,17 +109,18 @@ describe("SIGKILL recovery", () => {
           content: `kill-test note ${i} – ${Date.now()}`,
           agent: "test-agent",
         }),
-      });
-      // Accept 200 or 201; don't hard-fail on individual write errors
-      expect([200, 201]).toContain(res.status);
-    }
+      }).catch(() => null); // writes may fail once the daemon is killed — that's expected
 
-    // Step 2: SIGKILL the daemon
+    // Launch 20 writes concurrently; SIGKILL fires after 50ms while writes are in flight
+    const writePromises = Promise.all(Array.from({ length: 20 }, (_, i) => writeFn(i)));
+    await new Promise((r) => setTimeout(r, 50));
     if (serverProc) {
       serverProc.kill("SIGKILL");
     }
+    // Let the write promises settle (they may reject after the kill — that's fine)
+    await writePromises.catch(() => null);
 
-    // Step 3: wait for process to exit and settle
+    // Wait for process to exit and settle
     await new Promise((r) => setTimeout(r, 1_000));
 
     // Step 4: respawn on the same FREEHOLD_HOME
