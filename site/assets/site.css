@@ -950,7 +950,10 @@ p + p {
 .hero-visual {
   border: 1px solid var(--hairline);
   background: #fff;
-  padding: 20px;
+  padding: 16px;
+  max-width: 360px;
+  width: 100%;
+  justify-self: end;
 }
 .hero-visual svg {
   display: block;
@@ -960,7 +963,11 @@ p + p {
 @media (max-width: 900px) {
   .hero-grid {
     grid-template-columns: 1fr;
-    gap: 48px;
+    gap: 40px;
+  }
+  .hero-visual {
+    max-width: 320px;
+    justify-self: start;
   }
 }
 
