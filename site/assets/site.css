@@ -935,8 +935,7 @@ p + p {
   padding: 20px 24px;
   font-size: 0.875rem;
   color: var(--muted);
-  display: flex;
-  align-items: center;
+  align-content: center;
 }
 
 /* ── Notice / callout ────────────────────────────────────────────── */
