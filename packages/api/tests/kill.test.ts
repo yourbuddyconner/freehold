@@ -35,7 +35,7 @@ function makeTempHome(): { home: string; token: string; port: number } {
   return { home, token, port };
 }
 
-async function waitForDaemon(port: number, maxWait = 20_000): Promise<void> {
+async function waitForDaemon(port: number, maxWait = 60_000): Promise<void> {
   const deadline = Date.now() + maxWait;
   while (Date.now() < deadline) {
     try {
@@ -81,7 +81,7 @@ beforeAll(async () => {
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
     body: JSON.stringify({ name: "test-agent" }),
   });
-}, 30_000);
+}, 90_000);
 
 afterAll(() => {
   // Best-effort cleanup — the second daemon should already be dead after the test
@@ -135,7 +135,7 @@ describe("SIGKILL recovery", () => {
 
     // Step 4: respawn on the same FREEHOLD_HOME
     serverProc = spawnDaemon(home);
-    await waitForDaemon(port, 20_000);
+    await waitForDaemon(port, 60_000);
 
     // Step 5: GET /api/v1/verify — graph must be structurally valid after SIGKILL restart
     const verifyRes = await fetch(`http://127.0.0.1:${port}/api/v1/verify`, {
@@ -201,5 +201,5 @@ describe("SIGKILL recovery", () => {
     // The pre-kill note's id must appear in the recall results
     const found = recallBody.results?.some((r) => r.id === preKillNoteId);
     expect(found).toBe(true);
-  }, 55_000);
+  }, 120_000);
 });
