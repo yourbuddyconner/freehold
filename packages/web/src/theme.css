@@ -284,3 +284,8 @@ body {
   border-top: 1px solid var(--border);
   margin: 1.2em 0;
 }
+
+/* ─── Graph: hovered node rises above siblings so its card isn't clipped ── */
+.react-flow__node:hover {
+  z-index: 1000 !important;
+}

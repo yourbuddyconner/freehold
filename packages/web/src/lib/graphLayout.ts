@@ -26,12 +26,16 @@ export interface GraphEdgeInput {
 export interface PositionedNode extends GraphNodeInput {
   x: number;
   y: number;
-  /** Diameter in px, scaled by incoming degree */
+  /** Icon diameter in px, scaled by incoming degree */
   size: number;
   /** True for synthetic type-hub nodes */
   hub: boolean;
   /** Display group (the tree folder name), drives color */
   group: string;
+  /** Truncated title rendered under the icon; the full title lives in the hover card */
+  label: string;
+  /** Half-width in px of the icon + label footprint — what collision reserved */
+  footprint: number;
 }
 
 export interface LayoutResult {
@@ -49,6 +53,23 @@ function hash(s: string): number {
 }
 
 const TICKS = 200;
+const LABEL_MAX_CHARS = 22;
+/** Approximate px per character at the node label's 10px size. */
+const LABEL_CHAR_W = 6.1;
+
+/** Short label under the icon; the hover card carries the full title. */
+export function nodeLabel(title: string): string {
+  const flat = title.trim().split("\n")[0];
+  return flat.length > LABEL_MAX_CHARS ? `${flat.slice(0, LABEL_MAX_CHARS - 1)}…` : flat;
+}
+
+/**
+ * Half-width of a node's rendered footprint: the label extends horizontally
+ * under the icon, so collision must reserve label width, not icon width.
+ */
+export function nodeFootprint(label: string, iconSize: number): number {
+  return Math.max(iconSize / 2, (label.length * LABEL_CHAR_W) / 2) + 10;
+}
 
 interface SimNode extends PositionedNode {
   index?: number;
@@ -80,11 +101,15 @@ export function layoutGraph(
     const seed = hash(n.id);
     const angle = ((seed % 3600) / 3600) * 2 * Math.PI;
     const radius = 60 + (seed % 240);
+    const size = Math.min(40, Math.round(22 + 4 * Math.sqrt(deg)));
+    const label = nodeLabel(n.title);
     return {
       ...n,
       group: displayTypeName(n.type),
       hub: false,
-      size: Math.min(26, Math.round(9 + 3.4 * Math.sqrt(deg))),
+      size,
+      label,
+      footprint: nodeFootprint(label, size),
       x: width / 2 + Math.cos(angle) * radius,
       y: height / 2 + Math.sin(angle) * radius,
     };
@@ -115,7 +140,9 @@ export function layoutGraph(
         approval: "saved",
         group,
         hub: true,
-        size: 18,
+        size: 26,
+        label: group,
+        footprint: nodeFootprint(group, 26),
         x: width / 2 + Math.cos(angle) * 150,
         y: height / 2 + Math.sin(angle) * 150,
       });
@@ -136,15 +163,18 @@ export function layoutGraph(
       "link",
       forceLink(simEdges)
         .id((d) => (d as SimNode).id)
-        .distance(70)
+        .distance(110)
         .strength(0.4)
     )
-    .force("charge", forceManyBody().strength(-120))
+    .force("charge", forceManyBody().strength(-220))
     .force("x", forceX(width / 2).strength(0.05))
     .force("y", forceY(height / 2).strength(0.05))
     .force(
       "collide",
-      forceCollide<SimNode>().radius((d) => d.size / 2 + 18)
+      forceCollide<SimNode>()
+        .radius((d) => d.footprint + 14)
+        .strength(0.9)
+        .iterations(2)
     )
     .stop();
 
@@ -161,6 +191,8 @@ export function layoutGraph(
       group: n.group,
       hub: n.hub,
       size: n.size,
+      label: n.label,
+      footprint: n.footprint,
       x: Math.round(n.x * 100) / 100,
       y: Math.round(n.y * 100) / 100,
     })),

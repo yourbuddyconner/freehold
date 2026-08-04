@@ -1,7 +1,18 @@
-import { Background, ReactFlow } from "@xyflow/react";
+import { Background, Handle, Position, ReactFlow } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { createRoute, useNavigate } from "@tanstack/react-router";
+import {
+  Bot,
+  Box,
+  CalendarDays,
+  FileText,
+  Folder,
+  SlidersHorizontal,
+  StickyNote,
+  User,
+} from "lucide-react";
 import { useMemo, useState } from "react";
+import { StatusChip } from "~/components/StatusChip";
 import { layoutGraph } from "~/lib/graphLayout";
 import { useMemoryGraph } from "~/lib/hooks";
 import { Route as RootRoute } from "./__root";
@@ -23,6 +34,102 @@ function groupColor(group: string): string {
   return PALETTE[(h >>> 0) % PALETTE.length];
 }
 
+const GROUP_ICONS: Record<string, typeof StickyNote> = {
+  Notes: StickyNote,
+  Documents: FileText,
+  People: User,
+  Preferences: SlidersHorizontal,
+  Events: CalendarDays,
+  Agents: Bot,
+};
+
+interface MemoryNodeData {
+  label: string;
+  title: string;
+  type: string;
+  group: string;
+  approval: string;
+  hub: boolean;
+  size: number;
+  footprint: number;
+  [key: string]: unknown;
+}
+
+/** Icon node with its title beneath and a detail card on hover. */
+function MemoryNode({ data }: { data: MemoryNodeData }) {
+  const [hovered, setHovered] = useState(false);
+  const Icon = data.hub ? Folder : (GROUP_ICONS[data.group] ?? Box);
+  const pending = data.approval === "pending";
+
+  return (
+    <div
+      className="flex flex-col items-center"
+      style={{ width: data.footprint * 2 }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      <Handle type="target" position={Position.Top} style={{ opacity: 0 }} />
+      <Handle type="source" position={Position.Bottom} style={{ opacity: 0 }} />
+      <span
+        className="flex items-center justify-center"
+        style={{
+          width: data.size,
+          height: data.size,
+          background: data.hub ? "var(--bg-subtle)" : groupColor(data.group),
+          border: pending ? "1.5px dashed var(--color-status-pending)" : "1px solid var(--border)",
+          opacity: pending ? 0.75 : 1,
+          color: data.hub ? "var(--fg-muted)" : "#0e0e0c",
+        }}
+      >
+        <Icon size={Math.max(12, data.size - 12)} strokeWidth={1.75} aria-hidden />
+      </span>
+      <span
+        className="mt-1 text-center leading-tight"
+        style={{
+          fontSize: 10,
+          color: "var(--fg)",
+          whiteSpace: "nowrap",
+          opacity: pending ? 0.75 : 1,
+        }}
+      >
+        {data.label}
+      </span>
+
+      {hovered && (
+        <div
+          data-testid="graph-hover-card"
+          className="border border-(--border) bg-(--bg) p-2.5 space-y-1.5 shadow-md"
+          style={{
+            position: "absolute",
+            bottom: "100%",
+            marginBottom: 6,
+            minWidth: 200,
+            maxWidth: 280,
+            zIndex: 1000,
+            pointerEvents: "none",
+            textAlign: "left",
+          }}
+        >
+          <p className="text-xs text-(--fg) leading-snug">{data.title}</p>
+          <div className="flex items-center gap-1.5">
+            <span className="font-mono text-[10px] uppercase tracking-[0.06em] text-(--fg-muted)">
+              {data.hub ? "type group" : data.type.split("@")[0]}
+            </span>
+            {!data.hub && (
+              <StatusChip
+                status={pending ? "pending" : "approved"}
+                label={pending ? "Pending" : "Saved"}
+              />
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const nodeTypes = { memory: MemoryNode };
+
 export function MemoryGraphPage() {
   const { data, isLoading } = useMemoryGraph();
   const [hubs, setHubs] = useState(true);
@@ -37,24 +144,18 @@ export function MemoryGraphPage() {
     () =>
       layout.nodes.map((n) => ({
         id: n.id,
-        position: { x: n.x, y: n.y },
-        data: { label: n.title },
-        style: {
-          width: "auto",
-          minWidth: n.size + 24,
-          padding: "3px 8px",
-          fontSize: n.hub ? 10 : 11,
-          fontFamily: n.hub ? "'IBM Plex Mono', monospace" : undefined,
-          textTransform: n.hub ? ("uppercase" as const) : undefined,
-          letterSpacing: n.hub ? "0.08em" : undefined,
-          borderRadius: 0,
-          border:
-            n.approval === "pending"
-              ? "1px dashed var(--color-status-pending)"
-              : "1px solid var(--border)",
-          background: n.hub ? "var(--bg-subtle)" : groupColor(n.group),
-          color: n.hub ? "var(--fg-muted)" : "#0e0e0c",
-          opacity: n.approval === "pending" ? 0.6 : 1,
+        type: "memory" as const,
+        // Layout positions are centers; React Flow anchors at top-left
+        position: { x: n.x - n.footprint, y: n.y - n.size / 2 },
+        data: {
+          label: n.label,
+          title: n.title,
+          type: n.type,
+          group: n.group,
+          approval: n.approval,
+          hub: n.hub,
+          size: n.size,
+          footprint: n.footprint,
         },
       })),
     [layout]
@@ -66,13 +167,10 @@ export function MemoryGraphPage() {
         id: e.id,
         source: e.from,
         target: e.to,
-        label: e.type === "containment" ? undefined : e.type.split("@")[0].split("/").pop(),
-        labelStyle: { fontSize: 9, fill: "var(--fg-muted)" },
-        labelBgStyle: { fill: "transparent" },
         style:
           e.type === "containment"
             ? { stroke: "var(--border)", strokeDasharray: "3 3" }
-            : { stroke: "var(--fg-muted)" },
+            : { stroke: "var(--fg-muted)", strokeWidth: 1.25 },
         animated: false,
       })),
     [layout]
@@ -118,7 +216,9 @@ export function MemoryGraphPage() {
         <ReactFlow
           nodes={flowNodes}
           edges={flowEdges}
+          nodeTypes={nodeTypes}
           fitView
+          fitViewOptions={{ padding: 0.15, maxZoom: 1.25 }}
           nodesDraggable={false}
           nodesConnectable={false}
           proOptions={{ hideAttribution: true }}
