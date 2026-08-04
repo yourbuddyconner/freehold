@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Freehold — Memory for AI agents, on your machine</title>
-  <meta name="description" content="Freehold is a memory server for AI agents that runs on your machine. Notes save instantly, important writes wait for your approval, and every decision is signed and verifiable.">
+  <meta name="description" content="Give every agent you run one shared, persistent memory on your machine. Sessions start with context, important writes wait for your approval, and every belief has a paper trail.">
   <link rel="stylesheet" href="assets/site.css">
 </head>
 <body>
@@ -39,7 +39,7 @@
             Your agents' memory, in a graph you own.
           </h1>
           <p class="hero-subhead reveal reveal-3">
-            Freehold is a memory server for AI agents that runs on your machine. Agents save what they learn as they work, anything important waits for your approval, and every decision is signed with your key in a history you can verify.
+            Freehold gives every agent you run one shared, persistent memory on your machine. Sessions start with context instead of a blank slate, anything important waits for your approval, and you can trace every belief back to the moment you approved it.
           </p>
           <div class="hero-actions reveal reveal-4">
             <a href="docs/quickstart.html" class="btn btn-primary">Get started</a>
@@ -49,7 +49,7 @@
 
         <div class="hero-visual reg-marks reveal reveal-3">
           <span class="reg-mark-bl"></span><span class="reg-mark-br"></span>
-          <svg viewBox="0 0 460 520" role="img" aria-label="A pending proposal from an agent, your signed decision, and the append-only log it lands in.">
+          <svg viewBox="0 0 480 510" role="img" aria-label="A pending proposal from an agent, your signed decision, and the append-only log it lands in.">
             <defs>
               <marker id="h-arr" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
                 <path d="M0 0 L8 4 L0 8 z" fill="#0E0E0C"/>
@@ -59,105 +59,105 @@
               .h-card   { fill: #FFFFFF; stroke: #E8A200; stroke-dasharray: 5 4; }
               .h-panel  { fill: #FFFFFF; stroke: #0E0E0C; }
               .h-chip   { fill: #fffbeb; stroke: #E8A200; stroke-dasharray: 4 3; }
-              .h-chip-t { font: 600 10px "IBM Plex Mono", monospace; letter-spacing: 0.08em; fill: #E8A200; }
-              .h-type   { font: 500 11.5px "IBM Plex Mono", monospace; fill: #0E0E0C; }
-              .h-stmt   { font: 16px "Archivo", sans-serif; fill: #0E0E0C; }
-              .h-rule   { font: 10.5px "IBM Plex Mono", monospace; fill: #6B6F66; }
-              .h-sig    { font: 11px "Archivo", sans-serif; fill: #6B6F66; }
+              .h-chip-t { font: 600 11px "IBM Plex Mono", monospace; letter-spacing: 0.08em; fill: #E8A200; }
+              .h-type   { font: 500 13px "IBM Plex Mono", monospace; fill: #0E0E0C; }
+              .h-stmt   { font: 600 20px "Archivo", sans-serif; fill: #0E0E0C; }
+              .h-rule   { font: 11px "IBM Plex Mono", monospace; fill: #6B6F66; }
+              .h-sig    { font: 12px "Archivo", sans-serif; fill: #6B6F66; }
               .h-btn-g  { fill: #FFFFFF; stroke: #0BA05F; }
               .h-btn-r  { fill: #FFFFFF; stroke: #D14B3A; }
-              .h-btn-gt { font: 600 10px "IBM Plex Mono", monospace; letter-spacing: 0.08em; fill: #0BA05F; }
-              .h-btn-rt { font: 600 10px "IBM Plex Mono", monospace; letter-spacing: 0.08em; fill: #D14B3A; }
-              .h-label  { font: 10.5px "IBM Plex Mono", monospace; fill: #6B6F66; }
+              .h-btn-gt { font: 600 11px "IBM Plex Mono", monospace; letter-spacing: 0.08em; fill: #0BA05F; }
+              .h-btn-rt { font: 600 11px "IBM Plex Mono", monospace; letter-spacing: 0.08em; fill: #D14B3A; }
+              .h-label  { font: 11.5px "IBM Plex Mono", monospace; fill: #6B6F66; }
               .h-line   { stroke: #0E0E0C; fill: none; }
-              .h-title  { font: 600 11px "IBM Plex Mono", monospace; letter-spacing: 0.1em; fill: #0E0E0C; }
-              .h-sub    { font: 10px "IBM Plex Mono", monospace; fill: #6B6F66; }
+              .h-title  { font: 600 12.5px "IBM Plex Mono", monospace; letter-spacing: 0.1em; fill: #0E0E0C; }
+              .h-sub    { font: 10.5px "IBM Plex Mono", monospace; fill: #6B6F66; }
               .h-row    { fill: #FAFAF8; stroke: #C9C9C2; }
               .h-row-g  { fill: #f0fdf4; stroke: #0BA05F; }
-              .h-row-k  { font: 600 11px "IBM Plex Mono", monospace; fill: #0E0E0C; }
-              .h-row-c  { font: 11px "Archivo", sans-serif; fill: #6B6F66; }
-              .h-row-s  { font: 10px "Archivo", sans-serif; fill: #6B6F66; }
-              .h-row-sg { font: 10px "Archivo", sans-serif; fill: #0BA05F; }
-              .h-hash   { font: 9.5px "IBM Plex Mono", monospace; fill: #9B9F94; }
+              .h-row-k  { font: 600 13px "IBM Plex Mono", monospace; fill: #0E0E0C; }
+              .h-row-c  { font: 13px "Archivo", sans-serif; fill: #6B6F66; }
+              .h-row-s  { font: 12px "Archivo", sans-serif; fill: #6B6F66; }
+              .h-row-sg { font: 12px "Archivo", sans-serif; fill: #0BA05F; }
+              .h-hash   { font: 10.5px "IBM Plex Mono", monospace; fill: #9B9F94; }
+              .h-more   { font: 10.5px "IBM Plex Mono", monospace; fill: #9B9F94; }
             </style>
 
             <!-- Pending proposal card -->
-            <rect class="h-card" x="20" y="16" width="420" height="160"/>
-            <rect class="h-chip" x="40" y="36" width="76" height="22"/>
-            <text class="h-chip-t" x="78" y="51" text-anchor="middle">PENDING</text>
-            <text class="h-type" x="130" y="51">memory/Preference</text>
-            <text class="h-stmt" x="40" y="90">“prefers morning meetings”</text>
-            <text class="h-rule" x="40" y="118">rule: preferences-are-owner-business</text>
-            <text class="h-sig" x="40" y="150">✎ claude-code</text>
-            <rect class="h-btn-g" x="232" y="126" width="92" height="30"/>
-            <text class="h-btn-gt" x="278" y="145" text-anchor="middle">APPROVE</text>
-            <rect class="h-btn-r" x="336" y="126" width="84" height="30"/>
-            <text class="h-btn-rt" x="378" y="145" text-anchor="middle">REJECT</text>
+            <rect class="h-card" x="16" y="16" width="448" height="168"/>
+            <rect class="h-chip" x="36" y="36" width="86" height="24"/>
+            <text class="h-chip-t" x="79" y="52" text-anchor="middle">PENDING</text>
+            <text class="h-type" x="136" y="53">memory/Preference</text>
+            <text class="h-stmt" x="36" y="98">“prefers morning meetings”</text>
+            <text class="h-rule" x="36" y="128">rule: preferences-are-owner-business</text>
+            <text class="h-sig" x="36" y="160">✎ claude-code</text>
+            <rect class="h-btn-g" x="248" y="134" width="102" height="34"/>
+            <text class="h-btn-gt" x="299" y="155" text-anchor="middle">APPROVE</text>
+            <rect class="h-btn-r" x="362" y="134" width="86" height="34"/>
+            <text class="h-btn-rt" x="405" y="155" text-anchor="middle">REJECT</text>
 
             <!-- Decision arrow -->
-            <path class="h-line" d="M230 176 V 212" marker-end="url(#h-arr)"/>
-            <text class="h-label" x="244" y="192">your decision,</text>
-            <text class="h-label" x="244" y="206">signed with your key</text>
+            <path class="h-line" d="M240 184 V 218" marker-end="url(#h-arr)"/>
+            <text class="h-label" x="254" y="198">your decision,</text>
+            <text class="h-label" x="254" y="214">signed with your key</text>
 
             <!-- The log -->
-            <rect class="h-panel" x="20" y="216" width="420" height="288"/>
-            <text class="h-title" x="230" y="242" text-anchor="middle">THE LOG</text>
-            <text class="h-sub" x="230" y="258" text-anchor="middle">append-only · every entry names the previous hash</text>
+            <rect class="h-panel" x="16" y="222" width="448" height="272"/>
+            <text class="h-title" x="240" y="250" text-anchor="middle">THE LOG</text>
+            <text class="h-sub" x="240" y="268" text-anchor="middle">append-only · every entry names the previous hash</text>
 
-            <rect class="h-row-g" x="40" y="270" width="380" height="48"/>
-            <text class="h-row-k" x="56" y="290">decision</text>
-            <text class="h-row-c" x="140" y="290">approved memory/Preference</text>
-            <text class="h-row-sg" x="404" y="290" text-anchor="end">✎ you</text>
-            <text class="h-hash" x="56" y="306">hash a3f2…9c1d · prev 8c41…77e2</text>
+            <rect class="h-row-g" x="34" y="282" width="412" height="58"/>
+            <text class="h-row-k" x="50" y="306">decision</text>
+            <text class="h-row-c" x="152" y="306">approved: preference</text>
+            <text class="h-row-sg" x="432" y="306" text-anchor="end">✎ you</text>
+            <text class="h-hash" x="50" y="326">hash a3f2…9c1d · prev 8c41…77e2</text>
 
-            <rect class="h-row" x="40" y="326" width="380" height="48"/>
-            <text class="h-row-k" x="56" y="346">write</text>
-            <text class="h-row-c" x="140" y="346">prefers morning meetings</text>
-            <text class="h-row-s" x="404" y="346" text-anchor="end">✎ claude-code</text>
-            <text class="h-hash" x="56" y="362">hash 8c41…77e2 · prev f09a…b2c6</text>
+            <rect class="h-row" x="34" y="346" width="412" height="58"/>
+            <text class="h-row-k" x="50" y="370">write</text>
+            <text class="h-row-c" x="152" y="370">prefers morning meetings</text>
+            <text class="h-row-s" x="432" y="370" text-anchor="end">✎ claude-code</text>
+            <text class="h-hash" x="50" y="390">hash 8c41…77e2 · prev f09a…b2c6</text>
 
-            <rect class="h-row" x="40" y="382" width="380" height="48"/>
-            <text class="h-row-k" x="56" y="402">write</text>
-            <text class="h-row-c" x="140" y="402">note: meeting with design at 2pm</text>
-            <text class="h-row-s" x="404" y="402" text-anchor="end">✎ claude-code</text>
-            <text class="h-hash" x="56" y="418">hash f09a…b2c6 · prev 2d17…04ae</text>
+            <rect class="h-row" x="34" y="410" width="412" height="58"/>
+            <text class="h-row-k" x="50" y="434">write</text>
+            <text class="h-row-c" x="152" y="434">note: standup moved to 2pm</text>
+            <text class="h-row-s" x="432" y="434" text-anchor="end">✎ claude-code</text>
+            <text class="h-hash" x="50" y="454">hash f09a…b2c6 · prev 2d17…04ae</text>
 
-            <rect class="h-row" x="40" y="438" width="380" height="48"/>
-            <text class="h-row-k" x="56" y="458">genesis</text>
-            <text class="h-row-c" x="140" y="458">schema + policy installed</text>
-            <text class="h-row-s" x="404" y="458" text-anchor="end">✎ you</text>
-            <text class="h-hash" x="56" y="474">hash 2d17…04ae · prev 0000…0000</text>
+            <text class="h-more" x="240" y="484" text-anchor="middle">⋯ earlier entries, back to genesis</text>
           </svg>
         </div>
       </div>
     </section>
 
-    <!-- Value props -->
+    <!-- What changes -->
     <section class="section">
       <div class="section-header reveal reveal-1">
-        <div class="eyebrow">Why Freehold</div>
-        <h2>What you get</h2>
+        <div class="eyebrow">What changes</div>
+        <h2>When your agents get a memory you govern</h2>
+        <p>
+          Agents forget everything between sessions, and the usual fix is letting them write whatever they infer into a store you can't see. Freehold changes both.
+        </p>
       </div>
 
       <div class="loops-grid">
         <div class="loop-card reg-marks reveal reveal-2">
           <span class="reg-mark-bl"></span><span class="reg-mark-br"></span>
           <div class="loop-number">01</div>
-          <h3>It runs on your machine</h3>
+          <h3>Sessions start with context</h3>
           <p>
-            Freehold is one program on your laptop. Memory lives in <code>~/.freehold</code> as an append-only log of signed changes in the open <a href="https://github.com/yourbuddyconner/allod">Allod</a> format. No cloud service, no account, and nothing leaves the machine — even search embeddings are computed locally.
+            Every agent you run shares one memory over MCP. Tell one agent you prefer short PRs and rebase merges, and the next session — and every other agent — already knows. Notes, preferences, people, and project facts accumulate instead of evaporating.
           </p>
           <div style="margin-top:20px;">
-            <a href="docs/architecture.html" class="link-arrow">How the system fits together</a>
+            <a href="docs/tools.html#recall" class="link-arrow">How agents recall</a>
           </div>
         </div>
 
         <div class="loop-card reg-marks reveal reveal-3">
           <span class="reg-mark-bl"></span><span class="reg-mark-br"></span>
           <div class="loop-number">02</div>
-          <h3>You approve what matters</h3>
+          <h3>You decide what becomes true</h3>
           <p>
-            Agents save notes instantly and read memory freely. Preferences about you, facts about people, and schema changes arrive in your inbox as proposals, and they only become memory when you approve them. Agents can propose changes to memory's own schema through the same inbox.
+            Anything that would change what memory says about you — a preference, a fact about a person, a new schema type — waits in your inbox as a proposal. A bad inference ends as a rejected proposal, and the record shows it was never believed.
           </p>
           <div style="margin-top:20px;">
             <a href="docs/governance.html" class="link-arrow">How approval works</a>
@@ -167,13 +167,48 @@
         <div class="loop-card reg-marks reveal reveal-4">
           <span class="reg-mark-bl"></span><span class="reg-mark-br"></span>
           <div class="loop-number">03</div>
-          <h3>Signed, so you can check it</h3>
+          <h3>Every belief has a paper trail</h3>
           <p>
-            Agents sign their writes, you sign your decisions, and every entry names the hash of the one before it. The independent <code>allod verify</code> command checks the whole history from the files alone — you never have to take Freehold's word for what happened.
+            Ask "why does it think that?" and get an answer: who wrote it, which rule caught it, who approved it, in which changeset. The history is signed, lives on your disk, and the independent <code>allod verify</code> command checks it without Freehold.
           </p>
           <div style="margin-top:20px;">
             <a href="docs/architecture.html#signatures" class="link-arrow">How signatures work</a>
           </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Use cases -->
+    <section class="section">
+      <div class="section-header">
+        <div class="eyebrow">Use cases</div>
+        <h2>What you can do with it</h2>
+      </div>
+
+      <div class="usecase-grid">
+        <div class="usecase-cell">
+          <h4>A coding agent that knows how you work</h4>
+          <p>
+            Your conventions, review preferences, deploy rituals, and the people on your team. Approve them once, and every session starts there instead of you re-explaining — no more pasting the same context into every project.
+          </p>
+        </div>
+        <div class="usecase-cell">
+          <h4>Overnight agents with a morning review</h4>
+          <p>
+            An agent that works while you sleep saves its notes freely, and its important conclusions queue as proposals. Your inbox is the morning diff of what it wants you to believe — approve the good, reject the hallucinated.
+          </p>
+        </div>
+        <div class="usecase-cell">
+          <h4>One brain across all your tools</h4>
+          <p>
+            Claude Code, a custom agent, a script with an MCP client: all of them read and write the same graph under the same rules. What one learns, the others know, and none of them can bypass your approval.
+          </p>
+        </div>
+        <div class="usecase-cell">
+          <h4>Memory you can audit</h4>
+          <p>
+            Every attempt is in the log, including the rejected ones. When an agent misbehaves, you can see exactly what it tried to save, when, and what you allowed — signed, timestamped, and checkable with an independent tool.
+          </p>
         </div>
       </div>
     </section>
