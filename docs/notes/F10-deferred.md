@@ -52,11 +52,13 @@ FREEHOLD_E2E_LLM=1 ANTHROPIC_API_KEY=sk-ant-... \
 
 ## CI: allod verify cross-check graph directory
 
-The `allod verify` cross-check in CI only runs if a graph directory exists after
-the test writes. Because the verify test creates nodes via `/api/v1/remember`
-and admission depends on governance policy (may be held), the graph directory
-may be empty if all writes are held. CI handles this gracefully with a directory
-existence check and skips allod verify if no admissions occurred.
+**RESOLVED:** The earlier note claimed admission may be held by governance, requiring a
+graceful skip of `allod verify` if the graph directory did not exist. This was incorrect.
 
-**Path forward:** Ensure at least one unconditional admit (e.g., a `direct` admit
-path or an auto-approve policy) is exercised in the CI cross-check script.
+The daemon uses `createGraph` which calls `graph.init(owner, "memory")`, installing the
+embedded memory profile including the `scratch-is-free` rule. Nodes written via
+`/api/v1/remember` are classified as scratch, so writes are admitted immediately. The
+graph directory is guaranteed to exist after the two test writes.
+
+The vacuous conditional skip has been removed. The CI now unconditionally asserts that the
+graph directory exists (failing fast if admission is broken) and then runs `allod verify`.

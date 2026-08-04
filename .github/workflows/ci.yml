@@ -139,12 +139,12 @@ jobs:
 
           # Run allod verify on the graph directory
           GRAPH_DIR="$FREEHOLD_HOME/graphs/main"
-          if [ -d "$GRAPH_DIR" ]; then
-            "$ALLOD_BIN" verify "$GRAPH_DIR"
-            echo "allod verify: OK"
-          else
-            echo "No graph directory found — skipping allod verify (no admits occurred)"
+          if [ ! -d "$GRAPH_DIR" ]; then
+            echo "ERROR: graph directory missing after writes — admission may be broken"
+            exit 1
           fi
+          "$ALLOD_BIN" verify "$GRAPH_DIR"
+          echo "allod verify: OK"
 
           # Cleanup
           rm -rf "$FREEHOLD_HOME"
