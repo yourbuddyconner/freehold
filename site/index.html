@@ -37,7 +37,7 @@
         Your agents' memory,<br>in a graph you own.
       </h1>
       <p class="hero-subhead reveal reveal-3">
-        Most memory products lease you back your own data. Freehold keeps your agents' accumulated knowledge in an <strong>Allod graph</strong>: an append-only log of signed changes, verifiable from your keys alone, governed by rules you declare. One daemon serves twelve agent tools, and no third party ever holds the graph.
+        Most memory products lease you back your own data. Freehold keeps your agents' accumulated knowledge in an <strong>Allod graph</strong>: an append-only log of signed changes, verifiable from your keys alone, governed by rules you declare. It runs on your machine, your agents connect over MCP, and nothing consequential becomes memory without your approval.
       </p>
       <div class="hero-actions reveal reveal-4">
         <a href="docs/quickstart.html" class="btn btn-primary">Get started</a>
@@ -51,7 +51,7 @@
         <div class="eyebrow">The founding loops</div>
         <h2>Three loops: memory, schema, and trust</h2>
         <p>
-          Each loop starts with an agent action and ends with a signed, checkable record.
+          Everything Freehold does falls into one of three loops, and each ends in a signed record you can verify.
         </p>
       </div>
 
@@ -100,7 +100,7 @@
         <div class="eyebrow">MCP tool surface</div>
         <h2>Twelve tools, grouped by function</h2>
         <p>
-          Agents connect over streamable HTTP MCP at <code>/mcp</code>. Approval, rejection, policy changes, and key operations are not tools; they belong to the owner.
+          Agents connect over streamable HTTP MCP at <code>/mcp</code>. There are no tools for approving, rejecting, or changing policy. Those actions belong to you.
         </p>
       </div>
 
@@ -179,7 +179,7 @@
         <div class="eyebrow">Governed write</div>
         <h2>From write to signed record</h2>
         <p>
-          A held write is the system working correctly, not an error. This is the path a consequential write takes.
+          A held write is the system working correctly, not an error. Here is what happens to a consequential write, start to finish.
         </p>
       </div>
 
@@ -203,7 +203,7 @@
             <div class="wt-step-num">Step 02</div>
             <h4>Policy holds the write</h4>
             <p>
-              The policy engine matches the write against the installed rules. A preference about the owner is consequential. The write is held; the agent receives <code>{ status: "held", proposal, rule }</code>.
+              The policy engine matches the write against the installed rules. A preference about the owner needs the owner's approval, so the write is held and the agent receives <code>{ status: "held", proposal, rule }</code>.
             </p>
             <div style="margin-top:16px;">
               <span class="chip chip-held">held</span>

@@ -68,7 +68,7 @@
     <div class="eyebrow reveal reveal-1">Reference</div>
     <h1 class="reveal reveal-2">MCP Tools</h1>
     <p class="lead reveal reveal-3">
-      Agents connect over streamable HTTP MCP at <code>/mcp</code>. The tool surface is a strict subset of the HTTP API: agents never get approval, rejection, policy mutation, or key operations through the tool surface. Every write tool returns either <code>{ status: "admitted", changeset }</code> or <code>{ status: "held", proposal, rule }</code>.
+      Agents connect over streamable HTTP MCP at <code>/mcp</code> and get exactly these twelve tools. There are no tools for approving, rejecting, changing policy, or touching keys; those operations exist only in the owner's API. Every write tool returns either <code>{ status: "admitted", changeset }</code> or <code>{ status: "held", proposal, rule }</code>.
     </p>
 
     <blockquote>
@@ -76,7 +76,7 @@
     </blockquote>
 
     <h2>Knowledge tools</h2>
-    <p>These tools write to the graph. Each write is an atomic changeset. Scratch-classified writes are admitted immediately; governed writes are held by policy.</p>
+    <p>These tools write to the graph. Each write is an atomic changeset. Scratch writes are admitted immediately, and governed writes are held by policy.</p>
 
     <div class="tool-ref reg-marks" id="remember">
       <span class="reg-mark-bl"></span><span class="reg-mark-br"></span>
@@ -107,7 +107,7 @@
       </div>
       <div class="tool-ref-body">
         <p class="tool-ref-desc">
-          Create a typed node with optional classifications and edges in one atomic changeset. The entity type is any type installed in the graph's schema — not a fixed menu. The most common path to a held write: creating a <code>memory/Preference</code> or any entity that policy routes as consequential.
+          Create a typed node with optional classifications and edges in one atomic changeset. The entity type can be any type installed in the graph's schema. Creating a <code>memory/Preference</code>, or any other entity the policy treats as consequential, is the most common way to produce a held write.
         </p>
         <strong>Parameters</strong>
         <ul>

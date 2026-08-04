@@ -54,7 +54,7 @@
     <div class="eyebrow reveal reveal-1">Documentation</div>
     <h1 class="reveal reveal-2">Governance</h1>
     <p class="lead reveal reveal-3">
-      Freehold's governance model is a record of decisions, not an access control list. Every admitted write produces a changeset in the graph. Every approval and every rejection produces a signed decision record. Policy rules decide what is admitted immediately and what waits for you.
+      Freehold governs writes with declared policy rules and signed decisions. Every admitted write produces a changeset in the graph, and every approval or rejection produces a decision record signed with your key. The rules decide what is admitted immediately and what waits for you.
     </p>
 
     <h2 id="model">The governance model</h2>
@@ -135,7 +135,7 @@
       <li><strong>The rule that held it</strong> — which policy rule triggered the hold and its exact selector</li>
     </ul>
 
-    <p>The owner approves or rejects. Both outcomes produce a signed record.</p>
+    <p>You approve or reject, and either way the outcome is a signed record.</p>
 
     <h2 id="decision-records">Decision records</h2>
 
