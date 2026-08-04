@@ -81,13 +81,18 @@ function EditDrawer({ open, onClose, rule, allRules }: EditDrawerProps) {
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const submitMutation = useMutation({
-    mutationFn: () =>
-      apiClient.proposePolicy({
-        ruleId: rule.id,
-        patch: yaml,
-      }),
+    mutationFn: () => {
+      // Build the full policy YAML: replace this rule's entry in the list with the edited YAML,
+      // then wrap the whole thing as a policy document.
+      // The API requires { policy_yaml: string }.
+      const otherRules = allRules.filter((r) => r.id !== rule.id);
+      const otherYaml = otherRules.length > 0 ? `\n${rulesToYaml(otherRules)}` : "";
+      const policyYaml = `rules:\n${yaml.replace(/^rules:\n/, "")}${otherYaml}`;
+      return apiClient.proposePolicy({ policy_yaml: policyYaml });
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["policy"] });
+      qc.invalidateQueries({ queryKey: ["proposals"] });
       onClose();
       navigate({ to: "/inbox" });
     },
@@ -228,13 +233,19 @@ function PolicyPage() {
       )}
 
       {!isLoading && rules.length > 0 && (
-        <ul className="space-y-3 max-w-2xl">
-          {rules.map((rule) => (
-            <li key={rule.id}>
-              <RuleCard rule={rule} onEdit={() => setEditingRule(rule)} />
-            </li>
-          ))}
-        </ul>
+        <>
+          <p className="text-xs text-[--fg-muted] max-w-xl">
+            Editing a rule proposes a full policy replacement (held for owner approval). Per-rule
+            conditional application is not yet wired — all rules apply globally for v0.
+          </p>
+          <ul className="space-y-3 max-w-2xl">
+            {rules.map((rule) => (
+              <li key={rule.id}>
+                <RuleCard rule={rule} onEdit={() => setEditingRule(rule)} />
+              </li>
+            ))}
+          </ul>
+        </>
       )}
 
       {editingRule && (

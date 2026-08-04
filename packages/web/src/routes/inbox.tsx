@@ -18,12 +18,27 @@ function InboxPage() {
 
   const approveMut = useMutation({
     mutationFn: (hash: string) => apiClient.approve(hash),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["proposals"] }),
+    onSuccess: () => {
+      // Invalidate all query keys that may change after an approval:
+      // proposals list, recall results (newly admitted content), schema (schema proposals),
+      // verify report, and policy (policy proposals)
+      qc.invalidateQueries({ queryKey: ["proposals"] });
+      qc.invalidateQueries({ queryKey: ["recall"] });
+      qc.invalidateQueries({ queryKey: ["schema"] });
+      qc.invalidateQueries({ queryKey: ["verify"] });
+      qc.invalidateQueries({ queryKey: ["policy"] });
+    },
   });
 
   const rejectMut = useMutation({
     mutationFn: (hash: string) => apiClient.reject(hash),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["proposals"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["proposals"] });
+      qc.invalidateQueries({ queryKey: ["recall"] });
+      qc.invalidateQueries({ queryKey: ["schema"] });
+      qc.invalidateQueries({ queryKey: ["verify"] });
+      qc.invalidateQueries({ queryKey: ["policy"] });
+    },
   });
 
   return (

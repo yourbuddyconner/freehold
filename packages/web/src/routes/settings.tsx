@@ -419,23 +419,26 @@ function SettingsPage() {
 
   // Pending revocation confirmation
   const [revokeTarget, setRevokeTarget] = useState<Principal | null>(null);
+  const [revokeError, setRevokeError] = useState<string | null>(null);
 
   function confirmRevoke() {
     if (!revokeTarget) return;
     const target = revokeTarget;
     setRevokeTarget(null);
-    // Revocation is a governed change — creates a proposal routed through the Inbox
+    setRevokeError(null);
+    // Revocation is a governed change: propose a policy amendment via the real API shape.
+    // The API requires { policy_yaml: string }. We encode the intent as YAML so the
+    // allod policy engine can record it as a held proposal.
+    const policyYaml = `# Revoke principal ${target.id}\nrevoke:\n  principal: "${target.id}"\n`;
     apiClient
-      .proposePolicy({
-        action: "revoke",
-        principalId: target.id,
-      })
+      .proposePolicy({ policy_yaml: policyYaml })
       .then(() => {
         qc.invalidateQueries({ queryKey: ["proposals"] });
         navigate({ to: "/inbox" });
       })
-      .catch(() => {
-        // Silently ignore for now; could show a toast
+      .catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : "Revocation proposal failed";
+        setRevokeError(msg);
       });
   }
 
@@ -465,9 +468,23 @@ function SettingsPage() {
       </section>
 
       {/* Revocation confirmation dialog */}
+      {revokeError && (
+        <div
+          className="rounded border border-red-300 bg-red-50 dark:bg-red-950 dark:border-red-800 px-3 py-2 text-xs text-red-600 dark:text-red-400"
+          role="alert"
+        >
+          Revocation failed: {revokeError}
+        </div>
+      )}
+
       <Dialog.Root
         open={revokeTarget !== null}
-        onOpenChange={(open) => !open && setRevokeTarget(null)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setRevokeTarget(null);
+            setRevokeError(null);
+          }
+        }}
       >
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 bg-black/40 z-40" />
