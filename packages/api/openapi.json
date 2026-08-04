@@ -32,10 +32,7 @@
             "description": "Free-text note content"
           }
         },
-        "required": [
-          "agent",
-          "content"
-        ]
+        "required": ["agent", "content"]
       },
       "CreateEntityBody": {
         "type": "object",
@@ -55,11 +52,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "agent",
-          "type",
-          "attributes"
-        ]
+        "required": ["agent", "type", "attributes"]
       },
       "UpdateEntityBody": {
         "type": "object",
@@ -79,11 +72,7 @@
             "description": "Hash of the changeset being superseded"
           }
         },
-        "required": [
-          "agent",
-          "type",
-          "attributes"
-        ]
+        "required": ["agent", "type", "attributes"]
       },
       "RelateBody": {
         "type": "object",
@@ -108,12 +97,7 @@
             "type": "boolean"
           }
         },
-        "required": [
-          "agent",
-          "from",
-          "to",
-          "edgeType"
-        ]
+        "required": ["agent", "from", "to", "edgeType"]
       },
       "ClassifyBody": {
         "type": "object",
@@ -128,11 +112,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "agent",
-          "nodeId",
-          "term"
-        ]
+        "required": ["agent", "nodeId", "term"]
       },
       "AttachDocumentBody": {
         "type": "object",
@@ -150,11 +130,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "agent",
-          "entityId",
-          "content"
-        ]
+        "required": ["agent", "entityId", "content"]
       },
       "RegisterAgentBody": {
         "type": "object",
@@ -163,9 +139,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "name"
-        ]
+        "required": ["name"]
       },
       "ProposeOntologyBody": {
         "type": "object",
@@ -180,11 +154,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "agent",
-          "packageName",
-          "ontologyYaml"
-        ]
+        "required": ["agent", "packageName", "ontologyYaml"]
       },
       "InstallOntologyBody": {
         "type": "object",
@@ -193,9 +163,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "docsYaml"
-        ]
+        "required": ["docsYaml"]
       },
       "PolicyBody": {
         "type": "object",
@@ -206,10 +174,7 @@
         "properties": {
           "status": {
             "type": "string",
-            "enum": [
-              "admitted",
-              "held"
-            ]
+            "enum": ["admitted", "held"]
           },
           "hash": {
             "type": "string"
@@ -222,10 +187,7 @@
             }
           }
         },
-        "required": [
-          "status",
-          "hash"
-        ]
+        "required": ["status", "hash"]
       },
       "RememberResponse": {
         "allOf": [
@@ -277,24 +239,14 @@
                 "before": {},
                 "after": {}
               },
-              "required": [
-                "key"
-              ]
+              "required": ["key"]
             }
           },
           "isSchemaProposal": {
             "type": "boolean"
           }
         },
-        "required": [
-          "hash",
-          "agent",
-          "intent",
-          "summary",
-          "rules",
-          "diff",
-          "isSchemaProposal"
-        ]
+        "required": ["hash", "agent", "intent", "summary", "rules", "diff", "isSchemaProposal"]
       },
       "RecallResult": {
         "type": "object",
@@ -320,22 +272,11 @@
             "type": "number"
           },
           "method": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Method from the object's provenance, or null for unrecorded (owner-authored)"
           }
         },
-        "required": [
-          "id",
-          "type",
-          "author",
-          "approval",
-          "changeset",
-          "score",
-          "method"
-        ]
+        "required": ["id", "type", "author", "approval", "changeset", "score", "method"]
       },
       "VerifyReport": {
         "type": "object",
@@ -358,16 +299,11 @@
                   "type": "string"
                 }
               },
-              "required": [
-                "id",
-                "reason"
-              ]
+              "required": ["id", "reason"]
             }
           }
         },
-        "required": [
-          "ok"
-        ]
+        "required": ["ok"]
       },
       "SchemaDescription": {
         "type": "object",
@@ -391,9 +327,7 @@
                   "type": "string"
                 }
               },
-              "required": [
-                "name"
-              ]
+              "required": ["name"]
             }
           },
           "edgeTypes": {
@@ -411,9 +345,7 @@
                   "type": "string"
                 }
               },
-              "required": [
-                "name"
-              ]
+              "required": ["name"]
             }
           },
           "terms": {
@@ -428,34 +360,22 @@
                   "type": "string"
                 }
               },
-              "required": [
-                "name"
-              ]
+              "required": ["name"]
             }
           }
         },
-        "required": [
-          "entityTypes",
-          "edgeTypes",
-          "terms"
-        ]
+        "required": ["entityTypes", "edgeTypes", "terms"]
       },
       "SessionInfo": {
         "type": "object",
         "properties": {
           "defaultAgent": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Default MCP agent name, if set"
           },
           "embedder": {
             "type": "string",
-            "enum": [
-              "transformers",
-              "hash"
-            ],
+            "enum": ["transformers", "hash"],
             "description": "Active embedder backend"
           },
           "port": {
@@ -463,11 +383,7 @@
             "description": "Daemon listening port"
           }
         },
-        "required": [
-          "defaultAgent",
-          "embedder",
-          "port"
-        ]
+        "required": ["defaultAgent", "embedder", "port"]
       }
     },
     "parameters": {}
@@ -486,14 +402,10 @@
                   "properties": {
                     "status": {
                       "type": "string",
-                      "enum": [
-                        "ok"
-                      ]
+                      "enum": ["ok"]
                     }
                   },
-                  "required": [
-                    "status"
-                  ]
+                  "required": ["status"]
                 }
               }
             }
@@ -831,9 +743,7 @@
                       }
                     }
                   },
-                  "required": [
-                    "results"
-                  ]
+                  "required": ["results"]
                 }
               }
             }
@@ -875,11 +785,7 @@
           {
             "schema": {
               "type": "string",
-              "enum": [
-                "out",
-                "in",
-                "both"
-              ]
+              "enum": ["out", "in", "both"]
             },
             "required": false,
             "name": "direction",
@@ -927,9 +833,7 @@
                       }
                     }
                   },
-                  "required": [
-                    "proposals"
-                  ]
+                  "required": ["proposals"]
                 }
               }
             }

@@ -128,6 +128,9 @@ const RecallResult = z
     type: z.string(),
     content: z.unknown(),
     author: z.string(),
+    method: z.string().nullable().openapi({
+      description: "Provenance method (model-assisted, manual, etc.) or null for unrecorded",
+    }),
     approval: z
       .string()
       .openapi({ description: "approval field; maps from the `status` query parameter" }),

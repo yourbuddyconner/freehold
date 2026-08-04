@@ -196,20 +196,19 @@ describe("recall", () => {
 
     // Find the note we created
     const noteObj = allResults.find((r) => r.id === noteResult.noteId);
+    expect(noteObj).toBeDefined();
     if (noteObj) {
       // Agent writes carry provenance with method field
       expect(noteObj.method).toBe("model-assisted");
     }
 
-    // Genesis owner node should have null method (no provenance)
-    const ownerNodes = allResults.filter((r) => r.type.includes("principal") || r.author === "owner");
-    // At least some of these may exist; if they do, they should have null method
+    // Genesis owner node should have null method (no provenance).
+    // The principal/owner node is created during graph init and has no provenance stamp.
+    const ownerNodes = allResults.filter((r) => r.author === "owner");
+    expect(ownerNodes.length).toBeGreaterThan(0);
     for (const ownerNode of ownerNodes) {
-      // Owner-authored genesis nodes carry no provenance, so method is null
-      if (ownerNode.author === "owner") {
-        // Accept either null (as string) or actual null
-        expect(ownerNode.method === null || ownerNode.method === "").toBeTruthy();
-      }
+      // Owner-authored genesis nodes carry no provenance, so method must be null
+      expect(ownerNode.method).toBeNull();
     }
   });
 });

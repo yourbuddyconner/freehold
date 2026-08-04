@@ -172,5 +172,15 @@ export async function openDb(pgDir: string): Promise<DbHandle> {
 
   await pg.waitReady;
   await pg.exec(SCHEMA_SQL);
+
+  // Migrate: make method nullable for existing databases created before commit 23ab9cd.
+  // Existing databases may have 'method text NOT NULL', which blocks inserts of null values.
+  // ALTER COLUMN SET NOT NULL is idempotent; dropping the constraint is safe if it exists.
+  try {
+    await pg.exec("ALTER TABLE objects ALTER COLUMN method DROP NOT NULL");
+  } catch {
+    // Constraint may not exist on fresh databases; that's fine
+  }
+
   return { pg };
 }
