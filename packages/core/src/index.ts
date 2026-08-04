@@ -88,4 +88,13 @@ export { syncIndex, reindex } from "./indexer.js";
 
 // Recall
 export { recall, recentMemories } from "./recall.js";
+
+// Workspace views
+export { memoryIndex, memoryGraph, deriveTitle } from "./graphview.js";
+export type {
+  MemoryIndexEntry,
+  MemoryGraphView,
+  GraphNode,
+  GraphEdge,
+} from "./graphview.js";
 export type { RecallResult, RecallFilters } from "./recall.js";
