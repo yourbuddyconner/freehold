@@ -1,5 +1,18 @@
 # F10 Deferred Items
 
+## Dogfood: run from source for semantic recall
+
+The compiled binary (`packages/api/dist/freehold`) ships a hash-embedder — semantic recall
+(bge-small cosine similarity) is unavailable. For dogfood and development, run from source:
+
+```sh
+pnpm --filter @freehold/api exec tsx src/cli/index.ts serve
+```
+
+The compiled binary ships the hash-embedder only. Recall still works (BM25 full-text
++ hash vectors), but semantic similarity is random. The binary is suitable for
+packaging and distribution; the source path is appropriate for dogfood.
+
 ## Binary: semantic embedder not available in compiled binary
 
 **Decision:** The v0 compiled binary (`packages/api/dist/freehold`) ships with
