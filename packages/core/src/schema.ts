@@ -169,34 +169,47 @@ export async function proposeOntologyChange(
 
 // ---- Policy accessor ----
 
-interface RawPolicyObject {
-  content: {
-    type?: string;
-    attributes?: { definition?: string; name?: string };
-  };
-  rev: string;
-  deleted: boolean;
-}
-
 /**
- * Return the raw YAML definition of the graph's active policy (the live
- * `meta/Policy@1` node, created during graph init with the memory-baseline
- * policy).  Returns `null` when no policy node is found.
+ * Return the raw YAML definition of the graph's active policy via the WASM
+ * `get_policy()` binding. Returns `null` when no policy node is found.
+ *
+ * `graph.get_policy()` returns the parsed policy Value (the serde_yaml::Value
+ * deserialized to a plain JS object) or `null` when no policy node exists.
+ * The `definition` field is the JSON-stringified policy for stable string consumers.
  */
-export function getPolicy(graph: AllodGraph): { name: string; definition: string } | null {
+export function getPolicy(
+  graph: AllodGraph
+): { name: string; definition: string; rules?: unknown[] } | null {
   try {
-    const obj = (
-      graph as unknown as { object_get(kind: string, id: string): RawPolicyObject | null }
-    ).object_get("node", "meta-policy-1");
-    if (!obj || obj.deleted) return null;
-    const attrs = obj.content.attributes ?? {};
-    return {
-      name: attrs.name ?? "memory-baseline",
-      definition: attrs.definition ?? "",
-    };
+    const raw = (graph as unknown as { get_policy(): Record<string, unknown> | null }).get_policy();
+    if (!raw) return null;
+    const name = typeof raw.name === "string" ? raw.name : "memory-baseline";
+    const definition = JSON.stringify(raw);
+    const rules = Array.isArray(raw.rules) ? (raw.rules as unknown[]) : undefined;
+    return { name, definition, rules };
   } catch {
     return null;
   }
+}
+
+/**
+ * Propose a policy change by installing `policyYaml` as the graph owner.
+ *
+ * Calls `install_policy(policyYaml, owner)` on the WASM graph, which
+ * routes through `install_package` with `Some(policy)` — empty docs,
+ * policy-only changeset. Under the memory-baseline policy, policy changes
+ * require an owner decision record (`policy-changes-require-owner-review`),
+ * so the result is typically `Held`.
+ */
+export async function proposePolicyChange(
+  graph: AllodGraph,
+  policyYaml: string
+): Promise<OntologyProposalResult> {
+  const owner = resolveOwner(graph);
+  const raw = await (
+    graph as unknown as { install_policy(yaml: string, by: string): Promise<unknown> }
+  ).install_policy(policyYaml, owner);
+  return parseInstallAdmission(raw);
 }
 
 /**

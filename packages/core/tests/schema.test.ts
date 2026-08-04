@@ -4,7 +4,12 @@ import { join } from "node:path";
 import type { AllodGraph } from "@allod/core";
 import { beforeEach, describe, expect, test } from "vitest";
 import { createGraph } from "../src/allod.js";
-import { describeSchema, installOntology, proposeOntologyChange } from "../src/schema.js";
+import {
+  describeSchema,
+  getPolicy,
+  installOntology,
+  proposeOntologyChange,
+} from "../src/schema.js";
 
 describe("schema", () => {
   let graph: AllodGraph;
@@ -59,6 +64,16 @@ entity_types:
     expect(["admitted", "held"]).toContain(result.status);
     // Hash should be a non-empty string
     expect(typeof result.hash).toBe("string");
+  });
+
+  test("getPolicy() returns policy with rules after createGraph", () => {
+    const policy = getPolicy(graph);
+    expect(policy).not.toBeNull();
+    expect(typeof policy?.name).toBe("string");
+    expect(policy?.name.length).toBeGreaterThan(0);
+    expect(typeof policy?.definition).toBe("string");
+    // The definition must contain "scratch" (from the scratch-is-free rule)
+    expect(policy?.definition).toContain("scratch");
   });
 
   test("installOntology() installs as owner and returns Admission-shaped result", async () => {
