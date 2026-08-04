@@ -47,19 +47,13 @@ they can read and write, and gives you control over what they write:
 
 ## Quickstart
 
-Prerequisites: Node ≥ 22, [pnpm](https://pnpm.io), and — because
-`@allod/core` is consumed from a sibling checkout — Rust with
-`wasm-pack` to build it once.
+Prerequisites: Node ≥ 22 and [pnpm](https://pnpm.io). `@allod/core`
+(the Allod WASM engine) is downloaded prebuilt from [Allod's GitHub
+releases](https://github.com/yourbuddyconner/allod/releases) during
+install — no Rust toolchain needed.
 
 ```bash
-# 1. Clone both repos as siblings
-git clone https://github.com/yourbuddyconner/allod
 git clone https://github.com/yourbuddyconner/freehold
-
-# 2. Build the Allod wasm package
-cd allod/crates/allod-wasm && pnpm install && pnpm build && cd ../../..
-
-# 3. Install and start Freehold
 cd freehold && pnpm install
 pnpm --dir packages/api exec tsx src/cli/index.ts serve
 ```
@@ -127,6 +121,19 @@ FREEHOLD_E2E_REAL_EMBEDDER=1 pnpm --filter @freehold/core test   # real-model sm
 ```
 
 Tests run against temporary homes and never touch `~/.freehold`.
+
+To develop against a local Allod checkout instead of the released
+tarball, point the dependency back at it in
+`packages/core/package.json`:
+
+```json
+"@allod/core": "link:../../../allod/crates/allod-wasm"
+```
+
+then build it once (`pnpm --dir ../allod/crates/allod-wasm install &&
+pnpm --dir ../allod/crates/allod-wasm build`) and run `pnpm install`.
+New Allod releases are cut by tagging `core-v<version>` in the allod
+repo; the release workflow builds and attaches the tarball.
 
 ## License
 

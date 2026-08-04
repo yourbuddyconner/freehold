@@ -88,8 +88,8 @@ importers:
   packages/core:
     dependencies:
       '@allod/core':
-        specifier: link:../../../allod/crates/allod-wasm
-        version: link:../../../allod/crates/allod-wasm
+        specifier: https://github.com/yourbuddyconner/allod/releases/download/core-v0.1.1/allod-core-0.1.1.tgz
+        version: https://github.com/yourbuddyconner/allod/releases/download/core-v0.1.1/allod-core-0.1.1.tgz
       '@electric-sql/pglite':
         specifier: ^0.5.4
         version: 0.5.4
@@ -214,6 +214,10 @@ packages:
 
   '@adobe/css-tools@4.5.0':
     resolution: {integrity: sha512-6OzddxPio9UiWTCemp4N8cYLV2ZN1ncRnV1cVGtve7dhPOtRkleRyx32GQCYSwDYgaHU3USMm84tNsvKzRCa1Q==}
+
+  '@allod/core@https://github.com/yourbuddyconner/allod/releases/download/core-v0.1.1/allod-core-0.1.1.tgz':
+    resolution: {integrity: sha512-5XdAZSYy+xabIjPkS4Jdxv2nRVC0mE4ma2I441rgohdA42YGZzjHlEsSAx2GAaD2rr6PraFleal2xUUNKmIPwg==, tarball: https://github.com/yourbuddyconner/allod/releases/download/core-v0.1.1/allod-core-0.1.1.tgz}
+    version: 0.1.1
 
   '@anthropic-ai/sdk@0.91.1':
     resolution: {integrity: sha512-LAmu761tSN9r66ixvmciswUj/ZC+1Q4iAfpedTfSVLeswRwnY3n2Nb6Tsk+cLPP28aLOPWeMgIuTuCcMC6W/iw==}
@@ -1003,6 +1007,7 @@ packages:
   '@mariozechner/pi-agent-core@0.73.0':
     resolution: {integrity: sha512-ugcpvq0X9fr9fTSK29/3S4+KU/eeVMrBb7ZU3HqiF3xD7I1GlgumLj4FYmDrYSEA6+rzgNWlJUKwjKh9o0Z6AA==}
     engines: {node: '>=20.0.0'}
+    deprecated: please use @earendil-works/pi-agent-core instead going forward
 
   '@mariozechner/pi-ai@0.73.0':
     resolution: {integrity: sha512-phKOpcde/ssz6UYszkmaGJ9LF9mgt/AP8LrtSwsfap+kMSeFfSQ2/mCSBT1mLJ2BqVuff9uXs1/+op1aQeaafQ==}
@@ -3167,6 +3172,8 @@ packages:
 snapshots:
 
   '@adobe/css-tools@4.5.0': {}
+
+  '@allod/core@https://github.com/yourbuddyconner/allod/releases/download/core-v0.1.1/allod-core-0.1.1.tgz': {}
 
   '@anthropic-ai/sdk@0.91.1(zod@3.25.76)':
     dependencies:

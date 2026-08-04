@@ -282,9 +282,9 @@
     <section class="section">
       <div class="section-header">
         <div class="eyebrow">Quickstart</div>
-        <h2>Up in four commands</h2>
+        <h2>Up in three commands</h2>
         <p>
-          Prerequisites: Node ≥ 22, pnpm, and Rust with wasm-pack (for the one-time Allod WASM build). Both repos must be siblings on disk.
+          Prerequisites: Node ≥ 22 and pnpm. No Rust toolchain — the Allod engine ships prebuilt.
         </p>
       </div>
 
@@ -293,19 +293,15 @@
         <div class="code-panel-header">
           <span class="code-panel-label">bash</span>
         </div>
-        <pre><code><span class="code-comment"># 1. Clone both repos as siblings</span>
-git clone https://github.com/yourbuddyconner/allod
+        <pre><code><span class="code-comment"># 1. Clone and install — @allod/core comes prebuilt from GitHub releases</span>
 git clone https://github.com/yourbuddyconner/freehold
-
-<span class="code-comment"># 2. Build the Allod wasm package (one time)</span>
-cd allod/crates/allod-wasm &amp;&amp; pnpm install &amp;&amp; pnpm build &amp;&amp; cd ../../..
-
-<span class="code-comment"># 3. Install dependencies and start Freehold</span>
 cd freehold &amp;&amp; pnpm install
+
+<span class="code-comment"># 2. Start Freehold</span>
 pnpm --dir packages/api exec tsx src/cli/index.ts serve
 <span class="code-comment"># Binds 127.0.0.1:8710 — console at http://127.0.0.1:8710</span>
 
-<span class="code-comment"># 4. Wire an agent</span>
+<span class="code-comment"># 3. Wire an agent</span>
 <span class="code-accent">freehold mcp setup claude-code</span>   <span class="code-comment"># writes the MCP config entry</span>
 freehold mcp setup --print        <span class="code-comment"># or print JSON for any other agent</span></code></pre>
       </div>

@@ -32,7 +32,7 @@
       <div class="docs-sidebar-label">On this page</div>
       <ul class="docs-sidebar-links">
         <li><a href="#prerequisites" class="active">Prerequisites</a></li>
-        <li><a href="#install">Install and build</a></li>
+        <li><a href="#install">Install</a></li>
         <li><a href="#serve">Start Freehold</a></li>
         <li><a href="#wire-agent">Wire an agent</a></li>
         <li><a href="#cli">CLI reference</a></li>
@@ -55,43 +55,21 @@
     <div class="eyebrow reveal reveal-1">Documentation</div>
     <h1 class="reveal reveal-2">Quickstart</h1>
     <p class="lead reveal reveal-3">
-      This guide goes from a clean machine to Freehold running with an agent connected. Two prerequisites matter: the Allod repo checked out as a sibling directory, and a one-time WASM build.
+      This guide goes from a clean machine to Freehold running with an agent connected. You need Node and pnpm; everything else comes with <code>pnpm install</code>.
     </p>
 
     <h2 id="prerequisites">Prerequisites</h2>
 
-    <p>Freehold consumes <code>@allod/core</code>, a WASM npm package built from the Allod source. The package is not yet published to npm; it is consumed from a sibling checkout on disk. This means you need both repos.</p>
-
     <ul>
       <li><strong>Node ≥ 22</strong> — Freehold runs on Node</li>
       <li><strong>pnpm</strong> — the workspace package manager (<a href="https://pnpm.io">pnpm.io</a>)</li>
-      <li><strong>Rust + wasm-pack</strong> — required once to build the Allod WASM package; not needed after that unless you update Allod</li>
     </ul>
 
-    <p>Install wasm-pack if you do not already have it:</p>
+    <p>Freehold's storage engine, <code>@allod/core</code>, is a prebuilt WASM package downloaded from <a href="https://github.com/yourbuddyconner/allod/releases">Allod's GitHub releases</a> during install. You do not need a Rust toolchain or an Allod checkout.</p>
 
-    <pre><code>cargo install wasm-pack</code></pre>
+    <h2 id="install">Install</h2>
 
-    <h2 id="install">Install and build</h2>
-
-    <p>Both repositories must be siblings in the same parent directory, and the directory names matter: Freehold's workspace declares <code>@allod/core</code> as <code>link:../allod/crates/allod-wasm</code>.</p>
-
-    <pre><code><span class="code-comment"># 1. Clone both repos as siblings — order does not matter</span>
-git clone https://github.com/yourbuddyconner/allod
-git clone https://github.com/yourbuddyconner/freehold
-
-<span class="code-comment"># Your directory should look like:</span>
-<span class="code-comment">#   some-parent/</span>
-<span class="code-comment">#     allod/</span>
-<span class="code-comment">#     freehold/</span>
-
-<span class="code-comment"># 2. Build the Allod wasm package (one time)</span>
-cd allod/crates/allod-wasm
-pnpm install
-pnpm build
-cd ../../..
-
-<span class="code-comment"># 3. Install Freehold dependencies</span>
+    <pre><code>git clone https://github.com/yourbuddyconner/freehold
 cd freehold
 pnpm install</code></pre>
 
