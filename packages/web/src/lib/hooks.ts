@@ -48,3 +48,27 @@ export function useSchema() {
     queryFn: () => apiClient.schema(),
   });
 }
+
+/** Policy rules (raw JSON from server). */
+export function usePolicy() {
+  return useQuery({
+    queryKey: ["policy"],
+    queryFn: () => apiClient.getPolicy() as Promise<unknown>,
+  });
+}
+
+/** Changeset log (raw JSON from server). */
+export function useLog() {
+  return useQuery({
+    queryKey: ["log"],
+    queryFn: () => apiClient.log() as Promise<unknown>,
+  });
+}
+
+/** Principals list (raw JSON from server). */
+export function usePrincipals() {
+  return useQuery({
+    queryKey: ["principals"],
+    queryFn: () => apiClient.principals() as Promise<unknown>,
+  });
+}
