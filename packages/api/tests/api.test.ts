@@ -1,0 +1,232 @@
+/**
+ * F4 contract tests: founding loop over HTTP, auth, held shape, openapi coverage.
+ *
+ * All tests use hashEmbedder and a temp FREEHOLD_HOME — never the real home.
+ * The Hono app is tested in-process via app.request() — no port is bound.
+ */
+
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { Freehold, hashEmbedder, loadConfig } from "@freehold/core";
+import { afterAll, beforeAll, describe, expect, test } from "vitest";
+import { createApp } from "../src/app.js";
+import { getOpenApiDoc } from "../src/openapi.js";
+
+let home: string;
+let app: ReturnType<typeof createApp>;
+let token: string;
+
+async function makeTestApp() {
+  home = mkdtempSync(join(tmpdir(), "freehold-api-test-"));
+  const config = loadConfig(home);
+  token = config.token;
+  const fh = await Freehold.open(home);
+  app = createApp(fh, hashEmbedder, config);
+}
+
+async function req(
+  method: string,
+  path: string,
+  body?: unknown,
+  headers?: Record<string, string>
+): Promise<{ status: number; body: unknown }> {
+  const init: RequestInit = {
+    method,
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+      ...headers,
+    },
+  };
+  if (body !== undefined) {
+    init.body = JSON.stringify(body);
+  }
+  const res = await app.request(path, init);
+  const json = await res.json().catch(() => null);
+  return { status: res.status, body: json };
+}
+
+beforeAll(async () => {
+  await makeTestApp();
+});
+
+afterAll(() => {
+  if (home) rmSync(home, { recursive: true, force: true });
+});
+
+describe("GET /health", () => {
+  test("returns 200 ok without auth", async () => {
+    const res = await app.request("/health");
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toEqual({ status: "ok" });
+  });
+});
+
+describe("Auth middleware", () => {
+  test("returns 401 with error.code=auth on missing token", async () => {
+    const res = await app.request("/api/v1/proposals", {
+      method: "GET",
+      headers: {},
+    });
+    expect(res.status).toBe(401);
+    const body = await res.json();
+    expect((body as { error?: { code?: string } }).error?.code).toBe("auth");
+  });
+
+  test("returns 401 with wrong token", async () => {
+    const res = await app.request("/api/v1/proposals", {
+      method: "GET",
+      headers: { Authorization: "Bearer wrong-token" },
+    });
+    expect(res.status).toBe(401);
+  });
+});
+
+describe("Founding loop", () => {
+  let agentName: string;
+  let proposalHash: string | undefined;
+
+  test("POST /api/v1/agents — register an agent", async () => {
+    agentName = `test-agent-${Date.now()}`;
+    const { status, body } = await req("POST", "/api/v1/agents", { name: agentName });
+    expect(status).toBe(200);
+    const b = body as { name: string; mcpSnippet: string };
+    expect(b.name).toBe(agentName);
+    expect(typeof b.mcpSnippet).toBe("string");
+  });
+
+  test("POST /api/v1/remember — scratch note is admitted (200)", async () => {
+    const { status, body } = await req("POST", "/api/v1/remember", {
+      agent: agentName,
+      content: "I prefer morning meetings",
+    });
+    expect(status).toBe(200);
+    const b = body as { status: string; noteId: string; changeset: string };
+    expect(b.status).toBe("admitted");
+    expect(typeof b.noteId).toBe("string");
+    expect(typeof b.changeset).toBe("string");
+  });
+
+  test("POST /api/v1/entities — entity write returns 200", async () => {
+    const { status, body } = await req("POST", "/api/v1/entities", {
+      agent: agentName,
+      type: "memory/Preference@1",
+      attributes: { statement: "prefers morning meetings", strength: "soft" },
+      classification: "workspace/personal@1",
+    });
+    expect(status).toBe(200);
+    const b = body as { status: string; nodeId: string; changeset: string };
+    expect(b.status === "admitted" || b.status === "held").toBe(true);
+    expect(typeof b.changeset).toBe("string");
+  });
+
+  test("GET /api/v1/proposals — returns proposals array", async () => {
+    const { status, body } = await req("GET", "/api/v1/proposals");
+    expect(status).toBe(200);
+    const b = body as { proposals: Array<{ hash: string; summary: string; rules: string[] }> };
+    expect(Array.isArray(b.proposals)).toBe(true);
+    if (b.proposals.length > 0) {
+      const p = b.proposals[0];
+      expect(typeof p.hash).toBe("string");
+      proposalHash = p.hash;
+    }
+  });
+
+  test("POST /api/v1/proposals/:hash/approve — approve held proposal", async () => {
+    if (!proposalHash) return;
+    const { status, body } = await req("POST", `/api/v1/proposals/${proposalHash}/approve`);
+    expect(status).toBe(200);
+    const b = body as { status: string };
+    expect(b.status === "admitted" || b.status === "still-unmet").toBe(true);
+  });
+
+  test("GET /api/v1/recall — returns results array", async () => {
+    const { status, body } = await req("GET", "/api/v1/recall?q=morning+meetings");
+    expect(status).toBe(200);
+    const b = body as { results: unknown[] };
+    expect(Array.isArray(b.results)).toBe(true);
+  });
+
+  test("GET /api/v1/verify — returns ok:true on a fresh valid graph", async () => {
+    const { status, body } = await req("GET", "/api/v1/verify");
+    expect(status).toBe(200);
+    const b = body as { ok: boolean };
+    expect(b.ok).toBe(true);
+  });
+});
+
+describe("held shape is 200, not an error", () => {
+  test("POST /api/v1/entities returns 200 whether admitted or held", async () => {
+    const agentName2 = `held-test-agent-${Date.now()}`;
+    await req("POST", "/api/v1/agents", { name: agentName2 });
+
+    const { status, body } = await req("POST", "/api/v1/entities", {
+      agent: agentName2,
+      type: "memory/Preference@1",
+      attributes: { statement: "prefers tea", strength: "soft" },
+    });
+    expect(status).toBe(200);
+    const b = body as { status: string };
+    expect(b.status === "admitted" || b.status === "held").toBe(true);
+  });
+});
+
+describe("GET /api/v1/schema", () => {
+  test("returns entityTypes, edgeTypes, terms arrays", async () => {
+    const { status, body } = await req("GET", "/api/v1/schema");
+    expect(status).toBe(200);
+    const b = body as { entityTypes: unknown[]; edgeTypes: unknown[]; terms: unknown[] };
+    expect(Array.isArray(b.entityTypes)).toBe(true);
+    expect(Array.isArray(b.edgeTypes)).toBe(true);
+    expect(Array.isArray(b.terms)).toBe(true);
+  });
+});
+
+describe("OpenAPI document coverage", () => {
+  test("openapi.json contains every required route path", () => {
+    const doc = getOpenApiDoc() as { paths: Record<string, unknown> };
+    const paths = Object.keys(doc.paths);
+
+    const required = [
+      "/health",
+      "/api/v1/remember",
+      "/api/v1/entities",
+      "/api/v1/entities/{id}",
+      "/api/v1/entities/{id}/traverse",
+      "/api/v1/relations",
+      "/api/v1/classifications",
+      "/api/v1/documents",
+      "/api/v1/recall",
+      "/api/v1/proposals",
+      "/api/v1/proposals/{hash}/approve",
+      "/api/v1/proposals/{hash}/reject",
+      "/api/v1/verify",
+      "/api/v1/reindex",
+      "/api/v1/principals",
+      "/api/v1/agents",
+      "/api/v1/schema",
+      "/api/v1/schema/proposals",
+      "/api/v1/schema/install",
+      "/api/v1/policy",
+      "/api/v1/log",
+    ];
+
+    for (const p of required) {
+      expect(paths).toContain(p);
+    }
+  });
+
+  test("openapi.json is valid OpenAPI 3.1 object with info and servers", () => {
+    const doc = getOpenApiDoc() as {
+      openapi: string;
+      info: { title: string; version: string };
+      servers: Array<{ url: string }>;
+    };
+    expect(doc.openapi).toBe("3.1.0");
+    expect(typeof doc.info.title).toBe("string");
+    expect(typeof doc.info.version).toBe("string");
+    expect(doc.servers.length).toBeGreaterThan(0);
+  });
+});
