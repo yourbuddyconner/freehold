@@ -1,0 +1,124 @@
+name: release
+
+# Builds freehold release tarballs on a version tag (v*).
+#
+# Each tarball contains the single-file binary (Bun --compile) plus the
+# four PGlite sidecar files the binary reads from its own directory.
+# install.sh at the repo root downloads the tarball for the running
+# platform and installs it:
+#
+#   curl -fsSL https://raw.githubusercontent.com/yourbuddyconner/freehold/main/install.sh | bash
+#
+# Platforms: macOS arm64 (native runner) + macOS x64 (cross-compiled),
+# Linux x64 (native runner) + Linux arm64 (cross-compiled). The sidecar
+# files are WASM and platform-agnostic. Windows = WSL (linux-x64).
+#
+# Note: the compiled binary ships the deterministic hash embedder only;
+# semantic recall needs a from-source run (see docs/notes/F10-deferred.md).
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  binaries:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-14
+            targets: bun-darwin-arm64 bun-darwin-x64
+            smoke: darwin-arm64
+          - runner: ubuntu-latest
+            targets: bun-linux-x64 bun-linux-arm64
+            smoke: linux-x64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.3
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.10"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build packages
+        run: pnpm -r build
+
+      - name: Compile binaries and pack tarballs
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          for t in ${{ matrix.targets }}; do
+            plat="${t#bun-}"
+            node packages/api/build/compile-binary.mjs --target="$t" --outdir="packages/api/dist/pkg-$plat"
+            tar -czf "release/freehold-${plat}.tar.gz" -C "packages/api/dist/pkg-$plat" .
+          done
+          ls -la release/
+
+      # Smoke only the binary that matches this runner's platform (a
+      # cross-built binary can't run here). Boot it self-contained from an
+      # extracted tarball and hit /health.
+      - name: Smoke test (native target)
+        run: |
+          set -euo pipefail
+          SMOKE_DIR="$(mktemp -d)"
+          tar -xzf "release/freehold-${{ matrix.smoke }}.tar.gz" -C "$SMOKE_DIR"
+          "$SMOKE_DIR/freehold" --version
+
+          export FREEHOLD_HOME=$(mktemp -d)
+          export PORT=28712
+          echo "{\"token\":\"ci\",\"port\":$PORT,\"graph\":\"main\",\"embedder\":\"hash\",\"defaultAgent\":\"ci-agent\"}" \
+            > "$FREEHOLD_HOME/config.json"
+
+          "$SMOKE_DIR/freehold" serve &
+          BIN_PID=$!
+          trap 'kill "$BIN_PID" 2>/dev/null || true' EXIT
+
+          for i in $(seq 1 60); do
+            if curl -sf "http://127.0.0.1:$PORT/health" | grep -q '"status":"ok"'; then
+              echo "tarball binary booted and served /health"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "binary did not become healthy within 60s" >&2
+          exit 1
+
+      - name: Publish to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/freehold-*.tar.gz
+          fail_on_unmatched_files: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          generate_release_notes: true
+          body: |
+            Freehold ${{ github.ref_name }} — prebuilt CLI + daemon.
+
+            Install with one command (macOS and Linux; Windows via WSL):
+
+            ```
+            curl -fsSL https://raw.githubusercontent.com/yourbuddyconner/freehold/main/install.sh | bash
+            ```
+
+            Then `freehold serve` and open http://127.0.0.1:8710.
+
+            Each tarball contains the single-file binary plus its PGlite
+            sidecar files — keep them in one directory. The compiled binary
+            uses full-text search for recall; run from source for semantic
+            search (see the README).

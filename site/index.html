@@ -284,7 +284,7 @@
         <div class="eyebrow">Quickstart</div>
         <h2>Up in three commands</h2>
         <p>
-          Prerequisites: Node ≥ 22 and pnpm. No Rust toolchain — the Allod engine ships prebuilt.
+          No prerequisites — the installer drops a self-contained binary on your PATH. macOS and Linux; Windows via WSL.
         </p>
       </div>
 
@@ -293,17 +293,16 @@
         <div class="code-panel-header">
           <span class="code-panel-label">bash</span>
         </div>
-        <pre><code><span class="code-comment"># 1. Clone and install — @allod/core comes prebuilt from GitHub releases</span>
-git clone https://github.com/yourbuddyconner/freehold
-cd freehold &amp;&amp; pnpm install
+        <pre><code><span class="code-comment"># 1. Install</span>
+<span class="code-accent">curl -fsSL https://raw.githubusercontent.com/yourbuddyconner/freehold/main/install.sh | bash</span>
 
 <span class="code-comment"># 2. Start Freehold</span>
-pnpm --dir packages/api exec tsx src/cli/index.ts serve
+freehold serve
 <span class="code-comment"># Binds 127.0.0.1:8710 — console at http://127.0.0.1:8710</span>
 
 <span class="code-comment"># 3. Wire an agent</span>
-<span class="code-accent">freehold mcp setup claude-code</span>   <span class="code-comment"># writes the MCP config entry</span>
-freehold mcp setup --print        <span class="code-comment"># or print JSON for any other agent</span></code></pre>
+freehold mcp setup claude-code   <span class="code-comment"># writes the MCP config entry</span>
+freehold mcp setup --print       <span class="code-comment"># or print JSON for any other agent</span></code></pre>
       </div>
 
       <div style="margin-top:32px; display:flex; gap:16px; flex-wrap:wrap;">

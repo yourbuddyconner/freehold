@@ -28,6 +28,8 @@ import { runStatus } from "./commands/status.js";
 import { runVerify } from "./commands/verify.js";
 import { loadClientConfig } from "./config.js";
 
+import pkg from "../../package.json" with { type: "json" };
+
 const HELP = `
 freehold — governed memory backend for AI agents
 
@@ -53,12 +55,18 @@ Commands:
 Global flags:
   --json                      Output raw JSON
   --help                      Show help
+  --version                   Print the version
 
 Config: \${FREEHOLD_HOME:-~/.freehold}/config.json
 `.trim();
 
 async function main() {
   const argv = process.argv.slice(2);
+
+  if (argv.includes("--version") || argv.includes("-V")) {
+    console.log(`freehold ${pkg.version}`);
+    process.exit(0);
+  }
 
   if (argv.length === 0 || argv.includes("--help") || argv.includes("-h")) {
     console.log(HELP);

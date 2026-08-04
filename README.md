@@ -47,12 +47,22 @@ they can read and write, and gives you control over what they write:
 
 ## Quickstart
 
-Prerequisites: Node ≥ 22 and [pnpm](https://pnpm.io). `@allod/core`
-(the Allod WASM engine) is downloaded prebuilt from [Allod's GitHub
-releases](https://github.com/yourbuddyconner/allod/releases) during
-install — no Rust toolchain needed.
+Install the prebuilt binary (macOS and Linux; Windows via WSL):
 
 ```bash
+curl -fsSL https://raw.githubusercontent.com/yourbuddyconner/freehold/main/install.sh | bash
+freehold serve
+```
+
+The installer puts the release in `~/.local/share/freehold` and a
+`freehold` command in `~/.local/bin`. Pin a version with
+`FREEHOLD_VERSION=0.1.0`. The binary recalls with full-text search;
+run from source for semantic recall:
+
+```bash
+# Prerequisites: Node ≥ 22 and pnpm. @allod/core (the Allod WASM
+# engine) is downloaded prebuilt from Allod's GitHub releases —
+# no Rust toolchain needed.
 git clone https://github.com/yourbuddyconner/freehold
 cd freehold && pnpm install
 pnpm --dir packages/api exec tsx src/cli/index.ts serve
@@ -133,7 +143,10 @@ tarball, point the dependency back at it in
 then build it once (`pnpm --dir ../allod/crates/allod-wasm install &&
 pnpm --dir ../allod/crates/allod-wasm build`) and run `pnpm install`.
 New Allod releases are cut by tagging `core-v<version>` in the allod
-repo; the release workflow builds and attaches the tarball.
+repo; the release workflow builds and attaches the tarball. Freehold
+binary releases are cut by tagging `v<version>` here — the release
+workflow builds tarballs for macOS (arm64/x64) and Linux (x64/arm64)
+that `install.sh` serves.
 
 ## License
 

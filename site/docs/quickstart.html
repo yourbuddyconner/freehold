@@ -31,8 +31,7 @@
     <div class="docs-sidebar-section">
       <div class="docs-sidebar-label">On this page</div>
       <ul class="docs-sidebar-links">
-        <li><a href="#prerequisites" class="active">Prerequisites</a></li>
-        <li><a href="#install">Install</a></li>
+        <li><a href="#install" class="active">Install</a></li>
         <li><a href="#serve">Start Freehold</a></li>
         <li><a href="#wire-agent">Wire an agent</a></li>
         <li><a href="#cli">CLI reference</a></li>
@@ -55,34 +54,36 @@
     <div class="eyebrow reveal reveal-1">Documentation</div>
     <h1 class="reveal reveal-2">Quickstart</h1>
     <p class="lead reveal reveal-3">
-      This guide goes from a clean machine to Freehold running with an agent connected. You need Node and pnpm; everything else comes with <code>pnpm install</code>.
+      This guide goes from a clean machine to Freehold running with an agent connected. One command installs the prebuilt binary; nothing else is required.
     </p>
-
-    <h2 id="prerequisites">Prerequisites</h2>
-
-    <ul>
-      <li><strong>Node ≥ 22</strong> — Freehold runs on Node</li>
-      <li><strong>pnpm</strong> — the workspace package manager (<a href="https://pnpm.io">pnpm.io</a>)</li>
-    </ul>
-
-    <p>Freehold's storage engine, <code>@allod/core</code>, is a prebuilt WASM package downloaded from <a href="https://github.com/yourbuddyconner/allod/releases">Allod's GitHub releases</a> during install. You do not need a Rust toolchain or an Allod checkout.</p>
 
     <h2 id="install">Install</h2>
 
+    <p>macOS and Linux (Windows: run under WSL):</p>
+
+    <pre><code>curl -fsSL https://raw.githubusercontent.com/yourbuddyconner/freehold/main/install.sh | bash</code></pre>
+
+    <p>The installer downloads the release for your platform into <code>~/.local/share/freehold</code> and puts a <code>freehold</code> command in <code>~/.local/bin</code>. Pin a version with <code>FREEHOLD_VERSION=0.1.0</code>.</p>
+
+    <h3 id="prerequisites">From source</h3>
+
+    <p>Run from source if you want semantic recall (the binary uses full-text search) or you're developing Freehold. You need <strong>Node ≥ 22</strong> and <strong><a href="https://pnpm.io">pnpm</a></strong>; the storage engine, <code>@allod/core</code>, is a prebuilt WASM package downloaded from <a href="https://github.com/yourbuddyconner/allod/releases">Allod's GitHub releases</a> during install — no Rust toolchain, no Allod checkout.</p>
+
     <pre><code>git clone https://github.com/yourbuddyconner/freehold
 cd freehold
-pnpm install</code></pre>
+pnpm install
+pnpm --dir packages/api exec tsx src/cli/index.ts serve</code></pre>
 
     <h2 id="serve">Start Freehold</h2>
 
-    <pre><code>pnpm --dir packages/api exec tsx src/cli/index.ts serve</code></pre>
+    <pre><code>freehold serve</code></pre>
 
     <p>Freehold binds <code>127.0.0.1:8710</code>, creates <code>~/.freehold/</code> on first run (config, the PGlite index directory, and your graph in native Allod layout), and serves the owner console at <a href="http://127.0.0.1:8710">http://127.0.0.1:8710</a>.</p>
 
     <p>A bearer token is auto-minted into <code>~/.freehold/config.json</code> (mode 0600) at first boot. The CLI and the MCP config use this token automatically.</p>
 
     <div class="notice">
-      <p><strong>Run from source for semantic recall.</strong> The compiled binary ships with a deterministic hash embedder only, so semantic similarity is unavailable in the binary build. Run from source via <code>tsx</code> as shown above to get the real embedding model. With the hash embedder, recall still works through Postgres full-text search.</p>
+      <p><strong>Run from source for semantic recall.</strong> The compiled binary ships with a deterministic hash embedder only, so semantic similarity is unavailable in the binary build; recall works through Postgres full-text search. Run from source (see <a href="#prerequisites">From source</a>) to get the real embedding model.</p>
     </div>
 
     <h2 id="wire-agent">Wire an agent</h2>

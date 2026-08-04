@@ -46,7 +46,16 @@ const __dirname = dirname(__filename);
 //   MONO_ROOT:    <repo root>   (3 levels up from this file)
 const API_PKG = resolve(__dirname, ".."); // packages/api
 const MONO_ROOT = resolve(__dirname, "../../.."); // monorepo root
-const DIST = resolve(API_PKG, "dist");
+
+// CLI flags:
+//   --target=<bun-target>  cross-compile target (e.g. bun-darwin-arm64);
+//                          defaults to the host ("bun")
+//   --outdir=<dir>         artifact directory; defaults to packages/api/dist
+const argTarget = process.argv.find((a) => a.startsWith("--target="))?.slice("--target=".length);
+const argOutdir = process.argv.find((a) => a.startsWith("--outdir="))?.slice("--outdir=".length);
+
+const TARGET = argTarget ?? "bun";
+const DIST = argOutdir ? resolve(process.cwd(), argOutdir) : resolve(API_PKG, "dist");
 const ENTRYPOINT = resolve(API_PKG, "src/cli/index.ts");
 const BINARY = resolve(DIST, "freehold");
 
@@ -142,7 +151,7 @@ const BUN =
     }
     return "/opt/homebrew/bin/bun";
   })();
-const buildArgs = ["build", "--compile", ENTRYPOINT, `--outfile=${BINARY}`, "--target=bun"];
+const buildArgs = ["build", "--compile", ENTRYPOINT, `--outfile=${BINARY}`, `--target=${TARGET}`];
 
 console.log(`\n[freehold build] running: ${BUN} ${buildArgs.join(" ")}\n`);
 
