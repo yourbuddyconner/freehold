@@ -12,7 +12,7 @@ import {
   reject,
   verifyGraph,
 } from "../src/governance.js";
-import { createEntity, remember } from "../src/knowledge.js";
+import { classifyEntity, createEntity, remember } from "../src/knowledge.js";
 
 describe("governance", () => {
   let graph: AllodGraph;
@@ -149,5 +149,25 @@ describe("governance", () => {
     // After rejection, the proposal leaves pending (depending on allod's implementation)
     // We assert the function didn't crash and returned correct shape
     expect(Array.isArray(after)).toBe(true);
+  });
+});
+
+describe("classification proposals", () => {
+  test("summary names the target and term; diff carries a label entry", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "freehold-classify-test-"));
+    const graph = await createGraph(join(dir, "graphs", "main"), "owner");
+    await graph.principal_add("agent", "agent", "owner");
+
+    const note = await remember(graph, "agent", "Quarterly planning kickoff");
+    expect(note.status).toBe("saved");
+    const held = await classifyEntity(graph, "agent", note.noteId, "work@1");
+    expect(held.status).toBe("pending");
+
+    const proposals = await pending(graph);
+    const proposal = proposals.find((p) => p.hash === held.changeset);
+    expect(proposal).toBeDefined();
+    expect(proposal?.summary).toBe('agent wants to label "Quarterly planning kickoff" as work');
+    const label = proposal?.diff.find((d) => d.key === "label");
+    expect(label?.after).toBe("Quarterly planning kickoff → work");
   });
 });

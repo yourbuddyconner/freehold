@@ -83,7 +83,41 @@ function principalName(ref: string | undefined): string {
  *   "jarvis wants to add an entity type: Colleague"
  *   "jarvis wants to update node <id>"
  */
-function buildSummary(agent: string, ops: RawOp[]): string {
+/**
+ * Resolve a display title for a node reference ("node:<uuid>") from fold
+ * state: title, name, statement, first content line, then the short id.
+ * Must be called from within a withGraph critical section.
+ */
+function subjectTitle(graph: AllodGraph, ref: string): string {
+  const colon = ref.indexOf(":");
+  const id = colon >= 0 ? ref.slice(colon + 1) : ref;
+  try {
+    const obj = (
+      graph as unknown as {
+        object_get(kind: string, id: string): { content?: Record<string, unknown> } | null;
+      }
+    ).object_get("node", id);
+    const attrs = (obj?.content?.attributes ?? {}) as Record<string, unknown>;
+    for (const key of ["title", "name", "statement"]) {
+      const v = attrs[key];
+      if (typeof v === "string" && v.trim()) return v.trim();
+    }
+    const body = attrs.content;
+    if (typeof body === "string" && body.trim()) {
+      const first = body
+        .trim()
+        .split("\n")[0]
+        .replace(/^#+\s*/, "")
+        .trim();
+      if (first) return first.length > 60 ? `${first.slice(0, 60)}…` : first;
+    }
+  } catch {
+    // Node not in fold state — fall through to the short id
+  }
+  return `${id.slice(0, 8)}…`;
+}
+
+function buildSummary(graph: AllodGraph, agent: string, ops: RawOp[]): string {
   // Find the first substantive node op (not a classification op)
   const nodeOp = ops.find(
     (o) => (o.create?.kind === "node" || o.update?.kind === "node") && o.create?.type !== undefined
@@ -121,6 +155,13 @@ function buildSummary(agent: string, ops: RawOp[]): string {
     }
     return `${agent} wants to update node ${p.id ?? "?"}`;
   }
+  // Classification-only proposal: say what gets labeled as what
+  const classOp = ops.find((o) => o.create?.kind === "classification");
+  if (classOp?.create?.subject && classOp.create.term) {
+    const term = classOp.create.term.split("@")[0];
+    const title = subjectTitle(graph, classOp.create.subject);
+    return `${agent} wants to label "${title}" as ${term}`;
+  }
   // Fallback: use intent
   return `${agent} wants to make a change`;
 }
@@ -137,7 +178,18 @@ function buildDiff(graph: AllodGraph, ops: RawOp[]): AttributeDiff[] {
 
   for (const op of ops) {
     const payload = op.create ?? op.update;
-    if (!payload || payload.kind !== "node") continue;
+    if (!payload) continue;
+
+    if (payload.kind === "classification" && payload.subject && payload.term) {
+      diffs.push({
+        key: "label",
+        before: null,
+        after: `${subjectTitle(graph, payload.subject)} → ${payload.term.split("@")[0]}`,
+      });
+      continue;
+    }
+
+    if (payload.kind !== "node") continue;
 
     const attrs = payload.attributes ?? {};
     const isUpdate = !!op.update;
@@ -223,7 +275,7 @@ export async function pending(graph: AllodGraph): Promise<ProposalView[]> {
         // Leave rules empty on failure
       }
 
-      const summary = buildSummary(agent, ops);
+      const summary = buildSummary(graph, agent, ops);
       const diff = buildDiff(graph, ops);
       const isSchemaProposal = checkIsSchemaProposal(ops);
 
