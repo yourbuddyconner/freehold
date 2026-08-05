@@ -154,3 +154,30 @@ export async function appendDecision(
 export async function pushNotes(repoDir: string, remote = "origin"): Promise<void> {
   await git(repoDir, ["push", remote, "refs/notes/allod-decisions"]);
 }
+
+/**
+ * Return all local branch heads as { ref, sha } pairs.
+ * Uses `git for-each-ref refs/heads --format=%(refname)%09%(objectname)`.
+ */
+export async function branchHeads(
+  repoDir: string
+): Promise<Array<{ ref: string; sha: string }>> {
+  const out = await git(repoDir, [
+    "for-each-ref",
+    "refs/heads",
+    "--format=%(refname)\t%(objectname)",
+  ]);
+  const results: Array<{ ref: string; sha: string }> = [];
+  for (const line of out.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    const tab = trimmed.indexOf("\t");
+    if (tab === -1) continue;
+    const ref = trimmed.slice(0, tab).trim();
+    const sha = trimmed.slice(tab + 1).trim();
+    if (ref && sha) {
+      results.push({ ref, sha });
+    }
+  }
+  return results;
+}

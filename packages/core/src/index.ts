@@ -130,3 +130,8 @@ export type {
   RegionRule,
 } from "./codeview.js";
 export type { RecallResult, RecallFilters } from "./recall.js";
+
+// Git proposal review
+export { listGitProposals, gitProposal, decideGit, KeyMissingError } from "./gitreview.js";
+export { branchHeads } from "./git.js";
+export type { GitProposal, DecideResult } from "./gitreview.js";
