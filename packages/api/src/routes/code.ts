@@ -1,5 +1,12 @@
 import { basename } from "node:path";
-import { codeFile, codeItem, codeNeighborhood, codeRegions, codeTree } from "@freehold/core";
+import {
+  codeFile,
+  codeItem,
+  codeNeighborhood,
+  codeRegions,
+  codeSource,
+  codeTree,
+} from "@freehold/core";
 import { Hono } from "hono";
 import type { AppEnv } from "../types.js";
 
@@ -77,4 +84,30 @@ codeRouter.get("/code/regions", async (c) => {
   const repoName = basename(fh.graphDir);
   const rules = await codeRegions(fh, repoName);
   return c.json({ rules });
+});
+
+// GET /code/source?path=
+codeRouter.get("/code/source", async (c) => {
+  const fh = c.get("freehold");
+  if (!repoOnly(fh)) {
+    return c.json({ error: "code view is only available for repo graphs" }, 400);
+  }
+  const path = c.req.query("path");
+  if (!path) {
+    return c.json({ error: "path query parameter is required" }, 400);
+  }
+  let source: Awaited<ReturnType<typeof codeSource>>;
+  try {
+    source = await codeSource(fh, path);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("path traversal")) {
+      return c.json({ error: "invalid path" }, 400);
+    }
+    throw err;
+  }
+  if (!source) {
+    return c.json({ error: "file not found" }, 404);
+  }
+  return c.json(source);
 });
