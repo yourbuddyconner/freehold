@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider, createMemoryHistory, createRouter } from "@tanstack/react-router";
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as hooks from "~/lib/hooks";
 import { routeTree } from "~/routes/../routeTree.gen";
@@ -23,6 +23,7 @@ vi.mock("~/lib/hooks", () => ({
   useCodeFile: vi.fn(),
   useCodeItem: vi.fn(),
   useCodeRegions: vi.fn(),
+  useCodeSource: vi.fn(),
   useClassify: vi.fn(),
   useListGraphs: vi.fn(),
   useGitHubBlobUrl: vi.fn().mockReturnValue(null),
@@ -45,6 +46,7 @@ vi.mock("~/lib/api", () => ({
     classify: vi.fn(),
     listGraphs: vi.fn(),
     codeNeighborhood: vi.fn(),
+    codeSource: vi.fn(),
   },
 }));
 
@@ -110,6 +112,30 @@ const sampleFileView = {
 
 type GraphKind = "memory" | "repo";
 
+const sampleSource = {
+  path: "src/main.ts",
+  content: "function main() {\n  console.log('hello');\n}\n",
+  truncated: false,
+  binary: false,
+  size: 44,
+};
+
+const binarySource = {
+  path: "src/main.ts",
+  content: "",
+  truncated: false,
+  binary: true,
+  size: 100,
+};
+
+const truncatedSource = {
+  path: "src/main.ts",
+  content: "a".repeat(512 * 1024),
+  truncated: true,
+  binary: false,
+  size: 700 * 1024,
+};
+
 const sampleNeighborhood = {
   nodes: [
     { id: "node-file-1", label: "src/main.ts", type: "code/SourceFile@1", terms: [] },
@@ -128,6 +154,8 @@ function setupHooks(
     graphs?: { id: string; name: string; kind: GraphKind }[];
     blobUrl?: string | null;
     neighborhood?: typeof sampleNeighborhood | null;
+    source?: typeof sampleSource | null;
+    sourceLoading?: boolean;
   } = {}
 ) {
   const graphs = overrides.graphs ?? [];
@@ -220,6 +248,12 @@ function setupHooks(
     isError: overrides.neighborhood === null,
     error: null,
   } as unknown as ReturnType<typeof hooks.useCodeNeighborhood>);
+  vi.mocked(hooks.useCodeSource).mockReturnValue({
+    data: overrides.source === null ? undefined : (overrides.source ?? sampleSource),
+    isLoading: overrides.sourceLoading ?? false,
+    isError: false,
+    error: null,
+  } as unknown as ReturnType<typeof hooks.useCodeSource>);
 }
 
 async function renderCode(overrides: Parameters<typeof setupHooks>[0] = {}, initialPath = "/code") {
@@ -309,8 +343,49 @@ describe("Code workspace", () => {
     });
 
     it("shows the not-yet-indexed hint for a 404 file", async () => {
-      await renderCode({ fileView: null }, "/code/file?path=src%2Funknown.ts");
+      await renderCode({ fileView: null, source: null }, "/code/file?path=src%2Funknown.ts");
       expect(screen.getByText(/allod git index/)).toBeInTheDocument();
+    });
+
+    it("renders source with line numbers when source data is present", async () => {
+      await renderCode({}, "/code/file?path=src%2Fmain.ts");
+      // Source section heading
+      expect(screen.getByText("Source")).toBeInTheDocument();
+      // Line number 1
+      expect(screen.getByText("1")).toBeInTheDocument();
+      // Some code content — scoped to source panel to avoid matching item signature
+      const sourcePanel = screen.getByTestId("source-panel");
+      const { getByText } = within(sourcePanel);
+      expect(getByText(/function main/)).toBeInTheDocument();
+    });
+
+    it("shows binary caption when source is a binary file", async () => {
+      await renderCode({ source: binarySource }, "/code/file?path=src%2Fmain.ts");
+      expect(screen.getByText(/binary file — not rendered/)).toBeInTheDocument();
+    });
+
+    it("shows truncated caption when source was truncated", async () => {
+      await renderCode({ source: truncatedSource }, "/code/file?path=src%2Fmain.ts");
+      expect(screen.getByText(/truncated at 512 KB/)).toBeInTheDocument();
+    });
+
+    it("shows source + not-indexed hint when file is on disk but not indexed", async () => {
+      // fileView: null → codeFile 404; source succeeds
+      await renderCode(
+        { fileView: null, source: sampleSource },
+        "/code/file?path=src%2Funknown.ts"
+      );
+      // The not-indexed inline hint (not the full-page fallback)
+      expect(screen.getByText(/allod git index/)).toBeInTheDocument();
+      // Still shows source
+      expect(screen.getByText("Source")).toBeInTheDocument();
+    });
+
+    it("shows full not-indexed page when both codeFile and codeSource are unavailable", async () => {
+      await renderCode({ fileView: null, source: null }, "/code/file?path=src%2Funknown.ts");
+      expect(screen.getByText(/allod git index/)).toBeInTheDocument();
+      // Source heading should NOT appear
+      expect(screen.queryByText("Source")).not.toBeInTheDocument();
     });
   });
 

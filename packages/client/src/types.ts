@@ -1712,6 +1712,68 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/code/source": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Working-tree file source
+         * @description Read raw file content from the checkout working tree. Binary files return content:"". Files over 512 KB are truncated.
+         */
+        get: {
+            parameters: {
+                query: {
+                    path: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description File source content */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CodeSource"];
+                    };
+                };
+                /** @description Not a repo graph, missing path param, or path traversal attempt */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description File not found on disk */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/openapi.json": {
         parameters: {
             query?: never;
@@ -2667,6 +2729,17 @@ export interface components {
             edges: components["schemas"]["GraphEdge"][];
             /** @description True when the node cap cut the listing short */
             truncated: boolean;
+        };
+        CodeSource: {
+            path: string;
+            /** @description UTF-8 source text (empty when binary) */
+            content: string;
+            /** @description True when file exceeded 512 KB read limit */
+            truncated: boolean;
+            /** @description True when a NUL byte was detected in the first 8 KB */
+            binary: boolean;
+            /** @description File size in bytes (full file, not truncated) */
+            size: number;
         };
     };
     responses: never;

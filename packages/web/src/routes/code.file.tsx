@@ -1,6 +1,6 @@
 import { Link, createRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { useClassify, useCodeFile, useGitHubBlobUrl } from "~/lib/hooks";
+import { useClassify, useCodeFile, useCodeSource, useGitHubBlobUrl } from "~/lib/hooks";
 import { Route as RootRoute } from "./__root";
 
 export const Route = createRoute({
@@ -76,9 +76,58 @@ function ClassifyPanel({ nodeId }: { nodeId: string }) {
   );
 }
 
-/** File page — shows path, language, declared items. */
+interface SourcePanelProps {
+  isLoading: boolean;
+  binary: boolean;
+  truncated: boolean;
+  content: string;
+}
+
+/** Line-numbered source code panel. */
+function SourcePanel({ isLoading, binary, truncated, content }: SourcePanelProps) {
+  if (isLoading) {
+    return <p className="text-xs text-(--fg-muted)">Loading source…</p>;
+  }
+  if (binary) {
+    return (
+      <p className="font-mono text-xs text-(--fg-muted) border border-(--border) bg-(--bg-subtle) px-3 py-2">
+        binary file — not rendered
+      </p>
+    );
+  }
+  const lines = content.split("\n");
+  // Remove trailing empty line created by a trailing newline
+  if (lines.length > 0 && lines[lines.length - 1] === "") {
+    lines.pop();
+  }
+  const lineCount = lines.length;
+  const gutterWidth = String(lineCount).length;
+  return (
+    <div className="space-y-1" data-testid="source-panel">
+      <pre className="overflow-x-auto border border-(--border) bg-(--bg-subtle) p-3 font-mono text-xs leading-5 text-(--fg)">
+        {lines.map((line, i) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: line numbers are positional
+          <div key={i} className="flex">
+            <span
+              className="select-none pr-4 text-right text-(--fg-muted)"
+              style={{ minWidth: `${gutterWidth + 1}ch` }}
+              aria-hidden
+            >
+              {i + 1}
+            </span>
+            <span>{line}</span>
+          </div>
+        ))}
+      </pre>
+      {truncated && <p className="font-mono text-[11px] text-(--fg-muted)">truncated at 512 KB</p>}
+    </div>
+  );
+}
+
+/** File page — shows path, language, source, declared items. */
 export function CodeFilePage({ filePath }: { filePath?: string }) {
   const { data, isLoading, isError } = useCodeFile(filePath);
+  const { data: sourceData, isLoading: sourceLoading } = useCodeSource(filePath);
   const blobUrl = useGitHubBlobUrl(filePath);
 
   if (!filePath) {
@@ -89,26 +138,29 @@ export function CodeFilePage({ filePath }: { filePath?: string }) {
     );
   }
 
-  if (isLoading) {
+  // Show a loading state while either request is in flight
+  if (isLoading || sourceLoading) {
     return <p className="text-xs text-(--fg-muted)">Loading…</p>;
   }
 
-  if (isError || !data) {
+  // If codeFile 404d but source is available, still show source + hint
+  const fileUnavailable = isError || !data;
+
+  if (fileUnavailable && !sourceData) {
     return (
       <div className="border border-(--border) bg-(--bg-subtle) p-6 max-w-xl space-y-2">
         <p className="text-sm font-semibold text-(--fg)">{filePath}</p>
         <p className="text-sm text-(--fg-muted)">
-          This file has not been indexed yet. Run{" "}
+          File not indexed. Run:{" "}
           <code className="border border-(--border) bg-(--bg-subtle) px-1 py-0.5 font-mono text-[11px]">
             allod git index
-          </code>{" "}
-          to index the repository.
+          </code>
         </p>
       </div>
     );
   }
 
-  const items: CodeItem[] = data.items ?? [];
+  const items: CodeItem[] = data?.items ?? [];
 
   return (
     <article className="max-w-3xl space-y-6">
@@ -128,10 +180,12 @@ export function CodeFilePage({ filePath }: { filePath?: string }) {
           </span>
         </div>
         <div className="flex items-center justify-between gap-4">
-          <h2 className="text-xl font-semibold tracking-tight font-mono">{data.path}</h2>
+          <h2 className="text-xl font-semibold tracking-tight font-mono">
+            {data?.path ?? filePath}
+          </h2>
           <Link
             to="/code/graph"
-            search={{ path: filePath ?? "" }}
+            search={{ path: filePath }}
             data-testid="graph-tab-link"
             className="font-mono text-[11px] uppercase tracking-[0.06em] border border-(--border) px-2 py-0.5 text-(--fg-muted) hover:text-(--fg) hover:bg-(--bg-subtle)"
           >
@@ -150,12 +204,12 @@ export function CodeFilePage({ filePath }: { filePath?: string }) {
           </a>
         )}
         <div className="flex flex-wrap gap-1.5">
-          {data.language && (
+          {data?.language && (
             <span className="inline-flex items-center border border-(--border) bg-(--bg-subtle) px-1.5 py-0.5 text-[11px] font-mono text-(--fg-muted)">
               {data.language}
             </span>
           )}
-          {(data.terms ?? []).map((t) => (
+          {(data?.terms ?? []).map((t) => (
             <span
               key={t}
               className="inline-flex items-center border border-(--border) bg-(--bg-subtle) px-1.5 py-0.5 text-[11px] font-mono text-(--fg-muted)"
@@ -165,6 +219,35 @@ export function CodeFilePage({ filePath }: { filePath?: string }) {
           ))}
         </div>
       </header>
+
+      {/* Not-indexed hint when file is on disk but not in the graph */}
+      {fileUnavailable && sourceData && (
+        <div className="border border-(--border) bg-(--bg-subtle) px-3 py-2 space-y-1">
+          <p className="text-xs text-(--fg-muted)">
+            File not indexed. Run:{" "}
+            <code className="border border-(--border) bg-(--bg-subtle) px-1 py-0.5 font-mono text-[11px]">
+              allod git index
+            </code>
+          </p>
+        </div>
+      )}
+
+      {/* Source panel */}
+      {(sourceData ?? sourceLoading) && (
+        <section className="space-y-2">
+          <h3 className="text-sm font-semibold text-(--fg)">Source</h3>
+          {sourceLoading ? (
+            <SourcePanel isLoading content="" binary={false} truncated={false} />
+          ) : sourceData ? (
+            <SourcePanel
+              isLoading={false}
+              binary={sourceData.binary}
+              truncated={sourceData.truncated}
+              content={sourceData.content}
+            />
+          ) : null}
+        </section>
+      )}
 
       {items.length > 0 && (
         <section className="space-y-3">
@@ -210,7 +293,7 @@ export function CodeFilePage({ filePath }: { filePath?: string }) {
         </section>
       )}
 
-      <ClassifyPanel nodeId={data.nodeId} />
+      {data && <ClassifyPanel nodeId={data.nodeId} />}
     </article>
   );
 }

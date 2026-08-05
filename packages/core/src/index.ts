@@ -120,6 +120,8 @@ export {
   codeItem,
   codeNeighborhood,
   codeRegions,
+  codeSource,
+  PathTraversalError,
 } from "./codeview.js";
 export type {
   CodeTreeNode,
@@ -128,6 +130,7 @@ export type {
   CodeItemView,
   CodeNeighborhood,
   RegionRule,
+  CodeSource,
 } from "./codeview.js";
 export type { RecallResult, RecallFilters } from "./recall.js";
 

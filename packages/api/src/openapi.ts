@@ -226,6 +226,21 @@ const CodeNeighborhood = z
   })
   .openapi("CodeNeighborhood");
 
+const CodeSource = z
+  .object({
+    path: z.string(),
+    content: z.string().openapi({ description: "UTF-8 source text (empty when binary)" }),
+    truncated: z.boolean().openapi({ description: "True when file exceeded 512 KB read limit" }),
+    binary: z
+      .boolean()
+      .openapi({ description: "True when a NUL byte was detected in the first 8 KB" }),
+    size: z
+      .number()
+      .int()
+      .openapi({ description: "File size in bytes (full file, not truncated)" }),
+  })
+  .openapi("CodeSource");
+
 // ---- Response schemas ----
 
 const AdmissionResponse = z
@@ -1086,6 +1101,30 @@ function buildRegistry(): OpenAPIRegistry {
       },
       "400": { description: "Not a repo graph or missing path param" },
       "401": { description: "Unauthorized" },
+    },
+  });
+
+  // Code view — source
+  registry.registerPath({
+    method: "get",
+    path: "/api/v1/code/source",
+    summary: "Working-tree file source",
+    description:
+      'Read raw file content from the checkout working tree. Binary files return content:"". Files over 512 KB are truncated.',
+    security: auth,
+    request: {
+      query: z.object({
+        path: z.string().openapi({ description: "Repo-relative file path" }),
+      }),
+    },
+    responses: {
+      "200": {
+        description: "File source content",
+        content: { "application/json": { schema: CodeSource } },
+      },
+      "400": { description: "Not a repo graph, missing path param, or path traversal attempt" },
+      "401": { description: "Unauthorized" },
+      "404": { description: "File not found on disk" },
     },
   });
 

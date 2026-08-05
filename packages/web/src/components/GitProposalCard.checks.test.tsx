@@ -112,9 +112,14 @@ describe("GitProposalCard — checks section", () => {
     const govRow = screen.getByTestId("governance-check-row");
     expect(govRow).toBeInTheDocument();
 
-    // The governance badge text appears inside the governance row
-    const { getByText } = within(govRow);
-    expect(getByText("governance")).toBeInTheDocument();
+    // The governance badge (distinct from the check name) appears inside the governance row
+    const { getByText: getByTextInRow, getAllByText: getAllByTextInRow } = within(govRow);
+    const governanceMatches = getAllByTextInRow("governance");
+    expect(governanceMatches).toHaveLength(2); // check name span + badge
+    // Verify the badge exists specifically
+    const badge = govRow.querySelector("span.inline-flex.border.border-purple-400");
+    expect(badge).toBeInTheDocument();
+    expect(badge).toHaveTextContent("governance");
 
     // Governance row appears before other check-rows in the DOM
     const checksSection = screen.getByTestId("checks-section");

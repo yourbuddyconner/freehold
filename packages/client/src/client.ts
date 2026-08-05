@@ -48,6 +48,7 @@ export type CodeFileView = Schemas["CodeFileView"];
 export type CodeItemView = Schemas["CodeItemView"];
 export type RegionRule = Schemas["RegionRule"];
 export type CodeNeighborhood = Schemas["CodeNeighborhood"];
+export type CodeSource = Schemas["CodeSource"];
 
 export type GitProposal = Schemas["GitProposal"];
 export type GitProposalPath = Schemas["GitProposalPath"];
@@ -415,6 +416,11 @@ export class FreeholdClient {
   /** GET /api/v1/code/neighborhood?path= — nodes and edges one hop from the file */
   async codeNeighborhood(path: string): Promise<CodeNeighborhood> {
     return this.fetch<CodeNeighborhood>("GET", "/api/v1/code/neighborhood", { query: { path } });
+  }
+
+  /** GET /api/v1/code/source?path= — working-tree file content */
+  async codeSource(path: string): Promise<CodeSource> {
+    return this.fetch<CodeSource>("GET", "/api/v1/code/source", { query: { path } });
   }
 
   /** GET /api/v1/git/proposals — list all branch-head git proposals */

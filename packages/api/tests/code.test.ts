@@ -15,7 +15,7 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
@@ -438,5 +438,75 @@ describe("GET /api/v1/graphs/:id/code/neighborhood on repo graph", () => {
     expect(status).toBe(400);
     const b = body as { error: string };
     expect(b.error).toBe("code view is only available for repo graphs");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Source route — GET /code/source
+// ---------------------------------------------------------------------------
+
+describe("GET /api/v1/code/source on memory graph returns 400", () => {
+  test("returns 400 on default memory graph", async () => {
+    const { status, body } = await req("GET", "/api/v1/code/source?path=README.md");
+    expect(status).toBe(400);
+    const b = body as { error: string };
+    expect(b.error).toBe("code view is only available for repo graphs");
+  });
+
+  test("returns 400 when path param is missing", async () => {
+    const { status } = await req("GET", `/api/v1/graphs/${repoGraphId}/code/source`);
+    expect(status).toBe(400);
+  });
+});
+
+describe("GET /api/v1/graphs/:id/code/source on repo graph", () => {
+  test("returns 200 with content for an existing file (README.md)", async () => {
+    // README.md was written to repoDir in beforeAll: "# test"
+    const { status, body } = await req(
+      "GET",
+      `/api/v1/graphs/${repoGraphId}/code/source?path=README.md`
+    );
+    expect(status).toBe(200);
+    const b = body as {
+      path: string;
+      content: string;
+      truncated: boolean;
+      binary: boolean;
+      size: number;
+    };
+    expect(b.path).toBe("README.md");
+    expect(b.content).toContain("test");
+    expect(b.truncated).toBe(false);
+    expect(b.binary).toBe(false);
+    expect(b.size).toBeGreaterThan(0);
+  });
+
+  test("returns 404 for a file not present on disk", async () => {
+    const { status, body } = await req(
+      "GET",
+      `/api/v1/graphs/${repoGraphId}/code/source?path=src/does-not-exist.ts`
+    );
+    expect(status).toBe(404);
+    const b = body as { error: string };
+    expect(b.error).toBe("file not found");
+  });
+
+  test("returns 404 for a path that is a directory on disk", async () => {
+    // Create a real directory in the repo dir to test EISDIR → 404 (not 500)
+    const repoFh = await manager.get(repoGraphId);
+    mkdirSync(join(repoFh.graphDir, "src-dir-test"), { recursive: true });
+    const { status } = await req(
+      "GET",
+      `/api/v1/graphs/${repoGraphId}/code/source?path=src-dir-test`
+    );
+    expect(status).toBe(404);
+  });
+
+  test("returns 400 for a traversal path (../)", async () => {
+    const { status } = await req(
+      "GET",
+      `/api/v1/graphs/${repoGraphId}/code/source?path=../etc/passwd`
+    );
+    expect(status).toBe(400);
   });
 });

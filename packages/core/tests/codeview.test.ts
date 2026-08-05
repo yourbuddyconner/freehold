@@ -18,7 +18,15 @@ import { fileURLToPath } from "node:url";
 import type { AllodGraph } from "@allod/core";
 import { beforeAll, describe, expect, test } from "vitest";
 import { createGraph } from "../src/allod.js";
-import { codeFile, codeItem, codeNeighborhood, codeRegions, codeTree } from "../src/codeview.js";
+import {
+  PathTraversalError,
+  codeFile,
+  codeItem,
+  codeNeighborhood,
+  codeRegions,
+  codeSource,
+  codeTree,
+} from "../src/codeview.js";
 import { openDb } from "../src/db.js";
 import { hashEmbedder } from "../src/embed.js";
 import { approve } from "../src/governance.js";
@@ -494,5 +502,72 @@ describe("codeRegions", () => {
     const r1 = await codeRegions(fh, "test-repo");
     const r2 = await codeRegions(fh, "test-repo");
     expect(r1).toBe(r2); // same reference from cache
+  });
+});
+
+describe("codeSource", () => {
+  test("returns null for a file that does not exist", async () => {
+    const result = await codeSource(fh, "src/nonexistent-xyz.rs");
+    expect(result).toBeNull();
+  });
+
+  test("returns null for a directory path (not a 500)", async () => {
+    // "src" exists as a directory in the fixture
+    const result = await codeSource(fh, "src");
+    expect(result).toBeNull();
+  });
+
+  test("rejects path traversal with .. component — throws PathTraversalError", async () => {
+    await expect(codeSource(fh, "../escape.txt")).rejects.toBeInstanceOf(PathTraversalError);
+  });
+
+  test("rejects absolute paths — throws PathTraversalError", async () => {
+    await expect(codeSource(fh, "/etc/passwd")).rejects.toBeInstanceOf(PathTraversalError);
+  });
+
+  test("filename with .. in the middle (not a bare component) is accepted", async () => {
+    // "parser..v2.ts" splits to ["parser..v2.ts"] — no bare ".." component
+    writeFileSync(join(fh.graphDir, "parser..v2.ts"), "// ok\n", "utf-8");
+    const result = await codeSource(fh, "parser..v2.ts");
+    expect(result).not.toBeNull();
+    expect(result?.binary).toBe(false);
+  });
+
+  test("happy path: reads a file and returns content round-trip", async () => {
+    const text = "hello codeSource\nline two\n";
+    writeFileSync(join(fh.graphDir, "cs-test.txt"), text, "utf-8");
+    const result = await codeSource(fh, "cs-test.txt");
+    expect(result).not.toBeNull();
+    if (!result) return;
+    expect(result.content).toBe(text);
+    expect(result.truncated).toBe(false);
+    expect(result.binary).toBe(false);
+    expect(result.size).toBeGreaterThan(0);
+    expect(result.path).toBe("cs-test.txt");
+  });
+
+  test("truncation: files over 512 KB set truncated:true and content is 512 KB", async () => {
+    // Write a 600 KB file
+    const big = Buffer.alloc(600 * 1024, 65); // ASCII 'A'
+    writeFileSync(join(fh.graphDir, "cs-big.txt"), big);
+    const result = await codeSource(fh, "cs-big.txt");
+    expect(result).not.toBeNull();
+    if (!result) return;
+    expect(result.truncated).toBe(true);
+    // content should be exactly 512 KB of text
+    expect(Buffer.byteLength(result.content, "utf-8")).toBe(512 * 1024);
+    expect(result.binary).toBe(false);
+  });
+
+  test("binary detection: file with NUL byte → binary:true, content empty", async () => {
+    const buf = Buffer.from([72, 101, 0, 108, 108, 111]); // "He\0llo"
+    writeFileSync(join(fh.graphDir, "cs-binary.bin"), buf);
+    const result = await codeSource(fh, "cs-binary.bin");
+    expect(result).not.toBeNull();
+    if (!result) return;
+    expect(result.binary).toBe(true);
+    expect(result.content).toBe("");
+    // truncated is computed from the bounded read, not hardcoded false
+    expect(typeof result.truncated).toBe("boolean");
   });
 });

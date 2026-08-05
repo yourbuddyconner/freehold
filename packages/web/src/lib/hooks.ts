@@ -2,6 +2,7 @@ import type {
   CodeFileView,
   CodeItemView,
   CodeNeighborhood,
+  CodeSource,
   RegionRule,
   SessionGraphEntry,
 } from "@freehold/client";
@@ -248,6 +249,16 @@ export function useCodeNeighborhood(path: string | undefined) {
   });
 }
 
+/** Working-tree source content for a file path. null → file not on disk (404). */
+export function useCodeSource(path: string | undefined) {
+  return useQuery({
+    queryKey: ["code-source", path],
+    queryFn: () => apiClient.codeSource(path ?? ""),
+    enabled: !!path,
+    retry: false,
+  });
+}
+
 /** Git proposals for the active repo graph. */
 export function useGitProposals(enabled = true) {
   return useQuery({
@@ -302,7 +313,7 @@ export function useGitHubBlobUrl(filePath: string | undefined): string | null {
 }
 
 // Re-export types for convenience in route components
-export type { CodeFileView, CodeItemView, CodeNeighborhood, RegionRule };
+export type { CodeFileView, CodeItemView, CodeNeighborhood, RegionRule, CodeSource };
 export type {
   GitProposal,
   DecideResult,
