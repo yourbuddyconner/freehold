@@ -21,7 +21,10 @@ import { handleConnectorEvent } from "./events.js";
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export interface PollResult {
+  /** Number of graph writes or DB mutations (created, updated, tombstoned, check upserts). */
   events: number;
+  /** Number of items re-delivered without change (idempotent no-ops). */
+  unchanged: number;
   errors: string[];
 }
 
@@ -141,6 +144,7 @@ export async function pollOnce(
   const { owner, repo } = cfg;
   const errors: string[] = [];
   let eventCount = 0;
+  let unchangedCount = 0;
 
   // Load cursor state (previously ingested ids per PR)
   const cursorState = await readCursor(fh);
@@ -156,7 +160,7 @@ export async function pollOnce(
     const msg = err instanceof Error ? err.message : String(err);
     errors.push(`list-prs: ${msg}`);
     await writeCursorError(fh, errors);
-    return { events: eventCount, errors };
+    return { events: eventCount, unchanged: unchangedCount, errors };
   }
 
   const newIdsByPr: Record<string, string[]> = {};
@@ -178,7 +182,7 @@ export async function pollOnce(
         const extId = String(rc.id);
         currentIds.push(extId);
         allCommentIds.push(extId);
-        await handleConnectorEvent(fh, {
+        const ingestResult = await handleConnectorEvent(fh, {
           kind: "comment",
           action: "created",
           id: extId,
@@ -189,7 +193,11 @@ export async function pollOnce(
           prNumber: pr.number,
           inReplyTo: rc.in_reply_to_id ? String(rc.in_reply_to_id) : undefined,
         });
-        eventCount++;
+        if (ingestResult?.written === "unchanged") {
+          unchangedCount++;
+        } else {
+          eventCount++;
+        }
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -205,7 +213,7 @@ export async function pollOnce(
         const extId = `issue:${ic.id}`;
         currentIds.push(extId);
         allCommentIds.push(extId);
-        await handleConnectorEvent(fh, {
+        const ingestResult = await handleConnectorEvent(fh, {
           kind: "comment",
           action: "created",
           id: extId,
@@ -213,7 +221,11 @@ export async function pollOnce(
           author: ic.user.login,
           prNumber: pr.number,
         });
-        eventCount++;
+        if (ingestResult?.written === "unchanged") {
+          unchangedCount++;
+        } else {
+          eventCount++;
+        }
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -230,7 +242,7 @@ export async function pollOnce(
         const extId = `review:${rv.id}`;
         currentIds.push(extId);
         allCommentIds.push(extId);
-        await handleConnectorEvent(fh, {
+        const ingestResult = await handleConnectorEvent(fh, {
           kind: "comment",
           action: "created",
           id: extId,
@@ -238,7 +250,11 @@ export async function pollOnce(
           author: rv.user.login,
           prNumber: pr.number,
         });
-        eventCount++;
+        if (ingestResult?.written === "unchanged") {
+          unchangedCount++;
+        } else {
+          eventCount++;
+        }
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -303,7 +319,7 @@ export async function pollOnce(
   if (errors.length > 0) newState.lastErrors = errors;
   await writeCursor(fh, newState);
 
-  return { events: eventCount, errors };
+  return { events: eventCount, unchanged: unchangedCount, errors };
 }
 
 // ── startPoller ───────────────────────────────────────────────────────────────
@@ -347,36 +363,11 @@ export function startPoller(
 
   // Determine interval from initial config (best-effort; changes picked up via cfgProvider)
   let intervalMs = 300_000; // default 5 min
-  // Kick off an async read of config to get the real interval
-  cfgProvider()
-    .then((cfg) => {
-      if (cfg) intervalMs = cfg.pollIntervalSec * 1000;
-    })
-    .catch(() => {});
-
-  // Use a polling approach where we re-read the interval each tick
-  // Since setInterval doesn't support dynamic intervals, we use a recursive setTimeout approach.
   let stopped = false;
-  let timeoutId: ReturnType<typeof setTimeout> | null = null;
-
-  async function schedule(): Promise<void> {
-    if (stopped) return;
-    try {
-      const cfg = await cfgProvider();
-      if (cfg) intervalMs = cfg.pollIntervalSec * 1000;
-    } catch { /* ignore */ }
-    await tick();
-    if (!stopped) {
-      timeoutId = setTimeout(() => void schedule(), intervalMs);
-    }
-  }
-
-  // Use setInterval for the poller (simpler, compatible with fake timers in tests)
-  // We use a fixed interval based on the initial config; the cfgProvider is re-called
-  // each tick for the actual poll but the interval doesn't change dynamically.
   let intervalId: ReturnType<typeof setInterval> | null = null;
 
-  // Start with a best-effort config read, then set the interval
+  // Start with a best-effort config read, then set the interval.
+  // setInterval is used (not recursive setTimeout) for compatibility with fake timers in tests.
   cfgProvider()
     .then((cfg) => {
       if (cfg) intervalMs = cfg.pollIntervalSec * 1000;
@@ -397,10 +388,6 @@ export function startPoller(
       if (intervalId !== null) {
         clearInterval(intervalId);
         intervalId = null;
-      }
-      if (timeoutId !== null) {
-        clearTimeout(timeoutId);
-        timeoutId = null;
       }
     },
   };

@@ -1,8 +1,10 @@
 /**
  * @freehold/core/connector — Event handler core.
  *
- * Single handler for all connector events. All graph writes go through the
- * github-connector service principal (created-or-reused at first ingest).
+ * Single handler for all connector events. All graph writes are committed as
+ * the "owner" principal (graph root) so they are auto-admitted under the
+ * default memory policy. Attribution is preserved via external_source and
+ * claimed_author attributes on each ReviewComment node.
  *
  * Dedup strategy: scan admitted log + pending proposals for matching external_id
  * without relying on syncIndex (robust against index lag).
@@ -33,7 +35,11 @@ export interface IngestResult {
 
 // ── Internal types ────────────────────────────────────────────────────────────
 
-const CONNECTOR_PRINCIPAL = "github-connector";
+// Connector commits as "owner" — the graph root — so they are admitted
+// immediately under the default memory policy (restricted posture, root_required
+// for unmatched operations). Attribution is preserved via the external_source and
+// claimed_author attributes on each ReviewComment node.
+const CONNECTOR_PRINCIPAL = "owner";
 
 interface ParsedNode {
   nodeId: string;
@@ -44,54 +50,31 @@ interface ParsedNode {
   nodeRev: string | null;
 }
 
-// ── Ensure github-connector principal ────────────────────────────────────────
-
-/**
- * Create the github-connector service principal if it doesn't exist.
- * Uses graph.state() to check for existing principals.
- * Must be called inside a withGraph critical section.
- */
-async function ensureConnectorPrincipal(fh: Freehold): Promise<void> {
-  return withGraph(fh.graph, async () => {
-    let exists = false;
-    try {
-      const state = (fh.graph as unknown as { state(): { nodes: Array<{ label: string; type_ref: string }> } }).state();
-      exists = state.nodes.some(
-        (n) => n.label === CONNECTOR_PRINCIPAL
-      );
-    } catch (err) {
-      // Only swallow "not found" / empty-graph errors; rethrow unrelated failures
-      const msg = err instanceof Error ? err.message : String(err);
-      if (
-        !msg.includes("not found") &&
-        !msg.includes("empty") &&
-        !msg.includes("no state") &&
-        !msg.includes("NotFound") &&
-        !msg.includes("does not exist")
-      ) {
-        throw err;
-      }
-      // state() failed because graph has no state yet — assume principal absent
-    }
-
-    if (!exists) {
-      try {
-        await (fh.graph as unknown as {
-          principal_add(name: string, kind: string, by: string): Promise<unknown>
-        }).principal_add(CONNECTOR_PRINCIPAL, "service", "owner");
-      } catch (err) {
-        // If it already exists the call may error — that's fine
-        const msg = err instanceof Error ? err.message : String(err);
-        if (!msg.includes("already") && !msg.includes("exists") && !msg.includes("duplicate")) {
-          // Unexpected error — rethrow
-          throw err;
-        }
-      }
-    }
-  });
-}
 
 // ── Dedup: find existing comment node by external_id ─────────────────────────
+
+/** Public shape returned by getCommentNodeByExternalId. */
+export interface CommentNodeInfo {
+  nodeId: string;
+  attributes: Record<string, unknown>;
+}
+
+/**
+ * Look up a ReviewComment node by its external_id (e.g. GitHub comment id).
+ * Returns the node id and its current live attributes (from fold state),
+ * or null if no node with that external_id exists in this graph.
+ *
+ * Useful for test assertions and external tooling — does not require
+ * scanning changeset YAML files manually.
+ */
+export async function getCommentNodeByExternalId(
+  fh: Freehold,
+  externalId: string
+): Promise<CommentNodeInfo | null> {
+  const found = await findCommentByExternalId(fh, externalId);
+  if (!found) return null;
+  return { nodeId: found.nodeId, attributes: found.attributes };
+}
 
 /**
  * Scan admitted log + pending proposals for a ReviewComment node with the given external_id.
@@ -281,15 +264,17 @@ export async function handleConnectorEvent(
   }
 
   // ev.kind === "comment"
-  await ensureConnectorPrincipal(fh);
+  // No principal setup needed: connector commits as "owner" (the graph root),
+  // which is always present in an initialised allod graph.
 
   const repoName = basename(fh.graphDir);
   const commitRef = ev.commitSha ? `git:${repoName}#${ev.commitSha}` : undefined;
 
-  // Build the attributes for a created/active comment
+  // Build the attributes for a created/open comment.
+  // status "open" = ingested and active; "tombstoned" = deleted from source system.
   const activeAttrs: Record<string, unknown> = {
     body: ev.body,
-    status: "active",
+    status: "open",
     external_source: "github",
     external_id: ev.id,
     claimed_author: ev.author,
@@ -387,7 +372,7 @@ export async function handleConnectorEvent(
     if (
       !isSoftTombstoned &&
       existingBody === ev.body &&
-      existingStatus === "active"
+      existingStatus === "open"
     ) {
       return { written: "unchanged", nodeId: existing.nodeId };
     }

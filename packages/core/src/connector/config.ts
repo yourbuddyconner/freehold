@@ -175,7 +175,7 @@ export async function getConnector(db: DbHandle, graphId: string): Promise<Conne
 export async function setConnector(
   db: DbHandle,
   cfg: ConnectorConfig,
-  secrets?: { pem?: string; webhookSecret?: string; clientSecret?: string },
+  secrets?: { pem?: string; credentialToken?: string; webhookSecret?: string; clientSecret?: string },
   encKey?: Buffer
 ): Promise<void> {
   await ensureTables(db);
@@ -210,6 +210,7 @@ export async function setConnector(
   if (secrets && encKey) {
     const entries: Array<[string, string]> = [];
     if (secrets.pem !== undefined) entries.push(["pem", secrets.pem]);
+    if (secrets.credentialToken !== undefined) entries.push(["credentialToken", secrets.credentialToken]);
     if (secrets.webhookSecret !== undefined) entries.push(["webhookSecret", secrets.webhookSecret]);
     if (secrets.clientSecret !== undefined) entries.push(["clientSecret", secrets.clientSecret]);
 
@@ -236,7 +237,7 @@ export async function setConnector(
 export async function getSecret(
   db: DbHandle,
   graphId: string,
-  name: "pem" | "webhookSecret" | "clientSecret",
+  name: "pem" | "credentialToken" | "webhookSecret" | "clientSecret",
   encKey: Buffer
 ): Promise<string | null> {
   await ensureTables(db);

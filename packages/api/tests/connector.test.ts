@@ -34,6 +34,7 @@ import { createApp } from "../src/app.js";
 // Helpers
 // ---------------------------------------------------------------------------
 
+
 function makeTempDir(prefix: string): string {
   return mkdtempSync(join(tmpdir(), prefix));
 }
@@ -367,17 +368,69 @@ describe("POST /connector/poll", () => {
     const client = makeTokenClient("ghp_poll_test_token", mockFetch as typeof fetch);
     const cfg = await getConnector(fh.db, repoGraphId);
 
+    // Snapshot log length before re-delivering the same comment
+    let logLenBefore = 0;
+    try {
+      const state = (fh.graph as unknown as { log(): Array<unknown> }).log();
+      logLenBefore = Array.isArray(state) ? state.length : 0;
+    } catch { /* ignore */ }
+
     // First poll already done above; this is the second delivery of the same comment.
     const result = await pollOnce(fh, cfg!, client);
 
+    // Snapshot log length after — no new changesets should have been written
+    let logLenAfter = 0;
+    try {
+      const state = (fh.graph as unknown as { log(): Array<unknown> }).log();
+      logLenAfter = Array.isArray(state) ? state.length : 0;
+    } catch { /* ignore */ }
+
     expect(result.errors).toHaveLength(0);
-    // The comment was unchanged — no new graph write. Events may count unchanged as handled.
-    // Key assertion: we can call pollOnce twice without crash or duplication.
-    expect(result).toBeDefined();
+    // The comment was unchanged — no new graph write (log length stable).
+    expect(logLenAfter).toBe(logLenBefore);
+    // The unchanged counter should reflect the re-delivered comment.
+    expect(result.unchanged).toBeGreaterThan(0);
+    // No mutation events on unchanged redelivery.
+    expect(result.events).toBe(0);
+  });
+
+  test("pollOnce updates node body when comment is re-delivered with edited body", async () => {
+    const { pollOnce, makeTokenClient, getConnector, getCommentNodeByExternalId } = await import("@freehold/core");
+
+    const fh = await manager.get(repoGraphId);
+
+    // Second poll: same comment id 1001, but body has been edited
+    const mockFetch = makeMockGithubFetch({
+      owner: "test-owner",
+      repo: "test-repo",
+      openPrs: [{ number: 42, head: { sha: "abc1234", ref: "feature" } }],
+      reviewComments: [
+        { id: 1001, body: "LGTM! (edited)", user: { login: "alice" }, path: "src/lib.rs", commit_id: "abc1234" },
+      ],
+      issueComments: [],
+      reviews: [],
+      checkRuns: [],
+    });
+
+    const client = makeTokenClient("ghp_poll_test_token", mockFetch as typeof fetch);
+    const cfg = await getConnector(fh.db, repoGraphId);
+
+    const result = await pollOnce(fh, cfg!, client);
+
+    expect(result.errors).toHaveLength(0);
+    // An update was emitted (body changed → not unchanged)
+    expect(result.events).toBeGreaterThan(0);
+    expect(result.unchanged).toBe(0);
+
+    // Verify the node body reflects the edited text via the graph read path.
+    // getCommentNodeByExternalId returns the live attributes from fold state.
+    const node = await getCommentNodeByExternalId(fh, "1001");
+    expect(node).not.toBeNull();
+    expect(node?.attributes?.body).toBe("LGTM! (edited)");
   });
 
   test("pollOnce emits tombstone when previously-ingested comment is absent from open PR listing", async () => {
-    const { pollOnce, makeTokenClient, getConnector } = await import("@freehold/core");
+    const { pollOnce, makeTokenClient, getConnector, getCommentNodeByExternalId } = await import("@freehold/core");
 
     const fh = await manager.get(repoGraphId);
 
@@ -401,6 +454,12 @@ describe("POST /connector/poll", () => {
     expect(result.errors).toHaveLength(0);
     // The tombstone event was processed.
     expect(result.events).toBeGreaterThanOrEqual(1);
+
+    // Verify the node's status attribute is "tombstoned" in graph state.
+    // getCommentNodeByExternalId returns live attributes from fold state.
+    const node = await getCommentNodeByExternalId(fh, "1001");
+    expect(node).not.toBeNull();
+    expect(node?.attributes?.status).toBe("tombstoned");
   });
 
   test("check-runs land in check_status table", async () => {

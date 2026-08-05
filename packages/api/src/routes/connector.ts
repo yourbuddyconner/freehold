@@ -17,6 +17,8 @@ import {
   parseOriginRemote,
   makeTokenClient,
   pollOnce,
+  deriveEncKey,
+  getSecret,
 } from "@freehold/core";
 import type { AppEnv } from "../types.js";
 
@@ -149,9 +151,8 @@ connectorRouter.put("/connector", async (c) => {
 
   // Store config (token stored as a secret encrypted under daemon key)
   const config = c.get("config");
-  const { deriveEncKey } = await import("@freehold/core");
   const encKey = deriveEncKey(config.token);
-  await setConnector(fh.db, cfg, { webhookSecret: token }, encKey);
+  await setConnector(fh.db, cfg, { credentialToken: token }, encKey);
 
   return c.json({
     config: {
@@ -177,11 +178,10 @@ connectorRouter.post("/connector/poll", async (c) => {
     return c.json({ error: "connector not configured" }, 409);
   }
 
-  // Retrieve stored token (credential mode: stored under "webhookSecret" key)
+  // Retrieve stored token (credential mode: stored under "credentialToken" key)
   const config = c.get("config");
-  const { deriveEncKey, getSecret } = await import("@freehold/core");
   const encKey = deriveEncKey(config.token);
-  const token = await getSecret(fh.db, fh.graphId, "webhookSecret", encKey);
+  const token = await getSecret(fh.db, fh.graphId, "credentialToken", encKey);
   if (!token) {
     return c.json({ error: "no stored token; configure the connector first" }, 409);
   }

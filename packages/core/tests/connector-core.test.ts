@@ -4,15 +4,18 @@
  * No live GitHub calls — all GitHub access uses injected fetch.
  */
 
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, test, beforeAll } from "vitest";
 import { openDb } from "../src/db.js";
 import type { DbHandle } from "../src/db.js";
 import { createGraph } from "../src/allod.js";
 import { openFreehold } from "../src/graphs.js";
 import type { Freehold } from "../src/graphs.js";
+import { installOntology } from "../src/schema.js";
+import { approve } from "../src/governance.js";
 
 import { parseOriginRemote, makeTokenClient } from "../src/connector/github.js";
 import {
@@ -22,6 +25,11 @@ import {
   deriveEncKey,
 } from "../src/connector/config.js";
 import { handleConnectorEvent } from "../src/connector/events.js";
+
+function reviewOntologyYaml(): string {
+  const url = new URL("../assets/review-ontology.yaml", import.meta.url);
+  return readFileSync(fileURLToPath(url), "utf-8");
+}
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -235,7 +243,7 @@ describe("handleConnectorEvent", () => {
     graphDir = makeTempDir("connector-events-graph-");
     pgDir = makeTempDir("connector-events-pg-");
     const db = await openDb(pgDir);
-    const graph = await createGraph(graphDir, "owner");
+    await createGraph(graphDir, "owner");
     fh = await openFreehold({
       graphDir,
       db,
@@ -244,6 +252,12 @@ describe("handleConnectorEvent", () => {
       graphId: "main",
       kind: "repo",
     });
+
+    // Install the review ontology (normally done by GraphManager.registerRepo).
+    const result = await installOntology(fh.graph, reviewOntologyYaml());
+    if (result.status === "pending" && result.hash) {
+      await approve(fh.graph, "owner", result.hash);
+    }
   });
 
   test("push event returns null", async () => {

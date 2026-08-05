@@ -146,8 +146,8 @@ export {
   deriveEncKey,
 } from "./connector/config.js";
 export type { ConnectorConfig, ConnectorMode } from "./connector/config.js";
-export { handleConnectorEvent } from "./connector/events.js";
-export type { ConnectorEvent, IngestResult } from "./connector/events.js";
+export { handleConnectorEvent, getCommentNodeByExternalId } from "./connector/events.js";
+export type { ConnectorEvent, IngestResult, CommentNodeInfo } from "./connector/events.js";
 
 // Connector polling transport
 export { pollOnce, startPoller } from "./connector/poll.js";

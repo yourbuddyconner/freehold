@@ -59,7 +59,7 @@ async function main() {
           fh,
           async () => getConnector(fh.db, entry.id),
           async () => {
-            const token = await getSecret(fh.db, entry.id, "webhookSecret", encKey);
+            const token = await getSecret(fh.db, entry.id, "credentialToken", encKey);
             if (!token) throw new Error("no stored token for graph " + entry.id);
             return makeTokenClient(token);
           }
