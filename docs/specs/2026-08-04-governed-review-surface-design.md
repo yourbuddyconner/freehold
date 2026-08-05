@@ -113,6 +113,15 @@ reach, and signatures.
 
 ## Sub-project 2: code viewer
 
+**Status: shipped 2026-08-05**
+
+**Deviations from design:**
+
+- Blob link format is `git:HEAD:<path>` (using `/blob/HEAD/` path component) rather than the default-branch name. The daemon has no reliable way to resolve the default-branch name at index time without a live `git ls-remote` call; HEAD is used as a stable stand-in. Links are resolved to the correct commit on GitHub.
+- The graph tab (React Flow neighborhood view) lives on the file page rather than as a separate tab in the Code area. The neighborhood is scoped to the selected file by default, matching the spec intent.
+- `code/regions` resolves the repo name from `basename(graphDir)` — the filesystem directory name of the checkout — not from the graph registry id. Policy rules written with `repo: <basename>` match correctly; rules using other selectors are unaffected.
+- A fifth endpoint `code/neighborhood?path=` is exposed under `/graphs/:id/` beyond the four endpoints specified (`code/tree`, `code/file`, `code/item`, `code/regions`). It returns the React Flow node and edge payload for the file-scoped neighborhood and is consumed by the graph tab on the file page.
+
 A Code area for repo graphs, two-pane like the Memory workspace:
 
 - Tree pane: file tree derived from `SourceFile` paths; language and
