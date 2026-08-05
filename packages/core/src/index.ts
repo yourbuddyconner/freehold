@@ -32,6 +32,10 @@ export { loadConfig, saveConfig } from "./config.js";
 // Graph singleton
 export { Freehold } from "./graphs.js";
 
+// Graph registry
+export { GraphManager } from "./manager.js";
+export type { GraphEntry } from "./manager.js";
+
 // Knowledge operations
 export {
   remember,

@@ -190,9 +190,11 @@ function parseRelationOps(yaml: string): { edges: EdgeOp[]; terms: TermOp[] } {
 
 /**
  * Get the changeset directory for a Freehold instance.
+ * Uses freehold.graphDir (the allod graph root) so that repo-kind graphs
+ * (where the checkout root IS the graph dir) resolve correctly.
  */
 function changesetDir(freehold: Freehold): string {
-  return join(freehold.home, "graphs", freehold.graphName, ".allod", "changesets");
+  return join(freehold.graphDir, ".allod", "changesets");
 }
 
 /**
@@ -273,7 +275,7 @@ function collectNodeOps(
  */
 export async function syncIndex(freehold: Freehold, embedder: Embedder): Promise<void> {
   const { pg } = freehold.db;
-  const graphId = DEFAULT_GRAPH_ID;
+  const graphId = freehold.graphId;
 
   // Step 1: get the admitted log — serialized through the graph lock
   const log = await withGraph(freehold.graph, () => {

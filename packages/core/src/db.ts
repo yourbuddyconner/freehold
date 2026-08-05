@@ -256,6 +256,25 @@ export async function openDb(pgDir: string): Promise<DbHandle> {
     // Ignore
   }
 
+  // Migrate: add graphs registry table (idempotent, IF NOT EXISTS).
+  // Tracks all registered graphs: home "memory" graphs and repo "repo" graphs.
+  try {
+    await pg.exec(`
+      CREATE TABLE IF NOT EXISTS graphs (
+        id               text    PRIMARY KEY,
+        name             text    NOT NULL,
+        path             text    NOT NULL,
+        kind             text    NOT NULL DEFAULT 'memory',
+        auto_push_notes  boolean NOT NULL DEFAULT false,
+        embedder         text    NOT NULL DEFAULT 'hash',
+        allod_graph_id   text    NOT NULL DEFAULT '',
+        origin_remote    text
+      )
+    `);
+  } catch {
+    // Ignore — table may already exist
+  }
+
   // Migrate: recreate PKs for node_terms and meta to be (graph_id, …) composite.
   // For node_terms: old PK was (subject_id, term); new PK is (graph_id, subject_id, term).
   // For meta: old PK was (key); new PK is (graph_id, key).

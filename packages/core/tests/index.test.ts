@@ -32,7 +32,16 @@ async function makeFreehold(dir?: string): Promise<Freehold & { _dir: string }> 
   const db = await openDb(join(home, "pg"));
 
   // Cast to Freehold — shape-compatible
-  const fh = { graph, db, home, graphName: "main", _dir: home } as unknown as Freehold & {
+  const fh = {
+    graph,
+    db,
+    home,
+    graphName: "main",
+    graphId: "main",
+    kind: "memory" as const,
+    graphDir,
+    _dir: home,
+  } as unknown as Freehold & {
     _dir: string;
   };
   return fh;

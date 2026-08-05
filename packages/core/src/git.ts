@@ -1,0 +1,156 @@
+/**
+ * @freehold/core — Git shell-out helpers
+ *
+ * All operations use execFile (never shell strings) to avoid injection.
+ * Functions are async and throw on unexpected git errors.
+ */
+
+import { execFile } from "node:child_process";
+import { writeFileSync, unlinkSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { promisify } from "node:util";
+import { load as yamlLoad, dump as yamlDump } from "js-yaml";
+
+const execFileAsync = promisify(execFile);
+
+async function git(repoDir: string, args: string[]): Promise<string> {
+  try {
+    const { stdout } = await execFileAsync("git", args, { cwd: repoDir });
+    return stdout;
+  } catch (err: unknown) {
+    const e = err as { stderr?: string; message?: string };
+    throw new Error(e.stderr || e.message || String(err));
+  }
+}
+
+/**
+ * Get the URL for the "origin" remote, or null if no remote is configured.
+ */
+export async function originRemote(repoDir: string): Promise<string | null> {
+  try {
+    const out = await git(repoDir, ["remote", "get-url", "origin"]);
+    return out.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Resolve a git ref (defaults to HEAD) to a 40-char hex SHA.
+ */
+export async function headSha(repoDir: string, ref = "HEAD"): Promise<string> {
+  const out = await git(repoDir, ["rev-parse", ref]);
+  return out.trim();
+}
+
+export interface CommitMeta {
+  sha: string;
+  author: string;
+  email: string;
+  timestamp: string;
+  message: string;
+  parents: string[];
+}
+
+/**
+ * Return structured metadata for a commit SHA.
+ */
+export async function commitMeta(repoDir: string, sha: string): Promise<CommitMeta> {
+  // Format: SHA\nAuthorName\nAuthorEmail\nISO8601timestamp\nParent SHAs\nBody…
+  const out = await git(repoDir, ["show", "-s", "--format=%H%n%an%n%ae%n%aI%n%P%n%B", sha]);
+  const lines = out.split("\n");
+  const resultSha = lines[0].trim();
+  const author = lines[1].trim();
+  const email = lines[2].trim();
+  const timestamp = lines[3].trim();
+  const parentsLine = lines[4].trim();
+  const parents = parentsLine ? parentsLine.split(" ").filter(Boolean) : [];
+  // Everything from line 5 onward is the commit body (%B); strip trailing newline
+  const message = lines.slice(5).join("\n").trimEnd();
+  return { sha: resultSha, author, email, timestamp, message, parents };
+}
+
+/**
+ * Return the list of file operations for a commit as [status, path] pairs.
+ *
+ * For root commits (no parents), uses --root to diff against the empty tree.
+ * Status characters: A=added, M=modified, D=deleted, R=renamed, C=copied, etc.
+ */
+export async function diffTreeOps(repoDir: string, sha: string): Promise<Array<[string, string]>> {
+  const meta = await commitMeta(repoDir, sha);
+  let args: string[];
+  if (meta.parents.length === 0) {
+    // Root commit: diff against empty tree
+    args = ["diff-tree", "--root", "--no-renames", "--name-status", "-r", sha];
+  } else {
+    // First-parent two-tree diff
+    args = ["diff-tree", "--no-renames", "--name-status", "-r", meta.parents[0], sha];
+  }
+  const out = await git(repoDir, args);
+  const results: Array<[string, string]> = [];
+  for (const line of out.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    const parts = trimmed.split(/\t/);
+    if (parts.length >= 2) {
+      results.push([parts[0], parts[1]]);
+    }
+  }
+  return results;
+}
+
+/**
+ * Read the allod-decisions git note for a commit SHA.
+ * Returns [] if no note exists.
+ */
+export async function readDecisions(repoDir: string, sha: string): Promise<unknown[]> {
+  let body: string;
+  try {
+    body = await git(repoDir, ["notes", "--ref=allod-decisions", "show", sha]);
+  } catch (err: unknown) {
+    const msg = String(err).toLowerCase();
+    if (msg.includes("no note") || msg.includes("found no note") || msg.includes("no notes")) {
+      return [];
+    }
+    throw err;
+  }
+  if (!body.trim()) return [];
+  const doc = yamlLoad(body) as Record<string, unknown> | null;
+  if (!doc) return [];
+  const decisions = doc.decisions;
+  return Array.isArray(decisions) ? decisions : [];
+}
+
+/**
+ * Append a decision record to the allod-decisions git note for a commit SHA.
+ * Reads existing decisions, appends, and writes back atomically via a temp file.
+ */
+export async function appendDecision(
+  repoDir: string,
+  sha: string,
+  record: unknown
+): Promise<void> {
+  const existing = await readDecisions(repoDir, sha);
+  existing.push(record);
+  const root = { decisions: existing };
+  const body = yamlDump(root);
+  const tmpFile = join(tmpdir(), `allod-note-${sha}-${Date.now()}.yaml`);
+  writeFileSync(tmpFile, body);
+  try {
+    await git(repoDir, ["notes", "--ref=allod-decisions", "add", "-f", "-F", tmpFile, sha]);
+  } finally {
+    try {
+      unlinkSync(tmpFile);
+    } catch {
+      // Ignore cleanup errors
+    }
+  }
+}
+
+/**
+ * Push the allod-decisions notes ref to a remote.
+ */
+export async function pushNotes(repoDir: string, remote = "origin"): Promise<void> {
+  await git(repoDir, ["push", remote, "refs/notes/allod-decisions"]);
+}

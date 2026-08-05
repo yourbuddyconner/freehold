@@ -1,0 +1,31 @@
+ontology: review
+version: 1
+
+entity_types:
+
+  Review:
+    attributes:
+      verdict: { type: "enum<approve|approve-with-comments|request-changes>", required: true }
+      body:    { type: string }                     # long text; the review prose
+      commit:  { type: external-ref }               # git:<repo>#<sha> the review examined
+
+  ReviewComment:
+    attributes:
+      body:            { type: string, required: true }
+      anchor:          { type: external-ref }        # git:<repo>#<sha>:<path> plus span
+      span:            { type: string }              # e.g. "L120-L184"
+      status:          { type: "enum<open|resolved|wont-fix>" }
+      external_source: { type: string }              # e.g. github
+      external_id:     { type: string }              # host comment id, ingest dedup key
+      claimed_author:  { type: string }              # unsigned external identity
+
+edge_types:
+  part_of:    { domain: ReviewComment, range: Review, cardinality: many-to-one }
+  replies_to: { domain: ReviewComment, range: ReviewComment, cardinality: many-to-one }
+
+validation_rules:
+  - name: external-comments-carry-their-id
+    on:
+      type: ReviewComment
+      where: { attr: external_source, present: true }
+    require: { attr: external_id, present: true }

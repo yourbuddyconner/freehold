@@ -22,7 +22,15 @@ async function makeFreehold(): Promise<Freehold> {
   const graph = await createGraph(graphDir, "owner");
   await graph.principal_add("agent", "agent", "owner");
   const db = await openDb(join(home, "pg"));
-  return { graph, db, home, graphName: "main" } as unknown as Freehold;
+  return {
+    graph,
+    db,
+    home,
+    graphName: "main",
+    graphId: "main",
+    kind: "memory" as const,
+    graphDir,
+  } as unknown as Freehold;
 }
 
 describe("deriveTitle", () => {
