@@ -22,6 +22,8 @@ entity_types:
 edge_types:
   part_of:    { domain: ReviewComment, range: Review, cardinality: many-to-one }
   replies_to: { domain: ReviewComment, range: ReviewComment, cardinality: many-to-one }
+  reviews:    { domain: Review, range: eng/ChangeRequest, cardinality: many-to-one }
+  concerns:   { domain: ReviewComment, range: [code/SourceFile, code/Function], cardinality: many-to-many }
 
 validation_rules:
   - name: external-comments-carry-their-id

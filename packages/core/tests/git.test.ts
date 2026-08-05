@@ -124,4 +124,60 @@ describe("git helpers", () => {
     const remote = await originRemote(repoDir);
     expect(remote).toBeNull();
   });
+
+  test("diffTreeOps on merge commit uses first-parent two-tree diff", async () => {
+    // Get the current branch name (may be "main" or "master" depending on git config)
+    const currentBranch = execFileSync("git", ["rev-parse", "--abbrev-ref", "HEAD"], { cwd: repoDir })
+      .toString()
+      .trim();
+
+    const branchFile = join(repoDir, "branch-only.txt");
+    const mainFile = join(repoDir, "main-after.txt");
+
+    // Create a branch from sha1 (first commit)
+    execFileSync("git", ["checkout", sha1, "-b", "feature-branch"], { cwd: repoDir });
+    writeFileSync(branchFile, "branch content");
+    execFileSync("git", ["add", "branch-only.txt"], { cwd: repoDir });
+    execFileSync("git", ["commit", "-m", "branch commit"], { cwd: repoDir });
+
+    // Go back to the original branch, add a file, then merge with --no-ff
+    execFileSync("git", ["checkout", currentBranch], { cwd: repoDir });
+    writeFileSync(mainFile, "main content");
+    execFileSync("git", ["add", "main-after.txt"], { cwd: repoDir });
+    execFileSync("git", ["commit", "-m", "main commit after branch"], { cwd: repoDir });
+    const mainBeforeMergeSha = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repoDir })
+      .toString()
+      .trim();
+
+    execFileSync("git", ["merge", "--no-ff", "feature-branch", "-m", "merge branch"], { cwd: repoDir });
+    const mergeSha = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repoDir })
+      .toString()
+      .trim();
+
+    // diffTreeOps must use first-parent diff: mainBeforeMergeSha → mergeSha
+    const ops = await diffTreeOps(repoDir, mergeSha);
+
+    // The expected ops equal git diff-tree --no-renames --name-status -r <p1> <sha>
+    const directOut = execFileSync(
+      "git",
+      ["diff-tree", "--no-renames", "--name-status", "-r", mainBeforeMergeSha, mergeSha],
+      { cwd: repoDir }
+    ).toString();
+    const expectedOps: Array<[string, string]> = directOut
+      .split("\n")
+      .filter((l) => l.trim())
+      .map((l) => {
+        const parts = l.trim().split(/\t/);
+        return [parts[0], parts[1]] as [string, string];
+      });
+
+    expect(ops).toEqual(expectedOps);
+
+    // branch-only.txt was brought in by the merge (it was in feature-branch).
+    // Compared to first parent (p1 = mainBeforeMergeSha), the merge commit added it.
+    // So it DOES appear in the first-parent diff as "A".
+    const branchOnlyOp = ops.find(([, p]) => p === "branch-only.txt");
+    expect(branchOnlyOp).toBeDefined();
+    expect(branchOnlyOp![0]).toBe("A");
+  });
 });

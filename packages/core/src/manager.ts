@@ -11,7 +11,7 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { load as yamlLoad } from "js-yaml";
 import { createGraph } from "./allod.js";
 import { loadConfig } from "./config.js";
@@ -23,6 +23,8 @@ import { openFreehold } from "./graphs.js";
 import { approve } from "./governance.js";
 import { describeSchema, installOntology } from "./schema.js";
 import { originRemote } from "./git.js";
+import { syncIndex } from "./indexer.js";
+import { hashEmbedder } from "./embed.js";
 
 export interface GraphEntry {
   id: string;
@@ -59,19 +61,11 @@ function readAllodGraphId(graphDir: string): string {
 }
 
 /**
- * Generate a unique registry slug from a repo path.
- * Uses the basename; appends a short hex suffix to handle collisions.
+ * Generate a deterministic registry slug from a repo path.
+ * Uses the basename; sanitizes to [a-z0-9_-].
  */
 function makeRepoId(path: string): string {
-  const base = path
-    .split("/")
-    .filter(Boolean)
-    .at(-1)
-    ?.replace(/[^a-z0-9_-]/gi, "-")
-    .toLowerCase() ?? "repo";
-  // Short random suffix to avoid collisions
-  const suffix = Math.random().toString(36).slice(2, 7);
-  return `${base}-${suffix}`;
+  return basename(path).replace(/[^a-z0-9_-]/gi, "-").toLowerCase();
 }
 
 /** Map a DB row (snake_case) to a GraphEntry (camelCase). */
@@ -174,6 +168,23 @@ export class GraphManager {
   }
 
   /**
+   * Return the registry entry for a graph id.
+   * Throws if the id is not registered.
+   */
+  async entry(id: string): Promise<GraphEntry> {
+    const e = await this.getEntry(id);
+    if (!e) throw new Error(`graph not registered: ${id}`);
+    return e;
+  }
+
+  /**
+   * Returns the default graph id ("main").
+   */
+  defaultId(): string {
+    return DEFAULT_GRAPH_ID;
+  }
+
+  /**
    * List all registered graph entries.
    */
   async list(): Promise<GraphEntry[]> {
@@ -231,16 +242,63 @@ export class GraphManager {
   }
 
   /**
+   * Update mutable settings for a registered graph.
+   * Throws if the id is not registered.
+   */
+  async updateSettings(
+    id: string,
+    patch: Partial<Pick<GraphEntry, "name" | "autoPushNotes" | "embedder">>
+  ): Promise<GraphEntry> {
+    const e = await this.entry(id); // throws on unknown id
+    const newName = patch.name ?? e.name;
+    const newAutoPushNotes = patch.autoPushNotes ?? e.autoPushNotes;
+    const newEmbedder = patch.embedder ?? e.embedder;
+    await this.db.pg.query(
+      `UPDATE graphs SET name = $1, auto_push_notes = $2, embedder = $3 WHERE id = $4`,
+      [newName, newAutoPushNotes, newEmbedder, id]
+    );
+    return this.entry(id);
+  }
+
+  /**
+   * Remove a registered repo graph from the registry.
+   * Throws if the id is not registered, or if it is the default graph.
+   * Does NOT delete any files on disk.
+   */
+  async remove(id: string): Promise<void> {
+    if (id === DEFAULT_GRAPH_ID) throw new Error(`cannot remove the default graph: ${id}`);
+    await this.entry(id); // throws if not registered
+    const { pg } = this.db;
+    // Delete graph-scoped index rows
+    await pg.query("DELETE FROM objects WHERE graph_id = $1", [id]);
+    await pg.query("DELETE FROM graph_edges WHERE graph_id = $1", [id]);
+    await pg.query("DELETE FROM node_terms WHERE graph_id = $1", [id]);
+    await pg.query("DELETE FROM meta WHERE graph_id = $1 AND key = 'indexed_head'", [id]);
+    // Delete registry row
+    await pg.query("DELETE FROM graphs WHERE id = $1", [id]);
+    // Evict cached handle
+    this.cache.delete(id);
+    this.inFlight.delete(id);
+  }
+
+  /**
    * Register an existing repo checkout as a graph.
-   * Opens the graph, installs the review ontology if not present,
-   * records the origin remote, and persists the entry.
+   * Validates the path has .allod/graph.yaml, opens the graph, installs the
+   * review ontology if not present, records the origin remote, persists the
+   * entry, and runs the indexer.
    *
-   * Returns the assigned registry id.
+   * Throws if the path is not an allod graph or if the id is already registered.
+   * Returns the full GraphEntry.
    */
   async registerRepo(
     repoPath: string,
     opts: { name?: string; id?: string; embedder?: "hash" | "semantic" } = {}
-  ): Promise<string> {
+  ): Promise<GraphEntry> {
+    // Validate .allod/graph.yaml exists BEFORE opening
+    if (!existsSync(join(repoPath, ".allod", "graph.yaml"))) {
+      throw new Error(`not an allod graph: no .allod/graph.yaml at ${repoPath}`);
+    }
+
     const id = opts.id ?? makeRepoId(repoPath);
     const name = opts.name ?? id;
     const embedder = opts.embedder ?? "hash";
@@ -275,22 +333,24 @@ export class GraphManager {
       // Not a git repo or no origin — that's fine
     }
 
-    // Persist registry entry
-    await this.db.pg.query(
+    // Persist registry entry — reject duplicates
+    const result = await this.db.pg.query(
       `INSERT INTO graphs (id, name, path, kind, auto_push_notes, embedder, allod_graph_id, origin_remote)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-       ON CONFLICT (id) DO UPDATE SET
-         name = EXCLUDED.name,
-         path = EXCLUDED.path,
-         embedder = EXCLUDED.embedder,
-         allod_graph_id = EXCLUDED.allod_graph_id,
-         origin_remote = EXCLUDED.origin_remote`,
+       ON CONFLICT (id) DO NOTHING`,
       [id, name, repoPath, "repo", false, embedder, allodGraphId, remote]
     );
+
+    if ((result.affectedRows ?? 0) === 0) {
+      throw new Error(`graph id already registered: ${id}`);
+    }
 
     // Cache the handle
     this.cache.set(id, fh);
 
-    return id;
+    // Run the indexer after registration
+    await syncIndex(fh, hashEmbedder);
+
+    return this.entry(id);
   }
 }
