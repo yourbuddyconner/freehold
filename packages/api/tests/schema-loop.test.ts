@@ -11,7 +11,7 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Freehold, hashEmbedder, loadConfig } from "@freehold/core";
+import { GraphManager, hashEmbedder, loadConfig } from "@freehold/core";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { createApp } from "../src/app.js";
 
@@ -23,8 +23,8 @@ async function makeTestApp() {
   home = mkdtempSync(join(tmpdir(), "freehold-schema-loop-"));
   const config = loadConfig(home);
   token = config.token;
-  const fh = await Freehold.open(home);
-  app = createApp(fh, hashEmbedder, config);
+  const manager = await GraphManager.open(home);
+  app = createApp(manager, hashEmbedder, config);
 }
 
 async function req(

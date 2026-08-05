@@ -10,8 +10,10 @@ export const sessionRouter = new Hono<AppEnv>();
  * The bearer token is NOT echoed here — it is already available client-side
  * via the `<meta name="freehold-token">` tag injected at serve time.
  */
-sessionRouter.get("/session", (c) => {
+sessionRouter.get("/session", async (c) => {
   const config = c.get("config");
+  const manager = c.get("manager");
+  const graphs = await manager.list();
   return c.json({
     defaultAgent: config.defaultAgent ?? null,
     embedder: config.embedder,
@@ -19,5 +21,7 @@ sessionRouter.get("/session", (c) => {
     // The graph's owner principal — the console signs owner edits as this name.
     // Graph creation currently hardcodes "owner" (see core/src/graphs.ts).
     owner: "owner",
+    graphs: graphs.map((g) => ({ id: g.id, name: g.name, kind: g.kind })),
+    defaultGraph: manager.defaultId(),
   });
 });

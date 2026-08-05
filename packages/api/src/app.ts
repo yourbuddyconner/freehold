@@ -1,13 +1,15 @@
 import path from "node:path";
 import type { FreeholdConfig } from "@freehold/core";
 import type { Embedder } from "@freehold/core";
-import type { Freehold } from "@freehold/core";
+import type { GraphManager } from "@freehold/core";
+import { hashEmbedder } from "@freehold/core";
 import type { Context } from "hono";
 import { Hono } from "hono";
 import { bearerAuth } from "./auth.js";
 import { handleMcpRequest } from "./mcp.js";
 import { getOpenApiDoc } from "./openapi.js";
 import { governanceRouter } from "./routes/governance.js";
+import { graphsRouter } from "./routes/graphs.js";
 import { healthRouter } from "./routes/health.js";
 import { knowledgeRouter } from "./routes/knowledge.js";
 import { logRouter } from "./routes/log.js";
@@ -17,8 +19,21 @@ import { schemaRouter } from "./routes/schema.js";
 import { sessionRouter } from "./routes/session.js";
 import type { AppEnv } from "./types.js";
 
+/** Build the standard authenticated API sub-app (reused for default + scoped mounts). */
+function buildApiRoutes(): Hono<AppEnv> {
+  const api = new Hono<AppEnv>();
+  api.route("/", knowledgeRouter);
+  api.route("/", retrievalRouter);
+  api.route("/", governanceRouter);
+  api.route("/", schemaRouter);
+  api.route("/", policyRouter);
+  api.route("/", logRouter);
+  api.route("/", sessionRouter);
+  return api;
+}
+
 export function createApp(
-  freehold: Freehold,
+  manager: GraphManager,
   embedder: Embedder,
   config: FreeholdConfig
 ): Hono<AppEnv> {
@@ -36,11 +51,16 @@ export function createApp(
     return c.json({ error: { code: "internal", message: "Internal server error" } }, 500);
   });
 
-  // Inject context variables for all routes
+  // Inject context variables for all routes.
+  // The default graph's Freehold handle is resolved here so every existing
+  // route file continues to work via c.get("freehold") unmodified.
   app.use("*", async (c, next) => {
-    c.set("freehold", freehold);
+    c.set("manager", manager);
     c.set("embedder", embedder);
     c.set("config", config);
+    // Resolve default graph's Freehold handle (always "main")
+    const defaultFh = await manager.get(manager.defaultId());
+    c.set("freehold", defaultFh);
     await next();
   });
 
@@ -48,22 +68,44 @@ export function createApp(
   app.route("/", healthRouter);
   app.get("/api/v1/openapi.json", (c) => c.json(getOpenApiDoc()));
 
-  // Authenticated API routes
+  // Authenticated API — default graph (unscoped, byte-identical behaviour)
   const api = new Hono<AppEnv>();
   api.use("*", bearerAuth(config.token));
-  api.route("/", knowledgeRouter);
-  api.route("/", retrievalRouter);
-  api.route("/", governanceRouter);
-  api.route("/", schemaRouter);
-  api.route("/", policyRouter);
-  api.route("/", logRouter);
-  api.route("/", sessionRouter);
+  api.route("/", buildApiRoutes());
+  // Graphs registry routes (unscoped — operate on the manager, not a single graph)
+  api.route("/", graphsRouter);
 
   app.route("/api/v1", api);
 
-  // MCP endpoint — bearer auth via shared middleware, then streamable HTTP
+  // Graph-scoped mount: /api/v1/graphs/:graphId/*
+  // The resolver middleware looks up :graphId and sets c.set("freehold", ...)
+  // for that specific graph. All API routes are then re-served under this mount.
+  const scopedApi = new Hono<AppEnv>();
+  scopedApi.use("*", bearerAuth(config.token));
+  scopedApi.use("/:graphId/*", async (c, next) => {
+    const graphId = c.req.param("graphId");
+    try {
+      const fh = await manager.get(graphId);
+      // Select embedder based on graph kind/embedder setting
+      const entry = await manager.getEntry(graphId);
+      const graphEmbedder = entry?.embedder === "hash" ? hashEmbedder : embedder;
+      c.set("freehold", fh);
+      c.set("embedder", graphEmbedder);
+    } catch {
+      return c.json({ error: "unknown graph" }, 404);
+    }
+    await next();
+  });
+
+  // Mount all standard API routes under the scoped path
+  scopedApi.route("/:graphId", buildApiRoutes());
+
+  app.route("/api/v1/graphs", scopedApi);
+
+  // MCP endpoint — bearer auth via shared middleware, then streamable HTTP.
+  // Pass manager so tools can resolve the graph param.
   app.use("/mcp", bearerAuth(config.token));
-  app.all("/mcp", (c) => handleMcpRequest(freehold, embedder, config, c.req.raw));
+  app.all("/mcp", (c) => handleMcpRequest(manager, embedder, config, c.req.raw));
 
   // Console static serving — reads dist/index.html and injects the bearer
   // token as a meta tag so the browser console can authenticate without

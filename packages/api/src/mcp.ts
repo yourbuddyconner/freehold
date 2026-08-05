@@ -19,6 +19,7 @@ import {
   createEntity,
   describeSchema,
   getEntity,
+  hashEmbedder,
   pending,
   proposeOntologyChange,
   proposePolicyChange,
@@ -29,7 +30,8 @@ import {
   traverse,
   updateEntity,
 } from "@freehold/core";
-import type { Embedder, Freehold, FreeholdConfig } from "@freehold/core";
+import type { Embedder, FreeholdConfig, GraphManager } from "@freehold/core";
+import type { Freehold } from "@freehold/core";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { z } from "zod";
@@ -44,16 +46,51 @@ function resolveAgent(arg: string | undefined, config: FreeholdConfig): string {
   return arg ?? config.defaultAgent ?? "agent";
 }
 
+// ---- Graph resolution helper ----
+
+/**
+ * Resolve the Freehold handle for the given graph param.
+ * Falls back to the default graph if graph is undefined.
+ * Returns null and an error message if the graph id is unknown.
+ */
+async function resolveGraph(
+  graphParam: string | undefined,
+  manager: GraphManager,
+  defaultEmbedder: Embedder
+): Promise<{ fh: Freehold; embedder: Embedder } | { error: string }> {
+  const id = graphParam ?? manager.defaultId();
+  try {
+    const fh = await manager.get(id);
+    const entry = await manager.getEntry(id);
+    const emb = entry?.embedder === "hash" ? hashEmbedder : defaultEmbedder;
+    return { fh, embedder: emb };
+  } catch {
+    return { error: `unknown graph: ${id}` };
+  }
+}
+
+/** Helper to return an error tool result (not a throw). */
+function errorResult(message: string) {
+  return {
+    content: [{ type: "text" as const, text: JSON.stringify({ error: message }) }],
+    isError: true,
+  };
+}
+
 // ---- Tool registration helper ----
 
 /**
  * Register all thirteen tools on the given McpServer instance.
  * Called once per request (stateless transport model).
+ *
+ * Every tool accepts an optional `graph` param (string). When provided, the
+ * tool operates on that graph's Freehold handle. Unknown graph ids return an
+ * error result rather than throwing.
  */
 function registerTools(
   server: McpServer,
-  fh: Freehold,
-  embedder: Embedder,
+  manager: GraphManager,
+  defaultEmbedder: Embedder,
   config: FreeholdConfig
 ): void {
   // ------------------------------------------------------------------ //
@@ -71,9 +108,13 @@ function registerTools(
           .string()
           .optional()
           .describe("Agent principal name (default: config defaultAgent)"),
+        graph: z.string().optional().describe("Graph id to operate on (default: main)"),
       },
     },
-    async ({ content, agent }) => {
+    async ({ content, agent, graph }) => {
+      const resolved = await resolveGraph(graph, manager, defaultEmbedder);
+      if ("error" in resolved) return errorResult(resolved.error);
+      const { fh, embedder } = resolved;
       const by = resolveAgent(agent, config);
       const result = await remember(fh.graph, by, content);
       if (result.status === "saved") {
@@ -116,9 +157,13 @@ function registerTools(
           .optional()
           .describe("Optional edge to create alongside the entity"),
         agent: z.string().optional().describe("Agent principal name"),
+        graph: z.string().optional().describe("Graph id to operate on (default: main)"),
       },
     },
-    async ({ type, attributes, classify, relate: rel, agent }) => {
+    async ({ type, attributes, classify, relate: rel, agent, graph }) => {
+      const resolved = await resolveGraph(graph, manager, defaultEmbedder);
+      if ("error" in resolved) return errorResult(resolved.error);
+      const { fh, embedder } = resolved;
       const by = resolveAgent(agent, config);
       const result = await createEntity(fh.graph, by, type, attributes as Record<string, unknown>, {
         classification: classify,
@@ -171,9 +216,13 @@ function registerTools(
           .optional()
           .describe("Revision hash for optimistic concurrency (fetched automatically if omitted)"),
         agent: z.string().optional().describe("Agent principal name"),
+        graph: z.string().optional().describe("Graph id to operate on (default: main)"),
       },
     },
-    async ({ id, type, attributes, prior, agent }) => {
+    async ({ id, type, attributes, prior, agent, graph }) => {
+      const resolved = await resolveGraph(graph, manager, defaultEmbedder);
+      if ("error" in resolved) return errorResult(resolved.error);
+      const { fh, embedder } = resolved;
       const by = resolveAgent(agent, config);
       const result = await updateEntity(
         fh.graph,
@@ -221,9 +270,13 @@ function registerTools(
               "If false, the edge proposal requires owner approval."
           ),
         agent: z.string().optional().describe("Agent principal name"),
+        graph: z.string().optional().describe("Graph id to operate on (default: main)"),
       },
     },
-    async ({ from, to, edge_type, attributes, scratch, agent }) => {
+    async ({ from, to, edge_type, attributes, scratch, agent, graph }) => {
+      const resolved = await resolveGraph(graph, manager, defaultEmbedder);
+      if ("error" in resolved) return errorResult(resolved.error);
+      const { fh } = resolved;
       const by = resolveAgent(agent, config);
       const result = await relate(
         fh.graph,
@@ -259,9 +312,13 @@ function registerTools(
         subject: z.string().describe("Node bare UUID to classify"),
         term: z.string().describe("Classification term, e.g. workspace/personal@1"),
         agent: z.string().optional().describe("Agent principal name"),
+        graph: z.string().optional().describe("Graph id to operate on (default: main)"),
       },
     },
-    async ({ subject, term, agent }) => {
+    async ({ subject, term, agent, graph }) => {
+      const resolved = await resolveGraph(graph, manager, defaultEmbedder);
+      if ("error" in resolved) return errorResult(resolved.error);
+      const { fh } = resolved;
       const by = resolveAgent(agent, config);
       const result = await classifyEntity(fh.graph, by, subject, term);
       return {
@@ -292,9 +349,13 @@ function registerTools(
         media_type: z.string().optional().describe("Media type hint, e.g. text/plain"),
         title: z.string().optional().describe("Optional document title"),
         agent: z.string().optional().describe("Agent principal name"),
+        graph: z.string().optional().describe("Graph id to operate on (default: main)"),
       },
     },
-    async ({ entity_id, content, media_type, title, agent }) => {
+    async ({ entity_id, content, media_type, title, agent, graph }) => {
+      const resolved = await resolveGraph(graph, manager, defaultEmbedder);
+      if ("error" in resolved) return errorResult(resolved.error);
+      const { fh, embedder } = resolved;
       const by = resolveAgent(agent, config);
       const result = await attachDocument(fh.graph, by, entity_id, content, title, media_type);
       if (result.status === "saved") {
@@ -334,9 +395,13 @@ function registerTools(
           })
           .optional(),
         limit: z.number().int().min(1).max(100).optional().describe("Max results (default 10)"),
+        graph: z.string().optional().describe("Graph id to operate on (default: main)"),
       },
     },
-    async ({ query, filters, limit }) => {
+    async ({ query, filters, limit, graph }) => {
+      const resolved = await resolveGraph(graph, manager, defaultEmbedder);
+      if ("error" in resolved) return errorResult(resolved.error);
+      const { fh, embedder } = resolved;
       const results = await recall(fh, query, embedder, filters, limit ?? 10);
       return {
         content: [{ type: "text" as const, text: JSON.stringify({ results }) }],
@@ -351,9 +416,13 @@ function registerTools(
         "Fetch one entity in full: attributes, classifications, edges, provenance chain, revision history.",
       inputSchema: {
         id: z.string().describe("Bare UUID of the entity"),
+        graph: z.string().optional().describe("Graph id to operate on (default: main)"),
       },
     },
-    async ({ id }) => {
+    async ({ id, graph }) => {
+      const resolved = await resolveGraph(graph, manager, defaultEmbedder);
+      if ("error" in resolved) return errorResult(resolved.error);
+      const { fh } = resolved;
       const entity = await getEntity(fh.graph, id);
       if (!entity) {
         return {
@@ -389,9 +458,13 @@ function registerTools(
           .optional()
           .describe("Traversal direction (default: out)"),
         depth: z.number().int().min(1).max(10).optional().describe("Maximum hops (default: 1)"),
+        graph: z.string().optional().describe("Graph id to operate on (default: main)"),
       },
     },
-    async ({ from, edge_types, direction, depth }) => {
+    async ({ from, edge_types, direction, depth, graph }) => {
+      const resolved = await resolveGraph(graph, manager, defaultEmbedder);
+      if ("error" in resolved) return errorResult(resolved.error);
+      const { fh } = resolved;
       const results = await traverse(
         fh.graph,
         from,
@@ -414,9 +487,13 @@ function registerTools(
           .string()
           .optional()
           .describe("Agent principal name (filters to this agent's proposals)"),
+        graph: z.string().optional().describe("Graph id to operate on (default: main)"),
       },
     },
-    async ({ agent }) => {
+    async ({ agent, graph }) => {
+      const resolved = await resolveGraph(graph, manager, defaultEmbedder);
+      if ("error" in resolved) return errorResult(resolved.error);
+      const { fh } = resolved;
       const by = resolveAgent(agent, config);
       const all = await pending(fh.graph);
       const mine = all.filter((p) => p.agent === by);
@@ -435,9 +512,14 @@ function registerTools(
     {
       description:
         "Return the graph's installed ontologies as data: entity types, edge types, taxonomy terms.",
-      inputSchema: {},
+      inputSchema: {
+        graph: z.string().optional().describe("Graph id to operate on (default: main)"),
+      },
     },
-    async () => {
+    async ({ graph }) => {
+      const resolved = await resolveGraph(graph, manager, defaultEmbedder);
+      if ("error" in resolved) return errorResult(resolved.error);
+      const { fh } = resolved;
       const schema = await describeSchema(fh.graph);
       return {
         content: [{ type: "text" as const, text: JSON.stringify(schema) }],
@@ -456,9 +538,13 @@ function registerTools(
           .string()
           .describe("YAML ontology document (must have `ontology: <name>` header)"),
         agent: z.string().optional().describe("Agent principal name"),
+        graph: z.string().optional().describe("Graph id to operate on (default: main)"),
       },
     },
-    async ({ package_name, ontology_yaml, agent }) => {
+    async ({ package_name, ontology_yaml, agent, graph }) => {
+      const resolved = await resolveGraph(graph, manager, defaultEmbedder);
+      if ("error" in resolved) return errorResult(resolved.error);
+      const { fh } = resolved;
       const by = resolveAgent(agent, config);
       const result = await proposeOntologyChange(fh.graph, by, package_name, ontology_yaml);
       return {
@@ -492,9 +578,13 @@ function registerTools(
           .optional()
           .describe("One or two sentences on why this change is worth the owner's attention"),
         agent: z.string().optional().describe("Agent principal name"),
+        graph: z.string().optional().describe("Graph id to operate on (default: main)"),
       },
     },
-    async ({ policy_yaml, rationale, agent }) => {
+    async ({ policy_yaml, rationale, agent, graph }) => {
+      const resolved = await resolveGraph(graph, manager, defaultEmbedder);
+      if ("error" in resolved) return errorResult(resolved.error);
+      const { fh } = resolved;
       const by = resolveAgent(agent, config);
       const result = await proposePolicyChange(fh.graph, policy_yaml, by);
       return {
@@ -524,7 +614,7 @@ function registerTools(
  * without session tracking overhead.
  */
 export async function handleMcpRequest(
-  fh: Freehold,
+  manager: GraphManager,
   embedder: Embedder,
   config: FreeholdConfig,
   request: Request
@@ -533,7 +623,7 @@ export async function handleMcpRequest(
     { name: "freehold", version: "0.1.0" },
     { capabilities: { tools: {} } }
   );
-  registerTools(server, fh, embedder, config);
+  registerTools(server, manager, embedder, config);
 
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
