@@ -12,31 +12,24 @@
  *   - startPoller: starts and stops; no overlapping runs (fake timers)
  */
 
-import {
-  mkdtempSync,
-  mkdirSync,
-  writeFileSync,
-  rmSync,
-  chmodSync,
-} from "node:fs";
+import { generateKeyPairSync } from "node:crypto";
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { generateKeyPairSync } from "node:crypto";
-import { describe, expect, test, beforeAll, afterAll, vi } from "vitest";
 import {
   GraphManager,
   createGraph,
+  deriveEncKey,
   hashEmbedder,
   loadConfig,
   setConnector,
-  deriveEncKey,
 } from "@freehold/core";
+import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 import { createApp } from "../src/app.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
 
 function makeTempDir(prefix: string): string {
   return mkdtempSync(join(tmpdir(), prefix));
@@ -101,7 +94,10 @@ function makeMockGithubFetch(opts: {
 
     // List open PRs
     if (path === `/repos/${opts.owner}/${opts.repo}/pulls?state=open&per_page=100`) {
-      return new Response(JSON.stringify(opts.openPrs), { status: 200, headers: { "content-type": "application/json" } });
+      return new Response(JSON.stringify(opts.openPrs), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
     }
 
     // Review comments for a PR
@@ -109,7 +105,10 @@ function makeMockGithubFetch(opts: {
       new RegExp(`/repos/${opts.owner}/${opts.repo}/pulls/(\\d+)/comments\\?per_page=100`)
     );
     if (reviewCommentsMatch) {
-      return new Response(JSON.stringify(opts.reviewComments), { status: 200, headers: { "content-type": "application/json" } });
+      return new Response(JSON.stringify(opts.reviewComments), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
     }
 
     // Issue comments (regular PR comments)
@@ -117,7 +116,10 @@ function makeMockGithubFetch(opts: {
       new RegExp(`/repos/${opts.owner}/${opts.repo}/issues/(\\d+)/comments\\?per_page=100`)
     );
     if (issueCommentsMatch) {
-      return new Response(JSON.stringify(opts.issueComments), { status: 200, headers: { "content-type": "application/json" } });
+      return new Response(JSON.stringify(opts.issueComments), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
     }
 
     // Reviews for a PR
@@ -125,7 +127,10 @@ function makeMockGithubFetch(opts: {
       new RegExp(`/repos/${opts.owner}/${opts.repo}/pulls/(\\d+)/reviews\\?per_page=100`)
     );
     if (reviewsMatch) {
-      return new Response(JSON.stringify(opts.reviews), { status: 200, headers: { "content-type": "application/json" } });
+      return new Response(JSON.stringify(opts.reviews), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
     }
 
     // Check runs for a commit SHA
@@ -135,13 +140,16 @@ function makeMockGithubFetch(opts: {
     if (checkRunsMatch) {
       const sha = checkRunsMatch[1];
       const found = opts.checkRuns.find((cr) => cr.head_sha === sha);
-      return new Response(
-        JSON.stringify({ check_runs: found?.check_runs ?? [] }),
-        { status: 200, headers: { "content-type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ check_runs: found?.check_runs ?? [] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
     }
 
-    return new Response(JSON.stringify({ message: "Not Found" }), { status: 404, headers: { "content-type": "application/json" } });
+    return new Response(JSON.stringify({ message: "Not Found" }), {
+      status: 404,
+      headers: { "content-type": "application/json" },
+    });
   };
 }
 
@@ -191,7 +199,9 @@ beforeAll(async () => {
   execFileSync("git", ["init"], { cwd: repoDir });
   execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: repoDir });
   execFileSync("git", ["config", "user.name", "Test User"], { cwd: repoDir });
-  execFileSync("git", ["remote", "add", "origin", "https://github.com/test-owner/test-repo.git"], { cwd: repoDir });
+  execFileSync("git", ["remote", "add", "origin", "https://github.com/test-owner/test-repo.git"], {
+    cwd: repoDir,
+  });
   writeFileSync(join(repoDir, "README.md"), "# test");
   execFileSync("git", ["add", "README.md"], { cwd: repoDir });
   execFileSync("git", ["commit", "-m", "init"], { cwd: repoDir });
@@ -210,8 +220,16 @@ beforeAll(async () => {
 });
 
 afterAll(() => {
-  try { rmSync(home, { recursive: true, force: true }); } catch { /* ignore */ }
-  try { rmSync(repoDir, { recursive: true, force: true }); } catch { /* ignore */ }
+  try {
+    rmSync(home, { recursive: true, force: true });
+  } catch {
+    /* ignore */
+  }
+  try {
+    rmSync(repoDir, { recursive: true, force: true });
+  } catch {
+    /* ignore */
+  }
 });
 
 // ---------------------------------------------------------------------------
@@ -222,7 +240,7 @@ describe("connector route guard", () => {
   test("GET /connector on memory graph returns 400", async () => {
     const { status, body } = await req("GET", "/api/v1/connector");
     expect(status).toBe(400);
-    expect((body as any).error).toMatch(/repo/i);
+    expect((body as { error: string }).error).toMatch(/repo/i);
   });
 
   test("PUT /connector on memory graph returns 400", async () => {
@@ -244,16 +262,18 @@ describe("PUT /connector — no-credential", () => {
     process.env.PATH = `${emptyBinDir}:`;
 
     try {
-      const { status, body } = await req(
-        "PUT",
-        `/api/v1/graphs/${repoGraphId}/connector`,
-        { mode: "credential" }
-      );
+      const { status, body } = await req("PUT", `/api/v1/graphs/${repoGraphId}/connector`, {
+        mode: "credential",
+      });
       expect(status).toBe(409);
-      expect((body as any).code).toBe("no-credential");
+      expect((body as { code: string }).code).toBe("no-credential");
     } finally {
       process.env.PATH = origPath;
-      try { rmSync(emptyBinDir, { recursive: true, force: true }); } catch { /* ignore */ }
+      try {
+        rmSync(emptyBinDir, { recursive: true, force: true });
+      } catch {
+        /* ignore */
+      }
     }
   });
 });
@@ -270,16 +290,18 @@ describe("PUT /connector — credential mode success", () => {
   });
 
   test("configures credential mode when gh returns a token", async () => {
-    const { status, body } = await req(
-      "PUT",
-      `/api/v1/graphs/${repoGraphId}/connector`,
-      { mode: "credential", pollIntervalSec: 120 }
-    );
+    const { status, body } = await req("PUT", `/api/v1/graphs/${repoGraphId}/connector`, {
+      mode: "credential",
+      pollIntervalSec: 120,
+    });
     expect(status).toBe(200);
-    expect((body as any).config.mode).toBe("credential");
-    expect((body as any).config.owner).toBe("test-owner");
-    expect((body as any).config.repo).toBe("test-repo");
-    expect((body as any).config.pollIntervalSec).toBe(120);
+    const b = body as {
+      config: { mode: string; owner: string; repo: string; pollIntervalSec: number };
+    };
+    expect(b.config.mode).toBe("credential");
+    expect(b.config.owner).toBe("test-owner");
+    expect(b.config.repo).toBe("test-repo");
+    expect(b.config.pollIntervalSec).toBe(120);
     // Secret token must NOT be in the response
     expect(JSON.stringify(body)).not.toContain("ghp_fake_token_12345");
   });
@@ -289,15 +311,17 @@ describe("PUT /connector — credential mode success", () => {
   // ---------------------------------------------------------------------------
 
   test("GET /connector returns configured=true with config and status", async () => {
-    const { status, body } = await req(
-      "GET",
-      `/api/v1/graphs/${repoGraphId}/connector`
-    );
+    const { status, body } = await req("GET", `/api/v1/graphs/${repoGraphId}/connector`);
     expect(status).toBe(200);
-    expect((body as any).configured).toBe(true);
-    expect((body as any).config.mode).toBe("credential");
-    expect((body as any).config.owner).toBe("test-owner");
-    expect((body as any).status).toBeDefined();
+    const b2 = body as {
+      configured: boolean;
+      config: { mode: string; owner: string };
+      status: unknown;
+    };
+    expect(b2.configured).toBe(true);
+    expect(b2.config.mode).toBe("credential");
+    expect(b2.config.owner).toBe("test-owner");
+    expect(b2.status).toBeDefined();
   });
 });
 
@@ -311,11 +335,10 @@ describe("POST /connector/poll", () => {
   beforeAll(async () => {
     ghStub = stubGhBinary("ghp_poll_test_token");
     // Configure connector
-    const { status } = await req(
-      "PUT",
-      `/api/v1/graphs/${repoGraphId}/connector`,
-      { mode: "credential", pollIntervalSec: 300 }
-    );
+    const { status } = await req("PUT", `/api/v1/graphs/${repoGraphId}/connector`, {
+      mode: "credential",
+      pollIntervalSec: 300,
+    });
     expect(status, "connector config setup").toBe(200);
   });
 
@@ -338,7 +361,13 @@ describe("POST /connector/poll", () => {
       repo: "test-repo",
       openPrs: [{ number: 42, head: { sha: "abc1234", ref: "feature" } }],
       reviewComments: [
-        { id: 1001, body: "LGTM!", user: { login: "alice" }, path: "src/lib.rs", commit_id: "abc1234" },
+        {
+          id: 1001,
+          body: "LGTM!",
+          user: { login: "alice" },
+          path: "src/lib.rs",
+          commit_id: "abc1234",
+        },
       ],
       issueComments: [],
       reviews: [],
@@ -354,8 +383,9 @@ describe("POST /connector/poll", () => {
     const { getConnector } = await import("@freehold/core");
     const cfg = await getConnector(fh.db, repoGraphId);
     expect(cfg).not.toBeNull();
+    if (!cfg) throw new Error("connector config is null");
 
-    const result = await pollOnce(fh, cfg!, client);
+    const result = await pollOnce(fh, cfg, client);
 
     expect(result.errors).toHaveLength(0);
     expect(result.events).toBeGreaterThan(0); // comment + check = at least 2
@@ -371,7 +401,13 @@ describe("POST /connector/poll", () => {
       repo: "test-repo",
       openPrs: [{ number: 42, head: { sha: "abc1234", ref: "feature" } }],
       reviewComments: [
-        { id: 1001, body: "LGTM!", user: { login: "alice" }, path: "src/lib.rs", commit_id: "abc1234" },
+        {
+          id: 1001,
+          body: "LGTM!",
+          user: { login: "alice" },
+          path: "src/lib.rs",
+          commit_id: "abc1234",
+        },
       ],
       issueComments: [],
       reviews: [],
@@ -386,17 +422,22 @@ describe("POST /connector/poll", () => {
     try {
       const state = (fh.graph as unknown as { log(): Array<unknown> }).log();
       logLenBefore = Array.isArray(state) ? state.length : 0;
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
 
     // First poll already done above; this is the second delivery of the same comment.
-    const result = await pollOnce(fh, cfg!, client);
+    if (!cfg) throw new Error("connector config is null");
+    const result = await pollOnce(fh, cfg, client);
 
     // Snapshot log length after — no new changesets should have been written
     let logLenAfter = 0;
     try {
       const state = (fh.graph as unknown as { log(): Array<unknown> }).log();
       logLenAfter = Array.isArray(state) ? state.length : 0;
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
 
     expect(result.errors).toHaveLength(0);
     // The comment was unchanged — no new graph write (log length stable).
@@ -408,7 +449,9 @@ describe("POST /connector/poll", () => {
   });
 
   test("pollOnce updates node body when comment is re-delivered with edited body", async () => {
-    const { pollOnce, makeTokenClient, getConnector, getCommentNodeByExternalId } = await import("@freehold/core");
+    const { pollOnce, makeTokenClient, getConnector, getCommentNodeByExternalId } = await import(
+      "@freehold/core"
+    );
 
     const fh = await manager.get(repoGraphId);
 
@@ -418,7 +461,13 @@ describe("POST /connector/poll", () => {
       repo: "test-repo",
       openPrs: [{ number: 42, head: { sha: "abc1234", ref: "feature" } }],
       reviewComments: [
-        { id: 1001, body: "LGTM! (edited)", user: { login: "alice" }, path: "src/lib.rs", commit_id: "abc1234" },
+        {
+          id: 1001,
+          body: "LGTM! (edited)",
+          user: { login: "alice" },
+          path: "src/lib.rs",
+          commit_id: "abc1234",
+        },
       ],
       issueComments: [],
       reviews: [],
@@ -427,8 +476,9 @@ describe("POST /connector/poll", () => {
 
     const client = makeTokenClient("ghp_poll_test_token", mockFetch as typeof fetch);
     const cfg = await getConnector(fh.db, repoGraphId);
+    if (!cfg) throw new Error("connector config is null");
 
-    const result = await pollOnce(fh, cfg!, client);
+    const result = await pollOnce(fh, cfg, client);
 
     expect(result.errors).toHaveLength(0);
     // An update was emitted (body changed → not unchanged)
@@ -443,7 +493,9 @@ describe("POST /connector/poll", () => {
   });
 
   test("pollOnce emits tombstone when previously-ingested comment is absent from open PR listing", async () => {
-    const { pollOnce, makeTokenClient, getConnector, getCommentNodeByExternalId } = await import("@freehold/core");
+    const { pollOnce, makeTokenClient, getConnector, getCommentNodeByExternalId } = await import(
+      "@freehold/core"
+    );
 
     const fh = await manager.get(repoGraphId);
 
@@ -461,8 +513,9 @@ describe("POST /connector/poll", () => {
 
     const client = makeTokenClient("ghp_poll_test_token", mockFetch as typeof fetch);
     const cfg = await getConnector(fh.db, repoGraphId);
+    if (!cfg) throw new Error("connector config is null");
 
-    const result = await pollOnce(fh, cfg!, client);
+    const result = await pollOnce(fh, cfg, client);
 
     expect(result.errors).toHaveLength(0);
     // The tombstone event was processed.
@@ -497,11 +550,17 @@ describe("POST /connector/poll", () => {
 
     const client = makeTokenClient("ghp_poll_test_token", mockFetch as typeof fetch);
     const cfg = await getConnector(fh.db, repoGraphId);
+    if (!cfg) throw new Error("connector config is null");
 
-    await pollOnce(fh, cfg!, client);
+    await pollOnce(fh, cfg, client);
 
     // Verify check_status was written
-    const rows = await fh.db.pg.query<{ sha: string; name: string; status: string; conclusion: string }>(
+    const rows = await fh.db.pg.query<{
+      sha: string;
+      name: string;
+      status: string;
+      conclusion: string;
+    }>(
       `SELECT sha, name, status, conclusion FROM check_status WHERE graph_id = $1 AND sha = 'deadbeef'`,
       [repoGraphId]
     );
@@ -528,18 +587,13 @@ describe("DELETE /connector", () => {
 
   test("removes config and GET returns configured=false", async () => {
     // Configure first
-    const { status: putStatus } = await req(
-      "PUT",
-      `/api/v1/graphs/${repoGraphId}/connector`,
-      { mode: "credential" }
-    );
+    const { status: putStatus } = await req("PUT", `/api/v1/graphs/${repoGraphId}/connector`, {
+      mode: "credential",
+    });
     expect(putStatus).toBe(200);
 
     // Delete
-    const { status: delStatus } = await req(
-      "DELETE",
-      `/api/v1/graphs/${repoGraphId}/connector`
-    );
+    const { status: delStatus } = await req("DELETE", `/api/v1/graphs/${repoGraphId}/connector`);
     expect(delStatus).toBe(200);
 
     // GET now returns not configured
@@ -548,8 +602,9 @@ describe("DELETE /connector", () => {
       `/api/v1/graphs/${repoGraphId}/connector`
     );
     expect(getStatus).toBe(200);
-    expect((getBody as any).configured).toBe(false);
-    expect((getBody as any).config).toBeUndefined();
+    const gb = getBody as { configured: boolean; config: unknown };
+    expect(gb.configured).toBe(false);
+    expect(gb.config).toBeUndefined();
   });
 });
 
@@ -582,7 +637,10 @@ describe("startPoller", () => {
 
     // Configure connector (need it to exist)
     const ghStub2 = stubGhBinary("ghp_poller_test_token");
-    await req("PUT", `/api/v1/graphs/${repoGraphId}/connector`, { mode: "credential", pollIntervalSec: 1 });
+    await req("PUT", `/api/v1/graphs/${repoGraphId}/connector`, {
+      mode: "credential",
+      pollIntervalSec: 1,
+    });
     ghStub2.restorePath();
 
     const { getConnector } = await import("@freehold/core");
@@ -629,24 +687,24 @@ describe("PUT /connector — webhooksEnabled validation", () => {
   });
 
   test("PUT with webhooksEnabled=true and no publicUrl returns 400 missing-public-url", async () => {
-    const { status, body } = await req(
-      "PUT",
-      `/api/v1/graphs/${repoGraphId}/connector`,
-      { mode: "credential", webhooksEnabled: true }
-    );
+    const { status, body } = await req("PUT", `/api/v1/graphs/${repoGraphId}/connector`, {
+      mode: "credential",
+      webhooksEnabled: true,
+    });
     expect(status).toBe(400);
-    expect((body as any).code).toBe("missing-public-url");
+    expect((body as { code: string }).code).toBe("missing-public-url");
   });
 
   test("PUT with webhooksEnabled=true and publicUrl succeeds and persists both", async () => {
-    const { status, body } = await req(
-      "PUT",
-      `/api/v1/graphs/${repoGraphId}/connector`,
-      { mode: "credential", webhooksEnabled: true, publicUrl: "https://example.com" }
-    );
+    const { status, body } = await req("PUT", `/api/v1/graphs/${repoGraphId}/connector`, {
+      mode: "credential",
+      webhooksEnabled: true,
+      publicUrl: "https://example.com",
+    });
     expect(status).toBe(200);
-    expect((body as any).config.webhooksEnabled).toBe(true);
-    expect((body as any).config.publicUrl).toBe("https://example.com");
+    const b = body as { config: { webhooksEnabled: boolean; publicUrl: string } };
+    expect(b.config.webhooksEnabled).toBe(true);
+    expect(b.config.publicUrl).toBe("https://example.com");
 
     // Verify persisted via GET
     const { status: getStatus, body: getBody } = await req(
@@ -654,8 +712,9 @@ describe("PUT /connector — webhooksEnabled validation", () => {
       `/api/v1/graphs/${repoGraphId}/connector`
     );
     expect(getStatus).toBe(200);
-    expect((getBody as any).config.webhooksEnabled).toBe(true);
-    expect((getBody as any).config.publicUrl).toBe("https://example.com");
+    const gb = getBody as { config: { webhooksEnabled: boolean; publicUrl: string } };
+    expect(gb.config.webhooksEnabled).toBe(true);
+    expect(gb.config.publicUrl).toBe("https://example.com");
   });
 });
 
@@ -681,7 +740,9 @@ describe("app-mode poll", () => {
     execFileSync("git", ["init"], { cwd: appModeRepoDir });
     execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: appModeRepoDir });
     execFileSync("git", ["config", "user.name", "Test User"], { cwd: appModeRepoDir });
-    execFileSync("git", ["remote", "add", "origin", "https://github.com/testowner/testrepo.git"], { cwd: appModeRepoDir });
+    execFileSync("git", ["remote", "add", "origin", "https://github.com/testowner/testrepo.git"], {
+      cwd: appModeRepoDir,
+    });
     writeFileSync(join(appModeRepoDir, "README.md"), "# test");
     execFileSync("git", ["add", "README.md"], { cwd: appModeRepoDir });
     execFileSync("git", ["commit", "-m", "init"], { cwd: appModeRepoDir });
@@ -689,8 +750,12 @@ describe("app-mode poll", () => {
   });
 
   afterAll(() => {
-    try { rmSync(appModeDir, { recursive: true, force: true }); } catch {}
-    try { rmSync(appModeRepoDir, { recursive: true, force: true }); } catch {}
+    try {
+      rmSync(appModeDir, { recursive: true, force: true });
+    } catch {}
+    try {
+      rmSync(appModeRepoDir, { recursive: true, force: true });
+    } catch {}
   });
 
   test("POST /connector/poll works for app-mode with injected fetch", async () => {
@@ -714,7 +779,9 @@ describe("app-mode poll", () => {
       });
     };
 
-    const appInstance = createApp(appModeManager, hashEmbedder, appModeConfig, { fetchFn: mockFetch });
+    const appInstance = createApp(appModeManager, hashEmbedder, appModeConfig, {
+      fetchFn: mockFetch,
+    });
 
     // Register the repo graph via HTTP so it's kind="repo"
     const regRes = await appInstance.request("/api/v1/graphs", {
@@ -752,15 +819,12 @@ describe("app-mode poll", () => {
       encKey
     );
 
-    const res = await appInstance.request(
-      `/api/v1/graphs/${appModeRepoGraphId}/connector/poll`,
-      {
-        method: "POST",
-        headers: { Authorization: `Bearer ${appModeConfig.token}` },
-      }
-    );
+    const res = await appInstance.request(`/api/v1/graphs/${appModeRepoGraphId}/connector/poll`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${appModeConfig.token}` },
+    });
     expect(res.status).toBe(200);
-    const body = await res.json() as { events: number; unchanged: number; errors: string[] };
+    const body = (await res.json()) as { events: number; unchanged: number; errors: string[] };
     expect(typeof body.events).toBe("number");
     expect(Array.isArray(body.errors)).toBe(true);
     // fetch was called at least once (for installation token)

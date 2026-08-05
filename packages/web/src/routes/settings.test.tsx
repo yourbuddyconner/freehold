@@ -18,7 +18,9 @@ vi.mock("~/lib/hooks", () => ({
   useSession: vi.fn(),
   useGraphs: vi.fn().mockReturnValue({ graphs: [], defaultGraph: "main" }),
   useActiveGraph: vi.fn().mockReturnValue({ activeGraphId: "main", setActiveGraphId: vi.fn() }),
-  useGitProposals: vi.fn().mockReturnValue({ data: { proposals: [] }, isLoading: false, isError: false, error: null }),
+  useGitProposals: vi
+    .fn()
+    .mockReturnValue({ data: { proposals: [] }, isLoading: false, isError: false, error: null }),
 }));
 
 vi.mock("~/lib/api", () => {
@@ -38,23 +40,23 @@ vi.mock("~/lib/api", () => {
     setActiveGraph: vi.fn(),
     ApiError,
     apiClient: {
-    proposals: vi.fn(),
-    approve: vi.fn().mockResolvedValue({}),
-    reject: vi.fn().mockResolvedValue({}),
-    recall: vi.fn(),
-    getEntity: vi.fn(),
-    schema: vi.fn(),
-    getPolicy: vi.fn(),
-    log: vi.fn(),
-    principals: vi.fn(),
-    proposePolicy: vi.fn().mockResolvedValue({}),
-    registerAgent: vi.fn(),
-    installOntology: vi.fn().mockResolvedValue({}),
-    verify: vi.fn().mockResolvedValue({ ok: true }),
-    getConnector: vi.fn().mockResolvedValue({ configured: false, status: {} }),
-    putConnector: vi.fn(),
-    pollConnector: vi.fn(),
-    getConnectorManifest: vi.fn(),
+      proposals: vi.fn(),
+      approve: vi.fn().mockResolvedValue({}),
+      reject: vi.fn().mockResolvedValue({}),
+      recall: vi.fn(),
+      getEntity: vi.fn(),
+      schema: vi.fn(),
+      getPolicy: vi.fn(),
+      log: vi.fn(),
+      principals: vi.fn(),
+      proposePolicy: vi.fn().mockResolvedValue({}),
+      registerAgent: vi.fn(),
+      installOntology: vi.fn().mockResolvedValue({}),
+      verify: vi.fn().mockResolvedValue({ ok: true }),
+      getConnector: vi.fn().mockResolvedValue({ configured: false, status: {} }),
+      putConnector: vi.fn(),
+      pollConnector: vi.fn(),
+      getConnectorManifest: vi.fn(),
     },
   };
 });

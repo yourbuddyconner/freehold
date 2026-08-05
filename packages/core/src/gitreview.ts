@@ -13,11 +13,19 @@
 import { existsSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { load as yamlLoad } from "js-yaml";
-import type { Freehold } from "./graphs.js";
-import { withGraph } from "./lock.js";
-import { branchHeads, diffTreeOps, readDecisions, appendDecision, pushNotes, headSha, commitMeta } from "./git.js";
-import * as keys from "./keys.js";
 import { codeFile, codeRegions } from "./codeview.js";
+import {
+  appendDecision,
+  branchHeads,
+  commitMeta,
+  diffTreeOps,
+  headSha,
+  pushNotes,
+  readDecisions,
+} from "./git.js";
+import type { Freehold } from "./graphs.js";
+import * as keys from "./keys.js";
+import { withGraph } from "./lock.js";
 
 // ── KeyMissingError ───────────────────────────────────────────────────────────
 
@@ -92,11 +100,7 @@ function wasmGitChecklist(
 ): ChecklistResult {
   return (
     graph as {
-      git_checklist(
-        repo: string,
-        target_ref: string,
-        ops: [string, string][]
-      ): ChecklistResult;
+      git_checklist(repo: string, target_ref: string, ops: [string, string][]): ChecklistResult;
     }
   ).git_checklist(repo, targetRef, ops);
 }
@@ -261,7 +265,7 @@ async function evaluateSha(
   let checks: Array<{ name: string; status: string; conclusion?: string }> = [];
   try {
     const rows = await fh.db.pg.query<{ name: string; status: string; conclusion: string | null }>(
-      `SELECT name, status, conclusion FROM check_status WHERE graph_id = $1 AND sha = $2`,
+      "SELECT name, status, conclusion FROM check_status WHERE graph_id = $1 AND sha = $2",
       [fh.graphId, sha]
     );
     checks = rows.rows.map((r) => ({
@@ -283,7 +287,9 @@ async function evaluateSha(
     matched,
     checklist: Array.isArray(checklist)
       ? checklist
-      : (checklist && typeof checklist === "object" ? [checklist] : []),
+      : checklist && typeof checklist === "object"
+        ? [checklist]
+        : [],
     unmet,
     decided,
     paths,
@@ -304,7 +310,7 @@ export async function listGitProposals(fh: Freehold): Promise<GitProposal[]> {
   const heads = await branchHeads(fh.graphDir);
 
   // Also include HEAD if it differs from all branch heads
-  let headRef = "HEAD";
+  const headRef = "HEAD";
   let headCommitSha: string;
   try {
     headCommitSha = await headSha(fh.graphDir);
@@ -334,10 +340,7 @@ export async function listGitProposals(fh: Freehold): Promise<GitProposal[]> {
 /**
  * Return the GitProposal for a single sha, or null if the sha is unknown to git.
  */
-export async function gitProposal(
-  fh: Freehold,
-  sha: string
-): Promise<GitProposal | null> {
+export async function gitProposal(fh: Freehold, sha: string): Promise<GitProposal | null> {
   const repoName = basename(fh.graphDir);
   try {
     // commitMeta throws if sha is unknown
@@ -534,7 +537,10 @@ function parseChangesetOps(
   status: "saved" | "pending",
   sha: string,
   repoBasename: string,
-  reviews: Map<string, { attrs: Record<string, unknown>; author: string; status: "saved" | "pending" }>,
+  reviews: Map<
+    string,
+    { attrs: Record<string, unknown>; author: string; status: "saved" | "pending" }
+  >,
   comments: Map<string, { attrs: Record<string, unknown>; author: string }>,
   commentToReview: Map<string, string>
 ): void {
@@ -577,10 +583,8 @@ function parseChangesetOps(
       typeof inner.type === "string" &&
       inner.type.startsWith("review/part_of")
     ) {
-      const from =
-        typeof inner.from === "string" ? inner.from.replace(/^node:/, "") : null;
-      const to =
-        typeof inner.to === "string" ? inner.to.replace(/^node:/, "") : null;
+      const from = typeof inner.from === "string" ? inner.from.replace(/^node:/, "") : null;
+      const to = typeof inner.to === "string" ? inner.to.replace(/^node:/, "") : null;
       if (from && to) {
         commentToReview.set(from, to);
       }
@@ -588,10 +592,7 @@ function parseChangesetOps(
   }
 }
 
-export async function listReviewsForSha(
-  fh: Freehold,
-  sha: string
-): Promise<ReviewEntry[]> {
+export async function listReviewsForSha(fh: Freehold, sha: string): Promise<ReviewEntry[]> {
   const repoBasename = basename(fh.graphDir);
 
   // Maps: nodeId → { attrs, author, status }
@@ -673,7 +674,9 @@ export async function listReviewsForSha(
 
       let cs: RawPendingChangeset;
       try {
-        cs = (fh.graph as unknown as { proposal_get(hash: string): RawPendingChangeset }).proposal_get(hash);
+        cs = (
+          fh.graph as unknown as { proposal_get(hash: string): RawPendingChangeset }
+        ).proposal_get(hash);
       } catch {
         continue;
       }
@@ -704,7 +707,7 @@ export async function listReviewsForSha(
       if (!reviewComments.has(reviewId)) reviewComments.set(reviewId, []);
       const c = comments.get(commentId);
       if (c) {
-        reviewComments.get(reviewId)!.push({
+        reviewComments.get(reviewId)?.push({
           commentId,
           body: c.attrs.body as string | undefined,
           anchor: c.attrs.anchor as string | undefined,

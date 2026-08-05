@@ -22,16 +22,12 @@
  */
 
 import { execFileSync } from "node:child_process";
-import {
-  mkdtempSync,
-  rmSync,
-  writeFileSync,
-  readFileSync,
-} from "node:fs";
-import { fileURLToPath } from "node:url";
-import { tmpdir } from "node:os";
-import { join, resolve, basename, dirname } from "node:path";
 import { spawn } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { basename, dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import type { AllodGraph } from "@allod/core";
 
 // ── Paths ─────────────────────────────────────────────────────────────────────
 
@@ -49,7 +45,7 @@ const lines: string[] = [];
 function log(...args: string[]) {
   const msg = args.join(" ");
   lines.push(msg);
-  process.stdout.write(msg + "\n");
+  process.stdout.write(`${msg}\n`);
 }
 
 // ── HTTP helper ───────────────────────────────────────────────────────────────
@@ -103,7 +99,10 @@ function stripOntologyPreamble(yaml: string): string {
   let inImports = false;
   for (let i = start; i < ls.length; i++) {
     const line = ls[i];
-    if (/^imports:/.test(line)) { inImports = true; continue; }
+    if (/^imports:/.test(line)) {
+      inImports = true;
+      continue;
+    }
     if (inImports && (line.startsWith(" ") || line.startsWith("\t") || line === "")) {
       if (line === "") inImports = false;
       continue;
@@ -114,18 +113,18 @@ function stripOntologyPreamble(yaml: string): string {
   return result.join("\n");
 }
 
-async function approveIfHeld(graph: any, hash: string) {
+async function approveIfHeld(graph: AllodGraph, hash: string) {
   const { approve } = await import(join(CORE_PKG, "src", "governance.js"));
   const d = await approve(graph, "owner", hash);
   if (d.status !== "approved") throw new Error(`approve failed: ${JSON.stringify(d)}`);
 }
 
-async function commitAndApprove(graph: any, author: string, intent: string, ops: unknown[]) {
+async function commitAndApprove(graph: AllodGraph, author: string, intent: string, ops: unknown[]) {
   const raw = await graph.commit(author, intent, ops, [], true);
   if (raw && typeof raw === "object") {
-    if ("Admitted" in raw) return (raw as any).Admitted.hash as string;
+    if ("Admitted" in raw) return (raw as { Admitted: { hash: string } }).Admitted.hash;
     if ("Held" in raw) {
-      const hash = (raw as any).Held.hash as string;
+      const hash = (raw as { Held: { hash: string } }).Held.hash;
       await approveIfHeld(graph, hash);
       return hash;
     }
@@ -146,7 +145,13 @@ async function main() {
   // ── Step 1: temp home ────────────────────────────────────────────────────
   log("=== Step 1: create temp home ===");
   home = mkdtempSync(join(tmpdir(), "freehold-smoke-"));
-  const config = { token: TOKEN, port: PORT, graph: "main", embedder: "hash", defaultAgent: "smoke-agent" };
+  const config = {
+    token: TOKEN,
+    port: PORT,
+    graph: "main",
+    embedder: "hash",
+    defaultAgent: "smoke-agent",
+  };
   writeFileSync(join(home, "config.json"), JSON.stringify(config));
   log(`home=${home} port=${PORT}`);
 
@@ -206,41 +211,86 @@ async function main() {
   // Create SourceFile nodes
   const sfLibId = crypto.randomUUID();
   await commitAndApprove(fh.graph, "owner", "src/lib.rs", [
-    { create: { kind: "node", id: sfLibId, type: "code/SourceFile@1",
-        attributes: { path: "src/lib.rs", language: "rust", blob: "git:HEAD:src/lib.rs" } } },
+    {
+      create: {
+        kind: "node",
+        id: sfLibId,
+        type: "code/SourceFile@1",
+        attributes: { path: "src/lib.rs", language: "rust", blob: "git:HEAD:src/lib.rs" },
+      },
+    },
   ]);
 
   const sfUtilId = crypto.randomUUID();
   await commitAndApprove(fh.graph, "owner", "src/util.rs", [
-    { create: { kind: "node", id: sfUtilId, type: "code/SourceFile@1",
-        attributes: { path: "src/util.rs", language: "rust", blob: "git:HEAD:src/util.rs" } } },
+    {
+      create: {
+        kind: "node",
+        id: sfUtilId,
+        type: "code/SourceFile@1",
+        attributes: { path: "src/util.rs", language: "rust", blob: "git:HEAD:src/util.rs" },
+      },
+    },
   ]);
 
   // Function nodes
   const fnAId = crypto.randomUUID();
   await commitAndApprove(fh.graph, "owner", "fnA", [
-    { create: { kind: "node", id: fnAId, type: "code/Function@1",
-        attributes: { name: "fnA", signature: "fn fnA() -> i32", span: "L1-L10" } } },
+    {
+      create: {
+        kind: "node",
+        id: fnAId,
+        type: "code/Function@1",
+        attributes: { name: "fnA", signature: "fn fnA() -> i32", span: "L1-L10" },
+      },
+    },
   ]);
   const fnBId = crypto.randomUUID();
   await commitAndApprove(fh.graph, "owner", "fnB", [
-    { create: { kind: "node", id: fnBId, type: "code/Function@1",
-        attributes: { name: "fnB", signature: "fn fnB() -> bool", span: "L12-L20" } } },
+    {
+      create: {
+        kind: "node",
+        id: fnBId,
+        type: "code/Function@1",
+        attributes: { name: "fnB", signature: "fn fnB() -> bool", span: "L12-L20" },
+      },
+    },
   ]);
 
   // Declares edges
   await commitAndApprove(fh.graph, "owner", "declares fnA", [
-    { create: { kind: "edge", id: crypto.randomUUID(), type: `${declaresRef}@1`,
-        from: `node:${sfLibId}`, to: `node:${fnAId}` } },
+    {
+      create: {
+        kind: "edge",
+        id: crypto.randomUUID(),
+        type: `${declaresRef}@1`,
+        from: `node:${sfLibId}`,
+        to: `node:${fnAId}`,
+      },
+    },
   ]);
   await commitAndApprove(fh.graph, "owner", "declares fnB", [
-    { create: { kind: "edge", id: crypto.randomUUID(), type: `${declaresRef}@1`,
-        from: `node:${sfLibId}`, to: `node:${fnBId}` } },
+    {
+      create: {
+        kind: "edge",
+        id: crypto.randomUUID(),
+        type: `${declaresRef}@1`,
+        from: `node:${sfLibId}`,
+        to: `node:${fnBId}`,
+      },
+    },
   ]);
   // Calls edge
   await commitAndApprove(fh.graph, "owner", "fnA→fnB", [
-    { create: { kind: "edge", id: crypto.randomUUID(), type: `${callsRef}@1`,
-        from: `node:${fnAId}`, to: `node:${fnBId}` } },
+    {
+      create: {
+        kind: "edge",
+        id: crypto.randomUUID(),
+        type: `${callsRef}@1`,
+        from: `node:${fnAId}`,
+        to: `node:${fnBId}`,
+      },
+    },
   ]);
 
   // Install a policy with a path rule so code/regions has something to return
@@ -262,9 +312,9 @@ rules:
         - role: owner
           quorum: 1
 `;
-  const policyResult = await (fh.graph as any).install_policy(policyYaml, "owner");
+  const policyResult = await fh.graph.install_policy(policyYaml, "owner");
   if (policyResult && typeof policyResult === "object" && "Held" in policyResult) {
-    await approveIfHeld(fh.graph, (policyResult as any).Held.hash);
+    await approveIfHeld(fh.graph, (policyResult as { Held: { hash: string } }).Held.hash);
   }
   log(`fixture populated (sfLibId=${sfLibId}, fnAId=${fnAId})`);
 
@@ -313,18 +363,27 @@ rules:
   const treeBody = tree.body as { tree: Array<{ name: string; kind: string }> };
   const srcDir = treeBody.tree.find((n) => n.name === "src" && n.kind === "dir");
   if (!srcDir) throw new Error(`code/tree: no 'src' dir found`);
-  log(`  ✓ src dir present in tree`);
+  log("  ✓ src dir present in tree");
 
   // ── Step 7: GET code/file ────────────────────────────────────────────────
   log("\n=== Step 7: GET /api/v1/graphs/:id/code/file?path=src/lib.rs ===");
-  const file = await api("GET", `${base}/api/v1/graphs/${GRAPH_ID}/code/file?path=src/lib.rs`, TOKEN);
+  const file = await api(
+    "GET",
+    `${base}/api/v1/graphs/${GRAPH_ID}/code/file?path=src/lib.rs`,
+    TOKEN
+  );
   log(`GET /code/file?path=src/lib.rs → ${file.status}`);
   log(`  body=${JSON.stringify(file.body)}`);
   if (file.status !== 200) throw new Error(`code/file expected 200 got ${file.status}`);
-  const fileBody = file.body as { path: string; language: string; nodeId: string; items: unknown[] };
-  if (fileBody.path !== "src/lib.rs") throw new Error(`code/file: wrong path`);
-  if (fileBody.language !== "rust") throw new Error(`code/file: wrong language`);
-  if (!Array.isArray(fileBody.items)) throw new Error(`code/file: items not array`);
+  const fileBody = file.body as {
+    path: string;
+    language: string;
+    nodeId: string;
+    items: unknown[];
+  };
+  if (fileBody.path !== "src/lib.rs") throw new Error("code/file: wrong path");
+  if (fileBody.language !== "rust") throw new Error("code/file: wrong language");
+  if (!Array.isArray(fileBody.items)) throw new Error("code/file: items not array");
   log(`  ✓ path=${fileBody.path} language=${fileBody.language} items=${fileBody.items.length}`);
 
   // ── Step 8: GET code/item ────────────────────────────────────────────────
@@ -333,20 +392,30 @@ rules:
   log(`GET /code/item/${fnAId} → ${item.status}`);
   log(`  body=${JSON.stringify(item.body)}`);
   if (item.status !== 200) throw new Error(`code/item expected 200 got ${item.status}`);
-  const itemBody = item.body as { nodeId: string; name: string; callersIn: unknown[]; callsOut: unknown[] };
-  if (itemBody.nodeId !== fnAId) throw new Error(`code/item: wrong nodeId`);
-  if (itemBody.name !== "fnA") throw new Error(`code/item: wrong name`);
+  const itemBody = item.body as {
+    nodeId: string;
+    name: string;
+    callersIn: unknown[];
+    callsOut: unknown[];
+  };
+  if (itemBody.nodeId !== fnAId) throw new Error("code/item: wrong nodeId");
+  if (itemBody.name !== "fnA") throw new Error("code/item: wrong name");
   log(`  ✓ nodeId=${itemBody.nodeId} name=${itemBody.name} callsOut=${itemBody.callsOut.length}`);
 
   // ── Step 9: GET code/neighborhood ────────────────────────────────────────
   log("\n=== Step 9: GET /api/v1/graphs/:id/code/neighborhood?path=src/lib.rs ===");
-  const nb = await api("GET", `${base}/api/v1/graphs/${GRAPH_ID}/code/neighborhood?path=src/lib.rs`, TOKEN);
+  const nb = await api(
+    "GET",
+    `${base}/api/v1/graphs/${GRAPH_ID}/code/neighborhood?path=src/lib.rs`,
+    TOKEN
+  );
   log(`GET /code/neighborhood?path=src/lib.rs → ${nb.status}`);
-  log(`  body nodes=${(nb.body as any)?.nodes?.length ?? "?"} edges=${(nb.body as any)?.edges?.length ?? "?"}`);
+  const nbPreview = nb.body as { nodes?: unknown[]; edges?: unknown[] } | null;
+  log(`  body nodes=${nbPreview?.nodes?.length ?? "?"} edges=${nbPreview?.edges?.length ?? "?"}`);
   if (nb.status !== 200) throw new Error(`code/neighborhood expected 200 got ${nb.status}`);
   const nbBody = nb.body as { nodes: unknown[]; edges: unknown[] };
-  if (!Array.isArray(nbBody.nodes)) throw new Error(`code/neighborhood: nodes not array`);
-  if (!Array.isArray(nbBody.edges)) throw new Error(`code/neighborhood: edges not array`);
+  if (!Array.isArray(nbBody.nodes)) throw new Error("code/neighborhood: nodes not array");
+  if (!Array.isArray(nbBody.edges)) throw new Error("code/neighborhood: edges not array");
   log(`  ✓ ${nbBody.nodes.length} nodes ${nbBody.edges.length} edges`);
 
   // ── Step 10: GET code/regions ────────────────────────────────────────────
@@ -356,7 +425,7 @@ rules:
   log(`  body=${JSON.stringify(regions.body)}`);
   if (regions.status !== 200) throw new Error(`code/regions expected 200 got ${regions.status}`);
   const regBody = regions.body as { rules: Array<{ rule: string; paths: string[] }> };
-  if (!Array.isArray(regBody.rules)) throw new Error(`code/regions: rules not array`);
+  if (!Array.isArray(regBody.rules)) throw new Error("code/regions: rules not array");
   log(`  ✓ ${regBody.rules.length} rules`);
 
   // ── Step 11: memory graph 400 ─────────────────────────────────────────────
@@ -365,7 +434,7 @@ rules:
   log(`GET /api/v1/code/tree (memory) → ${mem.status}`);
   log(`  body=${JSON.stringify(mem.body)}`);
   if (mem.status !== 400) throw new Error(`memory graph code/tree expected 400 got ${mem.status}`);
-  log(`  ✓ memory graph correctly returns 400`);
+  log("  ✓ memory graph correctly returns 400");
 
   log("\n=== ALL CHECKS PASSED ===");
   return {

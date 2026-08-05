@@ -15,30 +15,21 @@
  *   - poll/webhook parity: same comment via pollOnce and webhook produces identical node attribute maps
  */
 
-import {
-  mkdtempSync,
-  writeFileSync,
-  rmSync,
-} from "node:fs";
+import { createHmac, createVerify, generateKeyPairSync } from "node:crypto";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createHmac, generateKeyPairSync, createVerify } from "node:crypto";
-import { describe, expect, test, beforeAll, afterAll } from "vitest";
-import {
-  GraphManager,
-  createGraph,
-  hashEmbedder,
-  loadConfig,
-} from "@freehold/core";
+import { GraphManager, createGraph, hashEmbedder, loadConfig } from "@freehold/core";
 import {
   deriveEncKey,
-  getSecret,
   getCommentNodeByExternalId,
+  getConnector,
+  getSecret,
   makeTokenClient,
   pollOnce,
   setConnector,
-  getConnector,
 } from "@freehold/core";
+import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { createApp } from "../src/app.js";
 
 // ---------------------------------------------------------------------------
@@ -75,10 +66,20 @@ function makeGithubMockFetch(opts: {
   conversionResponse?: Record<string, unknown>;
   installationTokenResponse?: Record<string, unknown>;
   openPrs?: Array<{ number: number; head: { sha: string; ref: string } }>;
-  reviewComments?: Array<{ id: number; body: string; user: { login: string }; path?: string; commit_id?: string; in_reply_to_id?: number }>;
+  reviewComments?: Array<{
+    id: number;
+    body: string;
+    user: { login: string };
+    path?: string;
+    commit_id?: string;
+    in_reply_to_id?: number;
+  }>;
   issueComments?: Array<{ id: number; body: string; user: { login: string } }>;
   reviews?: Array<{ id: number; body: string; user: { login: string }; state: string }>;
-  checkRuns?: Array<{ head_sha: string; check_runs: Array<{ name: string; status: string; conclusion: string | null }> }>;
+  checkRuns?: Array<{
+    head_sha: string;
+    check_runs: Array<{ name: string; status: string; conclusion: string | null }>;
+  }>;
   fetchCallCount?: { count: number };
 }): typeof fetch {
   return (async (url: string | Request | URL, _init?: RequestInit): Promise<Response> => {
@@ -272,7 +273,9 @@ beforeAll(async () => {
   execFileSync("git", ["init"], { cwd: repoDir });
   execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: repoDir });
   execFileSync("git", ["config", "user.name", "Test User"], { cwd: repoDir });
-  execFileSync("git", ["remote", "add", "origin", "https://github.com/owner/testrepo.git"], { cwd: repoDir });
+  execFileSync("git", ["remote", "add", "origin", "https://github.com/owner/testrepo.git"], {
+    cwd: repoDir,
+  });
   writeFileSync(join(repoDir, "README.md"), "# test");
   execFileSync("git", ["add", "README.md"], { cwd: repoDir });
   execFileSync("git", ["commit", "-m", "init"], { cwd: repoDir });
@@ -289,8 +292,12 @@ beforeAll(async () => {
 });
 
 afterAll(() => {
-  try { rmSync(home, { recursive: true, force: true }); } catch {}
-  try { rmSync(repoDir, { recursive: true, force: true }); } catch {}
+  try {
+    rmSync(home, { recursive: true, force: true });
+  } catch {}
+  try {
+    rmSync(repoDir, { recursive: true, force: true });
+  } catch {}
 });
 
 // ---------------------------------------------------------------------------
@@ -390,7 +397,7 @@ describe("manifest conversion exchange", () => {
 
     // Verify ciphertext at rest does NOT contain the raw PEM
     const rawResult = await fh.db.pg.query<{ ciphertext: Uint8Array; name: string }>(
-      `SELECT name, ciphertext FROM connector_secrets WHERE graph_id = $1`,
+      "SELECT name, ciphertext FROM connector_secrets WHERE graph_id = $1",
       [repoGraphId]
     );
     expect(rawResult.rows.length).toBeGreaterThanOrEqual(3);
@@ -444,7 +451,11 @@ describe("manifest conversion exchange", () => {
     execFileSync("git", ["init"], { cwd: injectRepoDir });
     execFileSync("git", ["config", "user.email", "t@t.com"], { cwd: injectRepoDir });
     execFileSync("git", ["config", "user.name", "T"], { cwd: injectRepoDir });
-    execFileSync("git", ["remote", "add", "origin", "https://github.com/injectowner/injectrepo.git"], { cwd: injectRepoDir });
+    execFileSync(
+      "git",
+      ["remote", "add", "origin", "https://github.com/injectowner/injectrepo.git"],
+      { cwd: injectRepoDir }
+    );
     writeFileSync(join(injectRepoDir, "README.md"), "# inject");
     execFileSync("git", ["add", "README.md"], { cwd: injectRepoDir });
     execFileSync("git", ["commit", "-m", "init"], { cwd: injectRepoDir });
@@ -452,7 +463,11 @@ describe("manifest conversion exchange", () => {
 
     const injectApp = createApp(injectManager, hashEmbedder, injectConfig, { fetchFn: mockFetch });
 
-    async function injectReq(method: string, path: string, body?: unknown): Promise<{ status: number; body: unknown }> {
+    async function injectReq(
+      method: string,
+      path: string,
+      body?: unknown
+    ): Promise<{ status: number; body: unknown }> {
       const init: RequestInit = {
         method,
         headers: {
@@ -465,7 +480,9 @@ describe("manifest conversion exchange", () => {
       const ct = res.headers.get("content-type");
       let responseBody: unknown = null;
       if (ct?.includes("application/json")) {
-        try { responseBody = await res.json(); } catch {}
+        try {
+          responseBody = await res.json();
+        } catch {}
       }
       return { status: res.status, body: responseBody };
     }
@@ -479,14 +496,18 @@ describe("manifest conversion exchange", () => {
     expect(regR.status, `register inject-repo: ${JSON.stringify(regR.body)}`).toBe(201);
 
     // Step 1: get a valid signed state
-    const manifestR = await injectReq("POST", "/api/v1/graphs/inject-repo/connector/app/manifest", {});
+    const manifestR = await injectReq(
+      "POST",
+      "/api/v1/graphs/inject-repo/connector/app/manifest",
+      {}
+    );
     expect(manifestR.status).toBe(200);
     const { state } = manifestR.body as { state: string };
 
     // Step 2: callback via the open route (no bearer header) with valid state + injected mock fetch
     const callbackR = await callbackReq(
       `code=injected-code&state=${encodeURIComponent(state)}`,
-      injectApp,
+      injectApp
     );
     expect(callbackR.status).toBe(200);
     const cbBody = callbackR.body as Record<string, unknown>;
@@ -499,7 +520,7 @@ describe("manifest conversion exchange", () => {
     const encKey = deriveEncKey(injectConfig.token);
 
     const rawRows = await injectFh.db.pg.query<{ name: string; ciphertext: Uint8Array }>(
-      `SELECT name, ciphertext FROM connector_secrets WHERE graph_id = $1`,
+      "SELECT name, ciphertext FROM connector_secrets WHERE graph_id = $1",
       ["inject-repo"]
     );
     expect(rawRows.rows.length).toBeGreaterThanOrEqual(3);
@@ -527,8 +548,12 @@ describe("manifest conversion exchange", () => {
     expect(cfg?.appSlug).toBe("injected-test-app");
 
     // Cleanup
-    try { rmSync(injectHome, { recursive: true, force: true }); } catch {}
-    try { rmSync(injectRepoDir, { recursive: true, force: true }); } catch {}
+    try {
+      rmSync(injectHome, { recursive: true, force: true });
+    } catch {}
+    try {
+      rmSync(injectRepoDir, { recursive: true, force: true });
+    } catch {}
   });
 });
 
@@ -742,7 +767,11 @@ describe("poll/webhook parity", () => {
       execFileSync("git", ["init"], { cwd: dir });
       execFileSync("git", ["config", "user.email", "t@t.com"], { cwd: dir });
       execFileSync("git", ["config", "user.name", "T"], { cwd: dir });
-      execFileSync("git", ["remote", "add", "origin", "https://github.com/parityowner/parityrepo.git"], { cwd: dir });
+      execFileSync(
+        "git",
+        ["remote", "add", "origin", "https://github.com/parityowner/parityrepo.git"],
+        { cwd: dir }
+      );
       writeFileSync(join(dir, "README.md"), "# parity");
       execFileSync("git", ["add", "README.md"], { cwd: dir });
       execFileSync("git", ["commit", "-m", "init"], { cwd: dir });
@@ -756,13 +785,15 @@ describe("poll/webhook parity", () => {
         },
         body: JSON.stringify({ path: dir, id, name: `Parity ${id}` }),
       });
-      const regBody = await regRes.json() as Record<string, unknown>;
+      const regBody = (await regRes.json()) as Record<string, unknown>;
       expect(regRes.status, `register ${id}: ${JSON.stringify(regBody)}`).toBe(201);
     }
   });
 
   afterAll(() => {
-    try { rmSync(parityHome, { recursive: true, force: true }); } catch {}
+    try {
+      rmSync(parityHome, { recursive: true, force: true });
+    } catch {}
   });
 
   test("same PR review comment via pollOnce and webhook produces identical node attribute maps", async () => {
@@ -794,16 +825,26 @@ describe("poll/webhook parity", () => {
       installationId: "22222",
     };
 
-    await setConnector(fh1.db, { graphId: "parity1", owner: OWNER1, repo: REPO1, ...baseCfg }, { webhookSecret: PARITY_WEBHOOK_SECRET }, encKey);
-    await setConnector(fh2.db, { graphId: "parity2", owner: OWNER2, repo: REPO2, ...baseCfg }, { webhookSecret: PARITY_WEBHOOK_SECRET }, encKey);
+    await setConnector(
+      fh1.db,
+      { graphId: "parity1", owner: OWNER1, repo: REPO1, ...baseCfg },
+      { webhookSecret: PARITY_WEBHOOK_SECRET },
+      encKey
+    );
+    await setConnector(
+      fh2.db,
+      { graphId: "parity2", owner: OWNER2, repo: REPO2, ...baseCfg },
+      { webhookSecret: PARITY_WEBHOOK_SECRET },
+      encKey
+    );
 
     // Update parity2's origin_remote to parityrepo2 so the webhook lookup
     // can route specifically to it (both graphs share parityowner but have
     // different repo names so the webhook routes unambiguously).
-    await parityManager.db.pg.query(
-      `UPDATE graphs SET origin_remote = $1 WHERE id = $2`,
-      [`https://github.com/${OWNER2}/${REPO2}.git`, "parity2"]
-    );
+    await parityManager.db.pg.query("UPDATE graphs SET origin_remote = $1 WHERE id = $2", [
+      `https://github.com/${OWNER2}/${REPO2}.git`,
+      "parity2",
+    ]);
 
     // Comment data
     const commentId = 99901;
@@ -815,13 +856,15 @@ describe("poll/webhook parity", () => {
     // Graph 1: deliver via pollOnce against parityrepo1
     const mockFetch = makeGithubMockFetch({
       openPrs: [{ number: 5, head: { sha: commitSha, ref: "feature" } }],
-      reviewComments: [{
-        id: commentId,
-        body: commentBody,
-        user: { login: commentAuthor },
-        path: commentPath,
-        commit_id: commitSha,
-      }],
+      reviewComments: [
+        {
+          id: commentId,
+          body: commentBody,
+          user: { login: commentAuthor },
+          path: commentPath,
+          commit_id: commitSha,
+        },
+      ],
       issueComments: [],
       reviews: [],
       checkRuns: [],
@@ -829,7 +872,8 @@ describe("poll/webhook parity", () => {
     const pollClient = makeTokenClient("fake-token", mockFetch);
     const pollCfg1 = await getConnector(fh1.db, "parity1");
     expect(pollCfg1).not.toBeNull();
-    await pollOnce(fh1, pollCfg1!, pollClient);
+    if (!pollCfg1) throw new Error("connector config is null");
+    await pollOnce(fh1, pollCfg1, pollClient);
 
     // Graph 2: deliver via webhook (pull_request_review_comment on parityrepo2)
     const webhookPayload = JSON.stringify({
@@ -868,10 +912,10 @@ describe("poll/webhook parity", () => {
     // Core attributes must be identical
     const relevantKeys = ["body", "external_source", "claimed_author", "external_id", "status"];
     for (const key of relevantKeys) {
-      expect(node1!.attributes[key]).toBe(node2!.attributes[key]);
+      expect(node1?.attributes[key]).toBe(node2?.attributes[key]);
     }
     // Anchor should contain the path in both
-    expect(String(node1!.attributes.anchor ?? "")).toContain(commentPath);
-    expect(String(node2!.attributes.anchor ?? "")).toContain(commentPath);
+    expect(String(node1?.attributes.anchor ?? "")).toContain(commentPath);
+    expect(String(node2?.attributes.anchor ?? "")).toContain(commentPath);
   });
 });

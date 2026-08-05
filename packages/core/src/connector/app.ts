@@ -15,7 +15,7 @@
 import { createPrivateKey, sign } from "node:crypto";
 import type { DbHandle } from "../db.js";
 import type { Freehold } from "../graphs.js";
-import { getConnector, getSecret, deriveEncKey } from "./config.js";
+import { deriveEncKey, getConnector, getSecret } from "./config.js";
 import { makeTokenClient } from "./github.js";
 import type { GithubClient } from "./github.js";
 
@@ -85,9 +85,11 @@ function parseAccessTokenResponse(payload: unknown): { token: string; expiresAtM
   }
   const p = payload as Record<string, unknown>;
   if (typeof p.token !== "string") throw new Error("installation access_tokens: missing token");
-  if (typeof p.expires_at !== "string") throw new Error("installation access_tokens: missing expires_at");
+  if (typeof p.expires_at !== "string")
+    throw new Error("installation access_tokens: missing expires_at");
   const expiresAtMs = Date.parse(p.expires_at);
-  if (Number.isNaN(expiresAtMs)) throw new Error(`installation access_tokens: unparseable expires_at`);
+  if (Number.isNaN(expiresAtMs))
+    throw new Error("installation access_tokens: unparseable expires_at");
   return { token: p.token, expiresAtMs };
 }
 
@@ -140,7 +142,9 @@ export async function makeAppClient(
   });
 
   if (!res.ok) {
-    throw new Error(`GitHub App: POST /app/installations/${cfg.installationId}/access_tokens returned ${res.status}`);
+    throw new Error(
+      `GitHub App: POST /app/installations/${cfg.installationId}/access_tokens returned ${res.status}`
+    );
   }
 
   const { token, expiresAtMs } = parseAccessTokenResponse(await res.json());
@@ -189,7 +193,10 @@ export function buildConnectorManifest(opts: {
   const callbackBase = publicUrl ?? origin;
 
   const manifest: AppManifest = {
-    name: `freehold-${graphId.slice(0, 20).replace(/[^a-z0-9-]/gi, "-").toLowerCase()}`,
+    name: `freehold-${graphId
+      .slice(0, 20)
+      .replace(/[^a-z0-9-]/gi, "-")
+      .toLowerCase()}`,
     url: callbackBase,
     redirect_url: `${origin}/connector/app/callback`,
     default_permissions: {

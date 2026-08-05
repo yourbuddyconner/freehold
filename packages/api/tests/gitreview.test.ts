@@ -15,17 +15,18 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, basename } from "node:path";
+import { basename, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import type { AllodGraph } from "@allod/core";
 import {
   GraphManager,
+  approve,
   createGraph,
   hashEmbedder,
-  loadConfig,
   installOntology,
-  approve,
+  loadConfig,
   syncIndex,
 } from "@freehold/core";
 
@@ -46,7 +47,7 @@ function makeTempDir(prefix: string): string {
 }
 
 function assetYaml(name: string): string {
-  const url = new URL("../../core/assets/" + name, import.meta.url);
+  const url = new URL(`../../core/assets/${name}`, import.meta.url);
   return readFileSync(fileURLToPath(url), "utf-8");
 }
 
@@ -184,7 +185,7 @@ beforeAll(async () => {
   }
 
   // Add a `reviewer` principal with a key
-  await (fh.graph as any).principal_add("reviewer", "agent", "owner");
+  await fh.graph.principal_add("reviewer", "agent", "owner");
 
   // Copy reviewer key to ALLOD_KEYS_DIR
   const reviewerKeyPath = join(repoDir, ".allod", "keys", "reviewer.yaml");
@@ -210,9 +211,13 @@ rules:
         - role: reviewer
           quorum: 1
 `;
-  const policyResult = await (fh.graph as any).install_policy(policyYaml, "owner");
+  const policyResult = await fh.graph.install_policy(policyYaml, "owner");
   if (policyResult && typeof policyResult === "object" && "Held" in policyResult) {
-    const d = await approve(fh.graph, "owner", (policyResult as any).Held.hash);
+    const d = await approve(
+      fh.graph,
+      "owner",
+      (policyResult as { Held: { hash: string } }).Held.hash
+    );
     expect(d.status, "policy approval failed").toBe("approved");
   }
 
@@ -221,7 +226,7 @@ rules:
 
 afterAll(() => {
   if (origKeysDir === undefined) {
-    delete process.env.ALLOD_KEYS_DIR;
+    process.env.ALLOD_KEYS_DIR = undefined;
   } else {
     process.env.ALLOD_KEYS_DIR = origKeysDir;
   }
@@ -250,32 +255,28 @@ describe("git proposal routes on memory graph return 400", () => {
   });
 
   test("POST /api/v1/git/proposals/:sha/decide → 400 on memory graph", async () => {
-    const { status, body } = await req(
-      "POST",
-      `/api/v1/git/proposals/${mainSha}/decide`,
-      { verdict: "approve", by: "reviewer" }
-    );
+    const { status, body } = await req("POST", `/api/v1/git/proposals/${mainSha}/decide`, {
+      verdict: "approve",
+      by: "reviewer",
+    });
     expect(status).toBe(400);
     const b = body as { error: string };
     expect(b.error).toBe("git review is only available for repo graphs");
   });
 
   test("POST /api/v1/git/proposals/:sha/reviews → 400 on memory graph", async () => {
-    const { status, body } = await req(
-      "POST",
-      `/api/v1/git/proposals/${mainSha}/reviews`,
-      { verdict: "approve", body: "looks good", by: "reviewer" }
-    );
+    const { status, body } = await req("POST", `/api/v1/git/proposals/${mainSha}/reviews`, {
+      verdict: "approve",
+      body: "looks good",
+      by: "reviewer",
+    });
     expect(status).toBe(400);
     const b = body as { error: string };
     expect(b.error).toBe("git review is only available for repo graphs");
   });
 
   test("GET /api/v1/git/proposals/:sha/reviews → 400 on memory graph", async () => {
-    const { status, body } = await req(
-      "GET",
-      `/api/v1/git/proposals/${mainSha}/reviews`
-    );
+    const { status, body } = await req("GET", `/api/v1/git/proposals/${mainSha}/reviews`);
     expect(status).toBe(400);
     const b = body as { error: string };
     expect(b.error).toBe("git review is only available for repo graphs");
@@ -288,7 +289,10 @@ describe("git proposal routes on memory graph return 400", () => {
 
 describe("sha validation — route 400 for injection-style params", () => {
   test("GET /git/proposals/:sha rejects --output=evil", async () => {
-    const { status, body } = await req("GET", `/api/v1/graphs/${repoGraphId}/git/proposals/--output%3Devil`);
+    const { status, body } = await req(
+      "GET",
+      `/api/v1/graphs/${repoGraphId}/git/proposals/--output%3Devil`
+    );
     expect(status).toBe(400);
     expect((body as { error: string }).error).toBe("invalid commit sha");
   });
@@ -316,10 +320,7 @@ describe("sha validation — route 400 for injection-style params", () => {
 
 describe("GET /api/v1/graphs/:id/git/proposals on repo graph", () => {
   test("returns 200 with proposals array", async () => {
-    const { status, body } = await req(
-      "GET",
-      `/api/v1/graphs/${repoGraphId}/git/proposals`
-    );
+    const { status, body } = await req("GET", `/api/v1/graphs/${repoGraphId}/git/proposals`);
     expect(status).toBe(200);
     const b = body as { proposals: unknown[] };
     expect(Array.isArray(b.proposals)).toBe(true);
@@ -347,8 +348,8 @@ describe("GET /api/v1/graphs/:id/git/proposals on repo graph", () => {
     const b = body as { proposals: Array<Record<string, unknown>> };
     const feature = b.proposals.find((p) => p.sha === featureSha);
     expect(feature, "feature proposal not in list").toBeDefined();
-    expect(feature!.decided).toBe("undecided");
-    expect((feature!.matched as string[])).toContain("src-review");
+    expect(feature?.decided).toBe("undecided");
+    expect(feature?.matched as string[]).toContain("src-review");
   });
 });
 
@@ -362,7 +363,7 @@ describe("GET /api/v1/graphs/:id/git/proposals/:sha on repo graph", () => {
     const b = body as Record<string, unknown>;
     expect(b.sha).toBe(featureSha);
     expect(b.decided).toBe("undecided");
-    expect((b.matched as string[])).toContain("src-review");
+    expect(b.matched as string[]).toContain("src-review");
   });
 
   test("returns 404 for unknown sha", async () => {
@@ -395,11 +396,11 @@ describe("POST /api/v1/graphs/:id/git/proposals/:sha/decide — approve", () => 
 
   test("note persists on disk after decide", async () => {
     // git notes show the allod-decisions note for featureSha in the actual repo
-    const note = execFileSync(
-      "git",
-      ["notes", "--ref=allod-decisions", "show", featureSha],
-      { cwd: repoDir }
-    ).toString().trim();
+    const note = execFileSync("git", ["notes", "--ref=allod-decisions", "show", featureSha], {
+      cwd: repoDir,
+    })
+      .toString()
+      .trim();
     expect(note.length).toBeGreaterThan(0);
   });
 
@@ -409,7 +410,7 @@ describe("POST /api/v1/graphs/:id/git/proposals/:sha/decide — approve", () => 
     const feature = b.proposals.find((p) => p.sha === featureSha);
     expect(feature).toBeDefined();
     // The decide call above approved it — it should be approved now
-    expect(feature!.decided).toBe("approved");
+    expect(feature?.decided).toBe("approved");
   });
 });
 
@@ -472,9 +473,7 @@ describe("POST /api/v1/graphs/:id/git/proposals/:sha/reviews", () => {
         verdict: "approve",
         body: "Looks good to me.",
         by: "reviewer",
-        comments: [
-          { body: "Nice change", anchor: `git:repo#${mainSha}:README.md` },
-        ],
+        comments: [{ body: "Nice change", anchor: `git:repo#${mainSha}:README.md` }],
       }
     );
     expect(status).toBe(200);
@@ -595,13 +594,11 @@ describe("GET /api/v1/graphs/:id/git/proposals/:sha/reviews", () => {
     };
     // The first POST review for mainSha posted 1 comment with body "Nice change"
     // and anchor `git:repo#${mainSha}:README.md`
-    const reviewWithComment = b.reviews.find(
-      (r) => r.comments.length > 0
-    );
+    const reviewWithComment = b.reviews.find((r) => r.comments.length > 0);
     expect(reviewWithComment, "no review with comments found").toBeDefined();
-    expect(reviewWithComment!.comments.length).toBe(1);
-    expect(reviewWithComment!.comments[0].body).toBe("Nice change");
-    expect(reviewWithComment!.comments[0].anchor).toBe(`git:repo#${mainSha}:README.md`);
+    expect(reviewWithComment?.comments.length).toBe(1);
+    expect(reviewWithComment?.comments[0].body).toBe("Nice change");
+    expect(reviewWithComment?.comments[0].anchor).toBe(`git:repo#${mainSha}:README.md`);
   });
 
   test("reviews for featureSha returns empty array (no reviews posted for that sha)", async () => {
@@ -666,7 +663,9 @@ describe("Task 4 e2e: region-rule — classified path → proposal card → deci
     writeFileSync(join(regionRepoDir, "classified", "secret.rs"), "// classified code");
     execFileSync("git", ["add", "classified/secret.rs"], { cwd: regionRepoDir });
     execFileSync("git", ["commit", "-m", "add classified/secret.rs"], { cwd: regionRepoDir });
-    regionFeatureSha = execFileSync("git", ["rev-parse", "HEAD"], { cwd: regionRepoDir }).toString().trim();
+    regionFeatureSha = execFileSync("git", ["rev-parse", "HEAD"], { cwd: regionRepoDir })
+      .toString()
+      .trim();
     execFileSync("git", ["checkout", "main"], { cwd: regionRepoDir });
 
     // Create allod graph
@@ -706,22 +705,28 @@ describe("Task 4 e2e: region-rule — classified path → proposal card → deci
 
     // Create SourceFile node for classified/secret.rs so it appears as indexed
     const sfId = crypto.randomUUID();
-    const rawCs = await (fh.graph as any).commit("owner", "index classified/secret.rs", [
-      {
-        create: {
-          kind: "node",
-          id: sfId,
-          type: "code/SourceFile@1",
-          attributes: {
-            path: "classified/secret.rs",
-            language: "rust",
-            blob: `git:${basename(regionRepoDir)}#HEAD:classified/secret.rs`,
+    const rawCs = await fh.graph.commit(
+      "owner",
+      "index classified/secret.rs",
+      [
+        {
+          create: {
+            kind: "node",
+            id: sfId,
+            type: "code/SourceFile@1",
+            attributes: {
+              path: "classified/secret.rs",
+              language: "rust",
+              blob: `git:${basename(regionRepoDir)}#HEAD:classified/secret.rs`,
+            },
           },
         },
-      },
-    ], [], true);
+      ],
+      [],
+      true
+    );
     if (rawCs && typeof rawCs === "object" && "Held" in rawCs) {
-      const d = await approve(fh.graph, "owner", (rawCs as any).Held.hash);
+      const d = await approve(fh.graph, "owner", (rawCs as { Held: { hash: string } }).Held.hash);
       expect(d.status).toBe("approved");
     }
 
@@ -733,21 +738,29 @@ describe("Task 4 e2e: region-rule — classified path → proposal card → deci
     - { name: security, parents: [] }
     - { name: "security/critical", parents: [security] }
 `;
-    const taxResult = await (fh.graph as any).install_package(secTaxYaml, "owner");
+    const taxResult = await fh.graph.install_package(secTaxYaml, "owner");
     if (taxResult && typeof taxResult === "object" && "Held" in taxResult) {
-      const d = await approve(fh.graph, "owner", (taxResult as any).Held.hash);
+      const d = await approve(
+        fh.graph,
+        "owner",
+        (taxResult as { Held: { hash: string } }).Held.hash
+      );
       expect(d.status).toBe("approved");
     }
 
     // Classify classified/secret.rs as security/critical
-    const clsResult = await (fh.graph as any).classify(sfId, "security/critical", "owner", "human-reviewed");
+    const clsResult = await fh.graph.classify(sfId, "security/critical", "owner", "human-reviewed");
     if (clsResult && typeof clsResult === "object" && "Held" in clsResult) {
-      const d = await approve(fh.graph, "owner", (clsResult as any).Held.hash);
+      const d = await approve(
+        fh.graph,
+        "owner",
+        (clsResult as { Held: { hash: string } }).Held.hash
+      );
       expect(d.status).toBe("approved");
     }
 
     // Add reviewer principal
-    await (fh.graph as any).principal_add("reviewer", "agent", "owner");
+    await fh.graph.principal_add("reviewer", "agent", "owner");
 
     // Copy reviewer key to ALLOD_KEYS_DIR
     const reviewerKeyPath = join(regionRepoDir, ".allod", "keys", "reviewer.yaml");
@@ -773,9 +786,13 @@ rules:
         - role: security-reviewer
           quorum: 1
 `;
-    const policyResult = await (fh.graph as any).install_policy(policyYaml, "owner");
+    const policyResult = await fh.graph.install_policy(policyYaml, "owner");
     if (policyResult && typeof policyResult === "object" && "Held" in policyResult) {
-      const d = await approve(fh.graph, "owner", (policyResult as any).Held.hash);
+      const d = await approve(
+        fh.graph,
+        "owner",
+        (policyResult as { Held: { hash: string } }).Held.hash
+      );
       expect(d.status, "region policy approval failed").toBe("approved");
     }
 
@@ -791,7 +808,7 @@ rules:
   function regionReq(
     method: string,
     path: string,
-    body?: unknown,
+    body?: unknown
   ): Promise<{ status: number; body: unknown }> {
     const init: RequestInit = {
       method,
@@ -817,36 +834,30 @@ rules:
     const feature = b.proposals.find((p) => p.sha === regionFeatureSha);
     expect(feature, "feature proposal not found in region test").toBeDefined();
     // The region rule should appear in matched
-    expect((feature!.matched as string[])).toContain("security-critical-region");
+    expect(feature?.matched as string[]).toContain("security-critical-region");
   });
 
   test("GET proposals: feature commit has non-empty unmet (region rule requirement unsatisfied)", async () => {
-    const { body } = await regionReq(
-      "GET",
-      `/api/v1/graphs/${regionGraphId}/git/proposals`
-    );
+    const { body } = await regionReq("GET", `/api/v1/graphs/${regionGraphId}/git/proposals`);
     const b = body as { proposals: Array<Record<string, unknown>> };
     const feature = b.proposals.find((p) => p.sha === regionFeatureSha);
     expect(feature).toBeDefined();
-    expect(feature!.decided).toBe("undecided");
-    expect((feature!.unmet as string[]).length).toBeGreaterThan(0);
+    expect(feature?.decided).toBe("undecided");
+    expect((feature?.unmet as string[]).length).toBeGreaterThan(0);
   });
 
   test("GET proposals: classified path shows region badge in paths", async () => {
-    const { body } = await regionReq(
-      "GET",
-      `/api/v1/graphs/${regionGraphId}/git/proposals`
-    );
+    const { body } = await regionReq("GET", `/api/v1/graphs/${regionGraphId}/git/proposals`);
     const b = body as { proposals: Array<Record<string, unknown>> };
     const feature = b.proposals.find((p) => p.sha === regionFeatureSha);
     expect(feature).toBeDefined();
-    const paths = feature!.paths as Array<{ path: string; regions: string[]; indexed: boolean }>;
+    const paths = feature?.paths as Array<{ path: string; regions: string[]; indexed: boolean }>;
     const secretPath = paths.find((p) => p.path === "classified/secret.rs");
     expect(secretPath, "classified/secret.rs not in paths").toBeDefined();
     // The region badge should show the region rule name
-    expect(secretPath!.regions).toContain("security-critical-region");
+    expect(secretPath?.regions).toContain("security-critical-region");
     // The path is indexed (SourceFile node was created)
-    expect(secretPath!.indexed).toBe(true);
+    expect(secretPath?.indexed).toBe(true);
   });
 
   test("POST decide: approve with reviewer → outcome approved", async () => {
@@ -861,23 +872,20 @@ rules:
   });
 
   test("git notes ref updated in repo after decide", () => {
-    const note = execFileSync(
-      "git",
-      ["notes", "--ref=allod-decisions", "show", regionFeatureSha],
-      { cwd: regionRepoDir }
-    ).toString().trim();
+    const note = execFileSync("git", ["notes", "--ref=allod-decisions", "show", regionFeatureSha], {
+      cwd: regionRepoDir,
+    })
+      .toString()
+      .trim();
     expect(note.length).toBeGreaterThan(0);
   });
 
   test("re-list shows approved with empty unmet after decide", async () => {
-    const { body } = await regionReq(
-      "GET",
-      `/api/v1/graphs/${regionGraphId}/git/proposals`
-    );
+    const { body } = await regionReq("GET", `/api/v1/graphs/${regionGraphId}/git/proposals`);
     const b = body as { proposals: Array<Record<string, unknown>> };
     const feature = b.proposals.find((p) => p.sha === regionFeatureSha);
     expect(feature).toBeDefined();
-    expect(feature!.decided).toBe("approved");
-    expect((feature!.unmet as string[]).length).toBe(0);
+    expect(feature?.decided).toBe("approved");
+    expect((feature?.unmet as string[]).length).toBe(0);
   });
 });

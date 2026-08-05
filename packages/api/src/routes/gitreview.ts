@@ -7,17 +7,17 @@
  * Review artifacts are written through the existing commit path.
  */
 
+import { basename } from "node:path";
 import {
-  listGitProposals,
-  gitProposal,
-  decideGit,
   KeyMissingError,
+  decideGit,
+  gitProposal,
+  listGitProposals,
   listReviewsForSha,
   pushNotes,
 } from "@freehold/core";
 import { withGraph } from "@freehold/core";
 import { Hono } from "hono";
-import { basename } from "node:path";
 import { z } from "zod";
 import type { AppEnv } from "../types.js";
 
@@ -200,7 +200,7 @@ gitreviewRouter.post("/git/proposals/:sha/reviews", async (c) => {
   let reviewStatus: "saved" | "pending" = "pending";
 
   const reviewAdmission = await withGraph(fh.graph, async () =>
-    (fh.graph as any).commit(by, `Review ${sha}`, [reviewOp], [], true)
+    fh.graph.commit(by, `Review ${sha}`, [reviewOp], [], true)
   );
 
   if (reviewAdmission && typeof reviewAdmission === "object") {
@@ -235,7 +235,7 @@ gitreviewRouter.post("/git/proposals/:sha/reviews", async (c) => {
 
     // Commit the comment node
     await withGraph(fh.graph, async () =>
-      (fh.graph as any).commit(by, `ReviewComment for ${sha}`, [commentOp], [], true)
+      fh.graph.commit(by, `ReviewComment for ${sha}`, [commentOp], [], true)
     );
 
     // Commit the part_of edge (comment → review)
@@ -251,7 +251,7 @@ gitreviewRouter.post("/git/proposals/:sha/reviews", async (c) => {
     };
 
     await withGraph(fh.graph, async () =>
-      (fh.graph as any).commit(by, `part_of edge for comment ${commentId}`, [edgeOp], [], true)
+      fh.graph.commit(by, `part_of edge for comment ${commentId}`, [edgeOp], [], true)
     );
   }
 

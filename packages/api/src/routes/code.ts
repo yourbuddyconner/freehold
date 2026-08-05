@@ -1,6 +1,6 @@
+import { basename } from "node:path";
 import { codeFile, codeItem, codeNeighborhood, codeRegions, codeTree } from "@freehold/core";
 import { Hono } from "hono";
-import { basename } from "node:path";
 import type { AppEnv } from "../types.js";
 
 export const codeRouter = new Hono<AppEnv>();

@@ -1,5 +1,5 @@
-import { useState } from "react";
 import { Link, createRoute } from "@tanstack/react-router";
+import { useState } from "react";
 import { useClassify, useCodeItem } from "~/lib/hooks";
 import { Route as RootRoute } from "./__root";
 
@@ -158,9 +158,7 @@ export function CodeItemPage({ nodeId }: { nodeId?: string }) {
             </span>
           ))}
         </div>
-        {item.signature && (
-          <p className="font-mono text-xs text-(--fg-muted)">{item.signature}</p>
-        )}
+        {item.signature && <p className="font-mono text-xs text-(--fg-muted)">{item.signature}</p>}
         {item.filePath && (
           <Link
             to="/code/file"

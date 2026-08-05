@@ -110,10 +110,7 @@ async function indexRows(freehold: Freehold, cap: number): Promise<IndexRow[]> {
  * derived title, approval, author, updated time, and taxonomy terms —
  * all from the index.
  */
-export async function memoryIndex(
-  freehold: Freehold,
-  cap = 5000
-): Promise<MemoryIndexEntry[]> {
+export async function memoryIndex(freehold: Freehold, cap = 5000): Promise<MemoryIndexEntry[]> {
   const graphId = freehold.graphId;
   const rows = await indexRows(freehold, cap);
   const knownIds = new Set(rows.map((r) => r.id));
@@ -186,10 +183,7 @@ export async function memoryIndex(
  * endpoints fall outside the (capped) node set are dropped. `truncated`
  * reports whether the node cap cut the listing short.
  */
-export async function memoryGraph(
-  freehold: Freehold,
-  nodeCap = 2000
-): Promise<MemoryGraphView> {
+export async function memoryGraph(freehold: Freehold, nodeCap = 2000): Promise<MemoryGraphView> {
   const graphId = freehold.graphId;
   const rows = await indexRows(freehold, nodeCap);
   const truncated = rows.length >= nodeCap;

@@ -17,18 +17,19 @@
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import type { AllodGraph } from "@allod/core";
 import {
   GraphManager,
+  approve,
   createGraph,
+  describeSchema,
   hashEmbedder,
+  installOntology,
   loadConfig,
   syncIndex,
-  approve,
-  installOntology,
-  describeSchema,
 } from "@freehold/core";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { createApp } from "../src/app.js";
@@ -42,7 +43,7 @@ function makeTempDir(prefix: string): string {
 }
 
 function assetYaml(name: string): string {
-  const url = new URL("../../core/assets/" + name, import.meta.url);
+  const url = new URL(`../../core/assets/${name}`, import.meta.url);
   return readFileSync(fileURLToPath(url), "utf-8");
 }
 
@@ -71,17 +72,17 @@ function stripOntologyPreamble(yaml: string): string {
 }
 
 async function commitAndApprove(
-  graph: any,
+  graph: AllodGraph,
   author: string,
   intent: string,
   ops: unknown[]
 ): Promise<{ status: "saved" | "pending"; hash: string }> {
   const raw = await graph.commit(author, intent, ops, [], true);
   if (raw && typeof raw === "object" && "Admitted" in raw) {
-    return { status: "saved", hash: (raw as any).Admitted.hash };
+    return { status: "saved", hash: (raw as { Admitted: { hash: string } }).Admitted.hash };
   }
   if (raw && typeof raw === "object" && "Held" in raw) {
-    const hash: string = (raw as any).Held.hash;
+    const hash: string = (raw as { Held: { hash: string } }).Held.hash;
     const decision = await approve(graph, "owner", hash);
     expect(decision.status, `approval of '${intent}' failed`).toBe("approved");
     return { status: "pending", hash };
@@ -234,9 +235,13 @@ rules:
         - role: owner
           quorum: 1
 `;
-  const policyResult = await (fh.graph as any).install_policy(policyYaml, "owner");
+  const policyResult = await fh.graph.install_policy(policyYaml, "owner");
   if (policyResult && typeof policyResult === "object" && "Held" in policyResult) {
-    const d = await approve(fh.graph, "owner", (policyResult as any).Held.hash);
+    const d = await approve(
+      fh.graph,
+      "owner",
+      (policyResult as { Held: { hash: string } }).Held.hash
+    );
     expect(d.status, "policy approval failed").toBe("approved");
   }
 
@@ -337,10 +342,7 @@ describe("GET /api/v1/graphs/:id/code/file on repo graph", () => {
 
 describe("GET /api/v1/graphs/:id/code/item/:nodeId on repo graph", () => {
   test("returns 200 with CodeItemView for an indexed node", async () => {
-    const { status, body } = await req(
-      "GET",
-      `/api/v1/graphs/${repoGraphId}/code/item/${fnAId}`
-    );
+    const { status, body } = await req("GET", `/api/v1/graphs/${repoGraphId}/code/item/${fnAId}`);
     expect(status).toBe(200);
     const b = body as {
       nodeId: string;
@@ -380,9 +382,12 @@ describe("GET /api/v1/graphs/:id/code/regions on repo graph", () => {
     expect(status).toBe(200);
     const b = body as { rules: Array<{ rule: string; paths: string[] }> };
     const srcRule = b.rules.find((r) => r.rule === "repo-src-rule");
-    expect(srcRule, "repo-src-rule not found — repoName was not resolved from dir basename").toBeDefined();
+    expect(
+      srcRule,
+      "repo-src-rule not found — repoName was not resolved from dir basename"
+    ).toBeDefined();
     // src/lib.rs matches the path pattern src/**
-    expect(srcRule!.paths).toContain("src/lib.rs");
+    expect(srcRule?.paths).toContain("src/lib.rs");
   });
 
   test("repo-src-rule does not include unmatched paths", async () => {
@@ -392,8 +397,9 @@ describe("GET /api/v1/graphs/:id/code/regions on repo graph", () => {
     // The only indexed file is src/lib.rs — no file outside src/ exists in the fixture
     const srcRule = b.rules.find((r) => r.rule === "repo-src-rule");
     expect(srcRule).toBeDefined();
+    if (!srcRule) return;
     // All returned paths should start with src/
-    for (const p of srcRule!.paths) {
+    for (const p of srcRule.paths) {
       expect(p.startsWith("src/"), `unexpected path outside src/: ${p}`).toBe(true);
     }
   });
@@ -423,10 +429,7 @@ describe("GET /api/v1/graphs/:id/code/neighborhood on repo graph", () => {
   });
 
   test("returns 400 when path is missing", async () => {
-    const { status } = await req(
-      "GET",
-      `/api/v1/graphs/${repoGraphId}/code/neighborhood`
-    );
+    const { status } = await req("GET", `/api/v1/graphs/${repoGraphId}/code/neighborhood`);
     expect(status).toBe(400);
   });
 

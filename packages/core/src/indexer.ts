@@ -394,10 +394,7 @@ export async function syncIndex(freehold: Freehold, embedder: Embedder): Promise
  * graph's rows are removed; other graphs' data is unaffected.
  * Deleting from objects cascades to embeddings via the FK ON DELETE CASCADE.
  */
-export async function reindex(
-  freehold: Freehold,
-  embedder: Embedder
-): Promise<void> {
+export async function reindex(freehold: Freehold, embedder: Embedder): Promise<void> {
   const { pg } = freehold.db;
   const graphId = freehold.graphId;
   // DELETE … WHERE graph_id = $1 is graph-scoped; other graphs are untouched.

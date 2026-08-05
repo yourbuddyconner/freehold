@@ -1,9 +1,15 @@
-import { describe, expect, it, afterEach } from "vitest";
-import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { createPublicKey, verify as nodeVerify } from "node:crypto";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createPublicKey, verify as nodeVerify } from "node:crypto";
-import { graphDirComponent, resolveKey, signPayload, publicHex, isKeychainNotFound } from "../src/keys.js";
+import { afterEach, describe, expect, it } from "vitest";
+import {
+  graphDirComponent,
+  isKeychainNotFound,
+  publicHex,
+  resolveKey,
+  signPayload,
+} from "../src/keys.js";
 
 // RFC 8032 test vector secret — same one allod's parity suite uses.
 const SECRET = "9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60";
@@ -11,15 +17,17 @@ const PUBLIC = "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a
 
 function writeKeyYaml(dir: string, principal: string) {
   mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, `${principal}.yaml`),
-    `name: ${principal}\nkey_id: x\nalgorithm: ed25519\npublic: ${PUBLIC}\nsecret: ${SECRET}\n`);
+  writeFileSync(
+    join(dir, `${principal}.yaml`),
+    `name: ${principal}\nkey_id: x\nalgorithm: ed25519\npublic: ${PUBLIC}\nsecret: ${SECRET}\n`
+  );
 }
 
 // Save/restore ALLOD_KEYS_DIR to avoid leaking across tests
 const origKeysDir = process.env.ALLOD_KEYS_DIR;
 afterEach(() => {
   if (origKeysDir === undefined) {
-    delete process.env.ALLOD_KEYS_DIR;
+    process.env.ALLOD_KEYS_DIR = undefined;
   } else {
     process.env.ALLOD_KEYS_DIR = origKeysDir;
   }
@@ -58,9 +66,12 @@ describe("keys.ts", () => {
       Buffer.from("302a300506032b6570032100", "hex"),
       Buffer.from(PUBLIC, "hex"),
     ]);
-    const ok = nodeVerify(null, Buffer.from("sha256:00ff", "utf8"),
+    const ok = nodeVerify(
+      null,
+      Buffer.from("sha256:00ff", "utf8"),
       createPublicKey({ key: spki, format: "der", type: "spki" }),
-      Buffer.from(sig.slice("sig:ed25519:".length), "hex"));
+      Buffer.from(sig.slice("sig:ed25519:".length), "hex")
+    );
     expect(ok).toBe(true);
     expect(await publicHex(k, "sha256:feed")).toBe(PUBLIC);
 

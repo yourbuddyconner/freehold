@@ -11,29 +11,25 @@
  *     to any policy role — it can sign but satisfaction remains incomplete
  */
 
-import { execFileSync, execFile } from "node:child_process";
-import { mkdtempSync, readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
+import { execFile, execFileSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
+import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { tmpdir, homedir } from "node:os";
-import { join, basename } from "node:path";
 import { promisify } from "node:util";
-import { describe, expect, test, beforeAll, afterAll } from "vitest";
+import type { AllodGraph } from "@allod/core";
+import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { createGraph, openGraph } from "../src/allod.js";
-import { openFreehold, Freehold } from "../src/graphs.js";
 import { openDb } from "../src/db.js";
-import { syncIndex } from "../src/indexer.js";
 import { hashEmbedder } from "../src/embed.js";
-import { approve } from "../src/governance.js";
-import { installOntology } from "../src/schema.js";
-import { graphDirComponent } from "../src/keys.js";
 import { branchHeads } from "../src/git.js";
-import {
-  listGitProposals,
-  gitProposal,
-  decideGit,
-  KeyMissingError,
-} from "../src/gitreview.js";
 import { readDecisions } from "../src/git.js";
+import { KeyMissingError, decideGit, gitProposal, listGitProposals } from "../src/gitreview.js";
+import { approve } from "../src/governance.js";
+import { type Freehold, openFreehold } from "../src/graphs.js";
+import { syncIndex } from "../src/indexer.js";
+import { graphDirComponent } from "../src/keys.js";
+import { installOntology } from "../src/schema.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -58,7 +54,10 @@ function stripOntologyPreamble(yaml: string): string {
   let inImports = false;
   for (let i = start; i < lines.length; i++) {
     const line = lines[i];
-    if (/^imports:/.test(line)) { inImports = true; continue; }
+    if (/^imports:/.test(line)) {
+      inImports = true;
+      continue;
+    }
     if (inImports && (line.startsWith(" ") || line.startsWith("\t") || line === "")) {
       if (line === "") inImports = false;
       continue;
@@ -70,17 +69,17 @@ function stripOntologyPreamble(yaml: string): string {
 }
 
 async function commitAndApprove(
-  graph: any,
+  graph: AllodGraph,
   author: string,
   intent: string,
   ops: unknown[]
 ): Promise<{ status: "saved" | "pending"; hash: string }> {
   const raw = await graph.commit(author, intent, ops, [], true);
   if (raw && typeof raw === "object" && "Admitted" in raw) {
-    return { status: "saved", hash: (raw as any).Admitted.hash };
+    return { status: "saved", hash: (raw as { Admitted: { hash: string } }).Admitted.hash };
   }
   if (raw && typeof raw === "object" && "Held" in raw) {
-    const hash: string = (raw as any).Held.hash;
+    const hash: string = (raw as { Held: { hash: string } }).Held.hash;
     const decision = await approve(graph, "owner", hash);
     expect(decision.status, `approval of '${intent}' failed`).toBe("approved");
     return { status: "pending", hash };
@@ -91,14 +90,14 @@ async function commitAndApprove(
 // ── Fixture state ──────────────────────────────────────────────────────────
 
 let fh: Freehold;
-let repoDir: string;   // git repo (also the graphDir since createGraph puts .allod/ here)
+let repoDir: string; // git repo (also the graphDir since createGraph puts .allod/ here)
 let mainSha: string;
 let featureSha: string;
 let featureRef: string;
 let pgDir: string;
-let keysDir: string;   // our ALLOD_KEYS_DIR override
+let keysDir: string; // our ALLOD_KEYS_DIR override
 let allodGraphId: string;
-let bareRemoteDir: string;  // for push tests
+let bareRemoteDir: string; // for push tests
 
 const origKeysDir = process.env.ALLOD_KEYS_DIR;
 
@@ -176,7 +175,7 @@ beforeAll(async () => {
 
   // ── Add a `reviewer` principal ─────────────────────────────────────────
   // principal_add generates a keypair inside the graph and persists to .allod/keys/reviewer.yaml
-  await (fh.graph as any).principal_add("reviewer", "agent", "owner");
+  await fh.graph.principal_add("reviewer", "agent", "owner");
 
   // Read the reviewer's secret from the graph store and write to ALLOD_KEYS_DIR
   const reviewerKeyPath = join(repoDir, ".allod", "keys", "reviewer.yaml");
@@ -210,9 +209,13 @@ rules:
         - role: reviewer
           quorum: 1
 `;
-  const policyResult = await (fh.graph as any).install_policy(policyYaml, "owner");
+  const policyResult = await fh.graph.install_policy(policyYaml, "owner");
   if (policyResult && typeof policyResult === "object" && "Held" in policyResult) {
-    const d = await approve(fh.graph, "owner", (policyResult as any).Held.hash);
+    const d = await approve(
+      fh.graph,
+      "owner",
+      (policyResult as { Held: { hash: string } }).Held.hash
+    );
     expect(d.status).toBe("approved");
   }
 
@@ -229,7 +232,7 @@ rules:
 
 afterAll(() => {
   if (origKeysDir === undefined) {
-    delete process.env.ALLOD_KEYS_DIR;
+    process.env.ALLOD_KEYS_DIR = undefined;
   } else {
     process.env.ALLOD_KEYS_DIR = origKeysDir;
   }
@@ -246,8 +249,8 @@ describe("branchHeads", () => {
 
     const main = heads.find((h) => h.ref === "refs/heads/main");
     const feature = heads.find((h) => h.ref === "refs/heads/feature");
-    expect(main!.sha).toBe(mainSha);
-    expect(feature!.sha).toBe(featureSha);
+    expect(main?.sha).toBe(mainSha);
+    expect(feature?.sha).toBe(featureSha);
   });
 });
 
@@ -265,38 +268,38 @@ describe("listGitProposals", () => {
     const proposals = await listGitProposals(fh);
     const feature = proposals.find((p) => p.sha === featureSha);
     expect(feature, "feature proposal not found").toBeDefined();
-    expect(feature!.matched).toContain("src-review");
-    expect(feature!.unmet.length).toBeGreaterThan(0);
-    expect(feature!.decided).toBe("undecided");
+    expect(feature?.matched).toContain("src-review");
+    expect(feature?.unmet.length).toBeGreaterThan(0);
+    expect(feature?.decided).toBe("undecided");
   });
 
   test("feature proposal paths include src/lib.rs with indexed:true", async () => {
     const proposals = await listGitProposals(fh);
     const feature = proposals.find((p) => p.sha === featureSha);
     expect(feature).toBeDefined();
-    const libPath = feature!.paths.find((p) => p.path === "src/lib.rs");
+    const libPath = feature?.paths.find((p) => p.path === "src/lib.rs");
     expect(libPath, "src/lib.rs not found in paths").toBeDefined();
-    expect(libPath!.indexed).toBe(true);
+    expect(libPath?.indexed).toBe(true);
   });
 
   test("feature proposal paths include region badge for in-region path", async () => {
     const proposals = await listGitProposals(fh);
     const feature = proposals.find((p) => p.sha === featureSha);
     expect(feature).toBeDefined();
-    const libPath = feature!.paths.find((p) => p.path === "src/lib.rs");
+    const libPath = feature?.paths.find((p) => p.path === "src/lib.rs");
     expect(libPath).toBeDefined();
     // src/lib.rs is matched by src-review rule so its regions should be non-empty
-    expect(Array.isArray(libPath!.regions)).toBe(true);
-    expect(libPath!.regions.length).toBeGreaterThan(0);
+    expect(Array.isArray(libPath?.regions)).toBe(true);
+    expect(libPath?.regions.length).toBeGreaterThan(0);
   });
 
   test("main commit (README only) has no policy match, decided undecided", async () => {
     const proposals = await listGitProposals(fh);
     const main = proposals.find((p) => p.sha === mainSha);
     expect(main, "main proposal not found").toBeDefined();
-    expect(main!.matched).toHaveLength(0);
-    expect(main!.unmet).toHaveLength(0);
-    expect(main!.decided).toBe("undecided");
+    expect(main?.matched).toHaveLength(0);
+    expect(main?.unmet).toHaveLength(0);
+    expect(main?.decided).toBe("undecided");
   });
 });
 
@@ -311,8 +314,8 @@ describe("gitProposal", () => {
   test("returns correct proposal for feature sha", async () => {
     const p = await gitProposal(fh, featureSha);
     expect(p).not.toBeNull();
-    expect(p!.sha).toBe(featureSha);
-    expect(p!.matched).toContain("src-review");
+    expect(p?.sha).toBe(featureSha);
+    expect(p?.matched).toContain("src-review");
   });
 });
 
@@ -357,8 +360,8 @@ describe("decideGit — approve with reviewer (role-bound)", () => {
     const proposals = await listGitProposals(fh);
     const feature = proposals.find((p) => p.sha === featureSha);
     expect(feature).toBeDefined();
-    expect(feature!.decided).toBe("approved");
-    expect(feature!.unmet).toHaveLength(0);
+    expect(feature?.decided).toBe("approved");
+    expect(feature?.unmet).toHaveLength(0);
   });
 });
 
@@ -416,10 +419,7 @@ describe("decideGit — missing key throws KeyMissingError", () => {
         originRemote: null,
       })
     ).rejects.toSatisfy((err: unknown) => {
-      return (
-        err instanceof Error &&
-        (err as any).code === "key-missing"
-      );
+      return err instanceof Error && (err as Error & { code?: string }).code === "key-missing";
     });
   });
 });
@@ -431,7 +431,9 @@ describe("decideGit — reject path", () => {
     writeFileSync(join(repoDir, "src", "reject_me.rs"), "// reject");
     execFileSync("git", ["add", "src/reject_me.rs"], { cwd: repoDir });
     execFileSync("git", ["commit", "-m", "add src/reject_me.rs"], { cwd: repoDir });
-    const rejectSha = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repoDir }).toString().trim();
+    const rejectSha = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repoDir })
+      .toString()
+      .trim();
     execFileSync("git", ["checkout", "main"], { cwd: repoDir });
 
     const result = await decideGit(fh, rejectSha, "reject", "reviewer", {
@@ -450,7 +452,7 @@ describe("decideGit — reject path", () => {
     // Single sha query shows rejected
     const p = await gitProposal(fh, rejectSha);
     expect(p).not.toBeNull();
-    expect(p!.decided).toBe("rejected");
+    expect(p?.decided).toBe("rejected");
   });
 });
 
@@ -476,7 +478,9 @@ describe("decideGit — push behavior", () => {
     }
 
     // Verify the notes ref exists on the bare remote
-    const remoteRefs = execFileSync("git", ["ls-remote", bareRemoteDir], { cwd: repoDir }).toString();
+    const remoteRefs = execFileSync("git", ["ls-remote", bareRemoteDir], {
+      cwd: repoDir,
+    }).toString();
     expect(remoteRefs).toContain("refs/notes/allod-decisions");
   });
 

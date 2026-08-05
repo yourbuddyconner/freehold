@@ -1,6 +1,12 @@
+import type {
+  CodeFileView,
+  CodeItemView,
+  CodeNeighborhood,
+  RegionRule,
+  SessionGraphEntry,
+} from "@freehold/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import type { CodeFileView, CodeItemView, CodeNeighborhood, RegionRule, SessionGraphEntry } from "@freehold/client";
 import { GRAPH_STORAGE_KEY, apiClient, setActiveGraph } from "./api";
 
 /** Pending proposals (the Inbox). */
@@ -207,7 +213,7 @@ export function useCodeTree(enabled = true) {
 export function useCodeFile(path: string | undefined) {
   return useQuery({
     queryKey: ["code-file", path],
-    queryFn: () => apiClient.codeFile(path!),
+    queryFn: () => apiClient.codeFile(path ?? ""),
     enabled: !!path,
     retry: false,
   });
@@ -217,7 +223,7 @@ export function useCodeFile(path: string | undefined) {
 export function useCodeItem(nodeId: string | undefined) {
   return useQuery({
     queryKey: ["code-item", nodeId],
-    queryFn: () => apiClient.codeItem(nodeId!),
+    queryFn: () => apiClient.codeItem(nodeId ?? ""),
     enabled: !!nodeId,
     retry: false,
   });
@@ -236,7 +242,7 @@ export function useCodeRegions(enabled = true) {
 export function useCodeNeighborhood(path: string | undefined) {
   return useQuery({
     queryKey: ["code-neighborhood", path],
-    queryFn: () => apiClient.codeNeighborhood(path!),
+    queryFn: () => apiClient.codeNeighborhood(path ?? ""),
     enabled: !!path,
     retry: false,
   });
@@ -255,7 +261,7 @@ export function useGitProposals(enabled = true) {
 export function useGitProposal(sha: string | undefined) {
   return useQuery({
     queryKey: ["git-proposal", sha],
-    queryFn: () => apiClient.getGitProposal(sha!),
+    queryFn: () => apiClient.getGitProposal(sha ?? ""),
     enabled: !!sha,
     retry: false,
   });
@@ -290,11 +296,17 @@ export function useGitHubBlobUrl(filePath: string | undefined): string | null {
   // Parse https://github.com/org/repo.git or git@github.com:org/repo.git
   const httpsMatch = remote.match(/https?:\/\/github\.com\/([^/]+\/[^/]+?)(?:\.git)?$/);
   const sshMatch = remote.match(/git@github\.com:([^/]+\/[^/]+?)(?:\.git)?$/);
-  const repoPath = (httpsMatch?.[1] ?? sshMatch?.[1]) ?? null;
+  const repoPath = httpsMatch?.[1] ?? sshMatch?.[1] ?? null;
   if (!repoPath) return null;
   return `https://github.com/${repoPath}/blob/HEAD/${filePath}`;
 }
 
 // Re-export types for convenience in route components
 export type { CodeFileView, CodeItemView, CodeNeighborhood, RegionRule };
-export type { GitProposal, DecideResult, PostReviewBody, PostReviewResult, ReviewEntry } from "@freehold/client";
+export type {
+  GitProposal,
+  DecideResult,
+  PostReviewBody,
+  PostReviewResult,
+  ReviewEntry,
+} from "@freehold/client";

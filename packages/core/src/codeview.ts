@@ -167,7 +167,10 @@ export async function codeTree(fh: Freehold): Promise<CodeTreeNode[]> {
         dir = { name: segment, path: pathSoFar, kind: "dir", terms: [], children: [] };
         current.push(dir);
       }
-      current = dir.children!;
+      if (!dir.children) {
+        dir.children = [];
+      }
+      current = dir.children;
     }
     current.push(leaf);
   }
@@ -266,9 +269,7 @@ export async function codeItem(fh: Freehold, nodeId: string): Promise<CodeItemVi
   const edges = await queryEdges(fh);
 
   // Find the file that declares this item (reverse declares edge)
-  const declaresEdge = edges.find(
-    (e) => edgeBaseType(e.type) === "declares" && e.to_id === nodeId
-  );
+  const declaresEdge = edges.find((e) => edgeBaseType(e.type) === "declares" && e.to_id === nodeId);
   let filePath: string | undefined;
   if (declaresEdge) {
     const fileResult = await fh.db.pg.query<SourceFileRow>(
@@ -328,10 +329,7 @@ export async function codeItem(fh: Freehold, nodeId: string): Promise<CodeItemVi
 /**
  * The file node + its declared items + one hop of code/calls edges in/out.
  */
-export async function codeNeighborhood(
-  fh: Freehold,
-  path: string
-): Promise<CodeNeighborhood> {
+export async function codeNeighborhood(fh: Freehold, path: string): Promise<CodeNeighborhood> {
   const fileView = await codeFile(fh, path);
   if (!fileView) return { nodes: [], edges: [] };
 
@@ -404,9 +402,10 @@ export async function codeNeighborhood(
   }
 
   return {
-    nodes: Array.from(allNodeIds)
-      .filter((id) => nodeMap.has(id))
-      .map((id) => nodeMap.get(id)!),
+    nodes: Array.from(allNodeIds).flatMap((id) => {
+      const node = nodeMap.get(id);
+      return node ? [node] : [];
+    }),
     edges: includedEdges.map((e) => ({
       id: e.id,
       from: e.from_id,
@@ -432,10 +431,7 @@ const regionsCache = new Map<string, { key: string; rules: RegionRule[] }>();
  * @param repoName - The repository name passed to git_checklist (e.g. "allod").
  *   The API layer should resolve this from the graph entry basename or config.
  */
-export async function codeRegions(
-  fh: Freehold,
-  repoName = "repo"
-): Promise<RegionRule[]> {
+export async function codeRegions(fh: Freehold, repoName = "repo"): Promise<RegionRule[]> {
   // Determine the log head for cache key
   // log() exists on the wasm instance but is absent from the re-exported TS type
   const logLength = await withGraph(fh.graph, () => {
@@ -459,10 +455,7 @@ export async function codeRegions(
   }
 
   // For each path call git_checklist and collect matched rules
-  const ruleToInfo = new Map<
-    string,
-    { region?: string; reviewers: unknown; paths: string[] }
-  >();
+  const ruleToInfo = new Map<string, { region?: string; reviewers: unknown; paths: string[] }>();
 
   for (const p of paths) {
     let matched: string[] = [];
@@ -501,17 +494,14 @@ export async function codeRegions(
     const checklist: unknown[] = Array.isArray(
       (checklistResult as { checklist?: unknown })?.checklist
     )
-      ? ((checklistResult as { checklist: unknown[] }).checklist)
+      ? (checklistResult as { checklist: unknown[] }).checklist
       : [];
 
     for (const ruleName of matched) {
       if (!ruleToInfo.has(ruleName)) {
         // Find rule info from checklist entries
         const entry = checklist.find(
-          (c) =>
-            c &&
-            typeof c === "object" &&
-            (c as Record<string, unknown>).name === ruleName
+          (c) => c && typeof c === "object" && (c as Record<string, unknown>).name === ruleName
         ) as Record<string, unknown> | undefined;
 
         ruleToInfo.set(ruleName, {
@@ -520,18 +510,16 @@ export async function codeRegions(
           paths: [],
         });
       }
-      ruleToInfo.get(ruleName)!.paths.push(p);
+      ruleToInfo.get(ruleName)?.paths.push(p);
     }
   }
 
-  const result: RegionRule[] = Array.from(ruleToInfo.entries()).map(
-    ([rule, info]) => ({
-      rule,
-      region: info.region,
-      reviewers: info.reviewers,
-      paths: info.paths,
-    })
-  );
+  const result: RegionRule[] = Array.from(ruleToInfo.entries()).map(([rule, info]) => ({
+    rule,
+    region: info.region,
+    reviewers: info.reviewers,
+    paths: info.paths,
+  }));
 
   regionsCache.set(fh.graphId, { key: cacheKey, rules: result });
   return result;

@@ -14,22 +14,22 @@
  */
 
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
-import { Hono } from "hono";
-import { z } from "zod";
 import {
-  getConnector,
-  setConnector,
-  discoverCredential,
-  parseOriginRemote,
-  makeTokenClient,
-  makeAppClient,
-  clearAppClientCache,
-  pollOnce,
-  deriveEncKey,
-  getSecret,
   buildConnectorManifest,
+  clearAppClientCache,
+  deriveEncKey,
+  discoverCredential,
+  getConnector,
+  getSecret,
+  makeAppClient,
+  makeTokenClient,
+  parseOriginRemote,
+  pollOnce,
+  setConnector,
 } from "@freehold/core";
 import type { GithubClient } from "@freehold/core";
+import { Hono } from "hono";
+import { z } from "zod";
 import type { AppEnv } from "../types.js";
 
 // ── HMAC state helpers (manifest flow) ───────────────────────────────────────
@@ -111,8 +111,7 @@ function parseManifestConversion(payload: unknown): ParsedConversion | null {
   if (typeof p.pem !== "string") return null;
   if (typeof p.client_secret !== "string") return null;
   // webhook_secret may be null for apps without a public URL
-  const webhookSecret =
-    typeof p.webhook_secret === "string" ? p.webhook_secret : "";
+  const webhookSecret = typeof p.webhook_secret === "string" ? p.webhook_secret : "";
   return {
     appId: String(p.id),
     appSlug: p.slug,
@@ -150,7 +149,7 @@ connectorRouter.get("/connector", async (c) => {
   let lastErrors: string[] | undefined;
   try {
     const cursor = await fh.db.pg.query<{ last_poll_at: string | null; state: unknown }>(
-      `SELECT last_poll_at, state FROM connector_cursor WHERE graph_id = $1`,
+      "SELECT last_poll_at, state FROM connector_cursor WHERE graph_id = $1",
       [fh.graphId]
     );
     if (cursor.rows.length > 0) {
@@ -230,10 +229,7 @@ connectorRouter.put("/connector", async (c) => {
     const existingCfg = await getConnector(fh.db, fh.graphId);
     const resolvedPublicUrl = publicUrl || existingCfg?.publicUrl;
     if (webhooksEnabled && !resolvedPublicUrl) {
-      return c.json(
-        { error: "webhooks require a public URL", code: "missing-public-url" },
-        400
-      );
+      return c.json({ error: "webhooks require a public URL", code: "missing-public-url" }, 400);
     }
 
     if (!existingCfg) {
@@ -267,10 +263,7 @@ connectorRouter.put("/connector", async (c) => {
   // Discover credential via gh auth token / git credential fill
   const token = await discoverCredential();
   if (!token) {
-    return c.json(
-      { error: "no credential found", code: "no-credential" },
-      409
-    );
+    return c.json({ error: "no credential found", code: "no-credential" }, 409);
   }
 
   // Parse originRemote from manager entry
@@ -293,10 +286,7 @@ connectorRouter.put("/connector", async (c) => {
 
   // Validate webhooksEnabled requires publicUrl
   if (webhooksEnabled && !publicUrl) {
-    return c.json(
-      { error: "webhooks require a public URL", code: "missing-public-url" },
-      400
-    );
+    return c.json({ error: "webhooks require a public URL", code: "missing-public-url" }, 400);
   }
 
   const cfg = {
@@ -354,10 +344,7 @@ connectorRouter.post("/connector/poll", async (c) => {
   } else if (cfg.mode === "app") {
     client = await makeAppClient(fh, encKey, fetchFn);
     if (!client) {
-      return c.json(
-        { error: "app mode not fully configured; set installationId first" },
-        409
-      );
+      return c.json({ error: "app mode not fully configured; set installationId first" }, 409);
     }
   } else {
     return c.json({ error: "unsupported connector mode" }, 409);
@@ -377,26 +364,11 @@ connectorRouter.delete("/connector", async (c) => {
 
   // Remove all connector state for this graph
   try {
-    await fh.db.pg.query(
-      `DELETE FROM connector_config WHERE graph_id = $1`,
-      [fh.graphId]
-    );
-    await fh.db.pg.query(
-      `DELETE FROM connector_secrets WHERE graph_id = $1`,
-      [fh.graphId]
-    );
-    await fh.db.pg.query(
-      `DELETE FROM connector_cursor WHERE graph_id = $1`,
-      [fh.graphId]
-    );
-    await fh.db.pg.query(
-      `DELETE FROM check_status WHERE graph_id = $1`,
-      [fh.graphId]
-    );
-    await fh.db.pg.query(
-      `DELETE FROM connector_soft_tombstone WHERE graph_id = $1`,
-      [fh.graphId]
-    );
+    await fh.db.pg.query("DELETE FROM connector_config WHERE graph_id = $1", [fh.graphId]);
+    await fh.db.pg.query("DELETE FROM connector_secrets WHERE graph_id = $1", [fh.graphId]);
+    await fh.db.pg.query("DELETE FROM connector_cursor WHERE graph_id = $1", [fh.graphId]);
+    await fh.db.pg.query("DELETE FROM check_status WHERE graph_id = $1", [fh.graphId]);
+    await fh.db.pg.query("DELETE FROM connector_soft_tombstone WHERE graph_id = $1", [fh.graphId]);
   } catch {
     // Table may not exist — that's fine; just return success.
   }
@@ -486,7 +458,10 @@ connectorCallbackRouter.get("/connector/app/callback", async (c) => {
   }
 
   // Exchange code for app credentials via GitHub API
-  const githubApiBase = (process.env.GITHUB_API_BASE ?? "https://api.github.com").replace(/\/$/, "");
+  const githubApiBase = (process.env.GITHUB_API_BASE ?? "https://api.github.com").replace(
+    /\/$/,
+    ""
+  );
   const conversionUrl = `${githubApiBase}/app-manifests/${encodeURIComponent(code)}/conversions`;
 
   const fetchFn = c.get("fetchFn") ?? fetch;

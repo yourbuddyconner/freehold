@@ -12,24 +12,19 @@
 
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, test, beforeAll } from "vitest";
+import { fileURLToPath } from "node:url";
+import type { AllodGraph } from "@allod/core";
+import { beforeAll, describe, expect, test } from "vitest";
 import { createGraph } from "../src/allod.js";
-import { openFreehold } from "../src/graphs.js";
+import { codeFile, codeItem, codeNeighborhood, codeRegions, codeTree } from "../src/codeview.js";
 import { openDb } from "../src/db.js";
-import { syncIndex } from "../src/indexer.js";
 import { hashEmbedder } from "../src/embed.js";
 import { approve } from "../src/governance.js";
+import { type Freehold, openFreehold } from "../src/graphs.js";
+import { syncIndex } from "../src/indexer.js";
 import { installOntology } from "../src/schema.js";
-import {
-  codeTree,
-  codeFile,
-  codeItem,
-  codeNeighborhood,
-  codeRegions,
-} from "../src/codeview.js";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -52,7 +47,10 @@ function stripOntologyPreamble(yaml: string): string {
   let inImports = false;
   for (let i = start; i < lines.length; i++) {
     const line = lines[i];
-    if (/^imports:/.test(line)) { inImports = true; continue; }
+    if (/^imports:/.test(line)) {
+      inImports = true;
+      continue;
+    }
     if (inImports && (line.startsWith(" ") || line.startsWith("\t") || line === "")) {
       if (line === "") inImports = false;
       continue;
@@ -64,17 +62,17 @@ function stripOntologyPreamble(yaml: string): string {
 }
 
 async function commitAndApprove(
-  graph: any,
+  graph: AllodGraph,
   author: string,
   intent: string,
   ops: unknown[]
 ): Promise<{ status: "saved" | "pending"; hash: string }> {
   const raw = await graph.commit(author, intent, ops, [], true);
   if (raw && typeof raw === "object" && "Admitted" in raw) {
-    return { status: "saved", hash: (raw as any).Admitted.hash };
+    return { status: "saved", hash: (raw as { Admitted: { hash: string } }).Admitted.hash };
   }
   if (raw && typeof raw === "object" && "Held" in raw) {
-    const hash: string = (raw as any).Held.hash;
+    const hash: string = (raw as { Held: { hash: string } }).Held.hash;
     const decision = await approve(graph, "owner", hash);
     expect(decision.status, `approval of '${intent}' failed`).toBe("approved");
     return { status: "pending", hash };
@@ -84,7 +82,7 @@ async function commitAndApprove(
 
 // ── Fixture ───────────────────────────────────────────────────────────────────
 
-let fh: any; // Freehold instance
+let fh: Freehold;
 let sfLibId: string;
 let sfHelperPathId: string;
 let fnAId: string;
@@ -157,7 +155,11 @@ beforeAll(async () => {
         kind: "node",
         id: sfHelperPathId,
         type: "code/SourceFile@1",
-        attributes: { path: "src/util/helper.rs", language: "rust", blob: "git:repo#abc:src/util/helper.rs" },
+        attributes: {
+          path: "src/util/helper.rs",
+          language: "rust",
+          blob: "git:repo#abc:src/util/helper.rs",
+        },
       },
     },
   ]);
@@ -235,18 +237,22 @@ beforeAll(async () => {
     - { name: security, parents: [] }
     - { name: "security/critical", parents: [security] }
 `;
-  const rawTaxResult = await (fh.graph as any).install_package(securityTaxonomyYaml, "owner");
+  const rawTaxResult = await fh.graph.install_package(securityTaxonomyYaml, "owner");
   if (rawTaxResult && typeof rawTaxResult === "object" && "Held" in rawTaxResult) {
-    const d = await approve(fh.graph, "owner", (rawTaxResult as any).Held.hash);
+    const d = await approve(
+      fh.graph,
+      "owner",
+      (rawTaxResult as { Held: { hash: string } }).Held.hash
+    );
     expect(d.status).toBe("approved");
   }
 
   // Classify fnA
-  const clsResult = await (fh.graph as any).classify(fnAId, "security/critical", "owner", "human-reviewed");
+  const clsResult = await fh.graph.classify(fnAId, "security/critical", "owner", "human-reviewed");
   // Under permissive policy or owner-admitted, this should be Admitted
   // If Held, approve it
   if (clsResult && typeof clsResult === "object" && "Held" in clsResult) {
-    const d = await approve(fh.graph, "owner", (clsResult as any).Held.hash);
+    const d = await approve(fh.graph, "owner", (clsResult as { Held: { hash: string } }).Held.hash);
     expect(d.status).toBe("approved");
   }
 
@@ -275,9 +281,13 @@ rules:
         - role: owner
           quorum: 1
 `;
-  const policyResult = await (fh.graph as any).install_policy(policyYaml, "owner");
+  const policyResult = await fh.graph.install_policy(policyYaml, "owner");
   if (policyResult && typeof policyResult === "object" && "Held" in policyResult) {
-    const d = await approve(fh.graph, "owner", (policyResult as any).Held.hash);
+    const d = await approve(
+      fh.graph,
+      "owner",
+      (policyResult as { Held: { hash: string } }).Held.hash
+    );
     expect(d.status).toBe("approved");
   }
 
@@ -295,17 +305,17 @@ describe("codeTree", () => {
     expect(srcDir, "src dir not found").toBeDefined();
 
     // src should contain lib.rs file and util dir
-    const libFile = srcDir!.children?.find((n) => n.name === "lib.rs" && n.kind === "file");
+    const libFile = srcDir?.children?.find((n) => n.name === "lib.rs" && n.kind === "file");
     expect(libFile, "src/lib.rs file not found").toBeDefined();
-    expect(libFile!.path).toBe("src/lib.rs");
-    expect(libFile!.language).toBe("rust");
+    expect(libFile?.path).toBe("src/lib.rs");
+    expect(libFile?.language).toBe("rust");
 
-    const utilDir = srcDir!.children?.find((n) => n.name === "util" && n.kind === "dir");
+    const utilDir = srcDir?.children?.find((n) => n.name === "util" && n.kind === "dir");
     expect(utilDir, "src/util dir not found").toBeDefined();
 
-    const helperFile = utilDir!.children?.find((n) => n.name === "helper.rs" && n.kind === "file");
+    const helperFile = utilDir?.children?.find((n) => n.name === "helper.rs" && n.kind === "file");
     expect(helperFile, "src/util/helper.rs file not found").toBeDefined();
-    expect(helperFile!.path).toBe("src/util/helper.rs");
+    expect(helperFile?.path).toBe("src/util/helper.rs");
   });
 
   test("rolls up terms from descendants into dir nodes", async () => {
@@ -321,15 +331,15 @@ describe("codeTree", () => {
     // fnA's term is on the Function node, not the SourceFile, so tree terms
     // for the dir reflect SourceFile node terms only. If none, terms is [].
     // This test checks structural integrity, not specific term propagation.
-    expect(Array.isArray(srcDir!.terms)).toBe(true);
+    expect(Array.isArray(srcDir?.terms)).toBe(true);
   });
 
   test("each file node has language and terms fields", async () => {
     const tree = await codeTree(fh);
     const srcDir = tree.find((n) => n.name === "src" && n.kind === "dir");
-    const libFile = srcDir!.children?.find((n) => n.name === "lib.rs");
-    expect(libFile!.language).toBe("rust");
-    expect(Array.isArray(libFile!.terms)).toBe(true);
+    const libFile = srcDir?.children?.find((n) => n.name === "lib.rs");
+    expect(libFile?.language).toBe("rust");
+    expect(Array.isArray(libFile?.terms)).toBe(true);
   });
 });
 
@@ -342,33 +352,33 @@ describe("codeFile", () => {
   test("returns CodeFileView for an indexed path", async () => {
     const result = await codeFile(fh, "src/lib.rs");
     expect(result).not.toBeNull();
-    expect(result!.path).toBe("src/lib.rs");
-    expect(result!.language).toBe("rust");
-    expect(result!.nodeId).toBe(sfLibId);
-    expect(result!.blobRef).toBeDefined();
+    expect(result?.path).toBe("src/lib.rs");
+    expect(result?.language).toBe("rust");
+    expect(result?.nodeId).toBe(sfLibId);
+    expect(result?.blobRef).toBeDefined();
   });
 
   test("items includes all Functions declared by the file", async () => {
     const result = await codeFile(fh, "src/lib.rs");
     expect(result).not.toBeNull();
-    const itemNames = result!.items.map((i) => i.name);
+    const itemNames = result?.items.map((i) => i.name);
     expect(itemNames).toContain("fnA");
     expect(itemNames).toContain("fnB");
-    expect(result!.items).toHaveLength(2);
+    expect(result?.items).toHaveLength(2);
   });
 
   test("item has correct signature and span", async () => {
     const result = await codeFile(fh, "src/lib.rs");
-    const fnA = result!.items.find((i) => i.name === "fnA");
+    const fnA = result?.items.find((i) => i.name === "fnA");
     expect(fnA).toBeDefined();
-    expect(fnA!.signature).toBe("fn fnA() -> i32");
-    expect(fnA!.span).toBe("L1-L10");
+    expect(fnA?.signature).toBe("fn fnA() -> i32");
+    expect(fnA?.span).toBe("L1-L10");
   });
 
   test("file with no declared items returns empty items array", async () => {
     const result = await codeFile(fh, "src/util/helper.rs");
     expect(result).not.toBeNull();
-    expect(result!.items).toHaveLength(0);
+    expect(result?.items).toHaveLength(0);
   });
 });
 
@@ -381,35 +391,35 @@ describe("codeItem", () => {
   test("returns CodeItemView with filePath for a declared function", async () => {
     const result = await codeItem(fh, fnAId);
     expect(result).not.toBeNull();
-    expect(result!.nodeId).toBe(fnAId);
-    expect(result!.name).toBe("fnA");
-    expect(result!.filePath).toBe("src/lib.rs");
+    expect(result?.nodeId).toBe(fnAId);
+    expect(result?.name).toBe("fnA");
+    expect(result?.filePath).toBe("src/lib.rs");
   });
 
   test("fnA callsOut contains fnB", async () => {
     const result = await codeItem(fh, fnAId);
     expect(result).not.toBeNull();
-    const calleeNames = result!.callsOut.map((i) => i.name);
+    const calleeNames = result?.callsOut.map((i) => i.name);
     expect(calleeNames).toContain("fnB");
   });
 
   test("fnB callersIn contains fnA", async () => {
     const result = await codeItem(fh, fnBId);
     expect(result).not.toBeNull();
-    const callerNames = result!.callersIn.map((i) => i.name);
+    const callerNames = result?.callersIn.map((i) => i.name);
     expect(callerNames).toContain("fnA");
   });
 
   test("fnA has no callersIn (nothing calls fnA)", async () => {
     const result = await codeItem(fh, fnAId);
     expect(result).not.toBeNull();
-    expect(result!.callersIn).toHaveLength(0);
+    expect(result?.callersIn).toHaveLength(0);
   });
 
   test("fnB has no callsOut (fnB calls nothing)", async () => {
     const result = await codeItem(fh, fnBId);
     expect(result).not.toBeNull();
-    expect(result!.callsOut).toHaveLength(0);
+    expect(result?.callsOut).toHaveLength(0);
   });
 });
 
@@ -430,9 +440,7 @@ describe("codeNeighborhood", () => {
 
   test("neighborhood includes the calls edge between fnA and fnB", async () => {
     const result = await codeNeighborhood(fh, "src/lib.rs");
-    const callsEdge = result.edges.find(
-      (e) => e.from === fnAId && e.to === fnBId
-    );
+    const callsEdge = result.edges.find((e) => e.from === fnAId && e.to === fnBId);
     expect(callsEdge, "calls edge from fnA to fnB not found").toBeDefined();
   });
 
@@ -446,7 +454,7 @@ describe("codeNeighborhood", () => {
     const result = await codeNeighborhood(fh, "src/lib.rs");
     const fileNode = result.nodes.find((n) => n.id === sfLibId);
     expect(fileNode).toBeDefined();
-    expect(fileNode!.label).toBe("src/lib.rs");
+    expect(fileNode?.label).toBe("src/lib.rs");
   });
 });
 
@@ -461,9 +469,9 @@ describe("codeRegions", () => {
     const pathRule = regions.find((r) => r.rule === "src-path-rule");
     expect(pathRule, "src-path-rule not found in regions").toBeDefined();
     // Both src/lib.rs and src/util/helper.rs match src/**
-    expect(pathRule!.paths.length).toBeGreaterThanOrEqual(2);
-    expect(pathRule!.paths).toContain("src/lib.rs");
-    expect(pathRule!.paths).toContain("src/util/helper.rs");
+    expect(pathRule?.paths.length).toBeGreaterThanOrEqual(2);
+    expect(pathRule?.paths).toContain("src/lib.rs");
+    expect(pathRule?.paths).toContain("src/util/helper.rs");
   });
 
   test("region-critical-rule matches the path of the classified SourceFile", async () => {
@@ -471,7 +479,7 @@ describe("codeRegions", () => {
     const regionRule = regions.find((r) => r.rule === "region-critical-rule");
     expect(regionRule, "region-critical-rule not found in regions").toBeDefined();
     // src/lib.rs declares fnA which is classified as security/critical
-    expect(regionRule!.paths).toContain("src/lib.rs");
+    expect(regionRule?.paths).toContain("src/lib.rs");
   });
 
   test("region-critical-rule does not match the unclassified file", async () => {
@@ -479,7 +487,7 @@ describe("codeRegions", () => {
     const regionRule = regions.find((r) => r.rule === "region-critical-rule");
     expect(regionRule, "region rule not found").toBeDefined();
     // src/util/helper.rs has no classified items
-    expect(regionRule!.paths).not.toContain("src/util/helper.rs");
+    expect(regionRule?.paths).not.toContain("src/util/helper.rs");
   });
 
   test("caches result for same graph state", async () => {

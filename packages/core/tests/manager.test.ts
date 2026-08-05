@@ -4,9 +4,9 @@
 
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
 import { createGraph } from "../src/allod.js";
 import { GraphManager } from "../src/manager.js";
@@ -28,7 +28,10 @@ function stripOntologyPreamble(yaml: string): string {
   let inImports = false;
   for (let i = start; i < lines.length; i++) {
     const line = lines[i];
-    if (/^imports:/.test(line)) { inImports = true; continue; }
+    if (/^imports:/.test(line)) {
+      inImports = true;
+      continue;
+    }
     if (inImports && (line.startsWith(" ") || line.startsWith("\t") || line === "")) {
       if (line === "") inImports = false; // blank line ends the imports block
       continue;
@@ -68,9 +71,9 @@ describe("GraphManager", () => {
     const manager = await GraphManager.open(home);
     const entry = await manager.getEntry("main");
     expect(entry).not.toBeNull();
-    expect(entry!.id).toBe("main");
-    expect(entry!.kind).toBe("memory");
-    expect(entry!.name).toBe("Main");
+    expect(entry?.id).toBe("main");
+    expect(entry?.kind).toBe("memory");
+    expect(entry?.name).toBe("Main");
   });
 
   test("open() is idempotent — second open doesn't duplicate main entry", async () => {
@@ -117,9 +120,9 @@ describe("GraphManager", () => {
 
     const fetched = await manager.getEntry(entry.id);
     expect(fetched).not.toBeNull();
-    expect(fetched!.kind).toBe("repo");
-    expect(fetched!.path).toBe(repoDir);
-    expect(fetched!.name).toBe("My Repo");
+    expect(fetched?.kind).toBe("repo");
+    expect(fetched?.path).toBe(repoDir);
+    expect(fetched?.name).toBe("My Repo");
   });
 
   test("registerRepo() installs the review ontology in the graph", async () => {
@@ -258,9 +261,9 @@ describe("GraphManager", () => {
     const countBefore = existsSync(changesetsDir) ? readdirSync(changesetsDir).length : 0;
 
     // Attempt to register with the same id — must throw BEFORE installing review ontology
-    await expect(
-      manager.registerRepo(repoDir2, { id: "collision-test" })
-    ).rejects.toThrow("graph id already registered");
+    await expect(manager.registerRepo(repoDir2, { id: "collision-test" })).rejects.toThrow(
+      "graph id already registered"
+    );
 
     // The changeset count must not have increased: review ontology install
     // would have added changesets. If the guard fires first, no new changesets appear.
@@ -298,7 +301,7 @@ describe("GraphManager", () => {
       "SELECT COUNT(*) as count FROM objects WHERE graph_id = $1",
       [entry.id]
     );
-    const count = parseInt(rows[0].count, 10);
+    const count = Number.parseInt(rows[0].count, 10);
     expect(count).toBeGreaterThan(0);
 
     // Rows for indexed-repo should not appear in main's rows
@@ -320,14 +323,21 @@ describe("GraphManager", () => {
     const repoDir = makeTempDir("freehold-mgr-repo-");
     await makeRepoGraph(repoDir);
     const manager = await GraphManager.open(home);
-    const entry = await manager.registerRepo(repoDir, { name: "Review Edge Test", id: "review-edge-test" });
+    const entry = await manager.registerRepo(repoDir, {
+      name: "Review Edge Test",
+      id: "review-edge-test",
+    });
     const fh = await manager.get(entry.id);
 
     const { describeSchema } = await import("../src/schema.js");
     const schema = await describeSchema(fh.graph);
     const edgeNames = schema.edgeTypes.map((et: { name: string }) => et.name);
-    expect(edgeNames.some((n: string) => n.includes("part_of") || n.includes("part-of"))).toBe(true);
-    expect(edgeNames.some((n: string) => n.includes("replies_to") || n.includes("replies-to"))).toBe(true);
+    expect(edgeNames.some((n: string) => n.includes("part_of") || n.includes("part-of"))).toBe(
+      true
+    );
+    expect(
+      edgeNames.some((n: string) => n.includes("replies_to") || n.includes("replies-to"))
+    ).toBe(true);
   });
 
   /**
@@ -364,16 +374,14 @@ describe("GraphManager", () => {
     const hasEdge = (fragment: string) =>
       edgeNames.some((n: string) => n === fragment || n.endsWith(`/${fragment}`));
 
-    expect(hasEdge("reviews"),    "edge type 'reviews' missing from schema").toBe(true);
-    expect(hasEdge("part_of"),    "edge type 'part_of' missing from schema").toBe(true);
+    expect(hasEdge("reviews"), "edge type 'reviews' missing from schema").toBe(true);
+    expect(hasEdge("part_of"), "edge type 'part_of' missing from schema").toBe(true);
     expect(hasEdge("replies_to"), "edge type 'replies_to' missing from schema").toBe(true);
-    expect(hasEdge("concerns"),   "edge type 'concerns' missing from schema").toBe(true);
+    expect(hasEdge("concerns"), "edge type 'concerns' missing from schema").toBe(true);
 
     // ── 2. Determine the edge type refs (schema may prefix with package name) ──
     const edgeTypeRef = (fragment: string): string => {
-      const found = edgeNames.find(
-        (n: string) => n === fragment || n.endsWith(`/${fragment}`)
-      );
+      const found = edgeNames.find((n: string) => n === fragment || n.endsWith(`/${fragment}`));
       return found ?? fragment;
     };
 
@@ -415,12 +423,12 @@ describe("GraphManager", () => {
       ops: unknown[]
     ): Promise<{ status: "saved" | "pending"; hash: string }> {
       // Wasm commit() signature: commit(author, intent, ops, [], sign_envelope)
-      const raw = await (fh.graph as any).commit(author, intent, ops, [], true);
+      const raw = await fh.graph.commit(author, intent, ops, [], true);
       if (raw && typeof raw === "object" && "Admitted" in raw) {
-        return { status: "saved", hash: (raw as any).Admitted.hash };
+        return { status: "saved", hash: (raw as { Admitted: { hash: string } }).Admitted.hash };
       }
       if (raw && typeof raw === "object" && "Held" in raw) {
-        const hash: string = (raw as any).Held.hash;
+        const hash: string = (raw as { Held: { hash: string } }).Held.hash;
         const decision = await approve(fh.graph, "owner", hash);
         expect(decision.status, `approval of '${intent}' failed`).toBe("approved");
         return { status: "pending", hash };
@@ -431,8 +439,14 @@ describe("GraphManager", () => {
     // ── 5a. Create the Review node (review/Review) ────────────────────────────
     const reviewId = crypto.randomUUID();
     const r1 = await commitAndApprove("owner", "Create Review", [
-      { create: { kind: "node", id: reviewId, type: "review/Review@1",
-                  attributes: { verdict: "approve", body: "LGTM" } } },
+      {
+        create: {
+          kind: "node",
+          id: reviewId,
+          type: "review/Review@1",
+          attributes: { verdict: "approve", body: "LGTM" },
+        },
+      },
     ]);
     expect(["saved", "pending"], "Review node must be saved or pending").toContain(r1.status);
 
@@ -441,14 +455,26 @@ describe("GraphManager", () => {
     const comment2Id = crypto.randomUUID();
 
     const rc1 = await commitAndApprove("owner", "Create ReviewComment 1", [
-      { create: { kind: "node", id: comment1Id, type: "review/ReviewComment@1",
-                  attributes: { body: "This function is too long" } } },
+      {
+        create: {
+          kind: "node",
+          id: comment1Id,
+          type: "review/ReviewComment@1",
+          attributes: { body: "This function is too long" },
+        },
+      },
     ]);
     expect(["saved", "pending"]).toContain(rc1.status);
 
     const rc2 = await commitAndApprove("owner", "Create ReviewComment 2", [
-      { create: { kind: "node", id: comment2Id, type: "review/ReviewComment@1",
-                  attributes: { body: "Agreed on the length issue" } } },
+      {
+        create: {
+          kind: "node",
+          id: comment2Id,
+          type: "review/ReviewComment@1",
+          attributes: { body: "Agreed on the length issue" },
+        },
+      },
     ]);
     expect(["saved", "pending"]).toContain(rc2.status);
 
@@ -466,17 +492,33 @@ describe("GraphManager", () => {
 
     const crId = crypto.randomUUID();
     const crResult = await commitAndApprove("owner", "Create eng/ChangeRequest", [
-      { create: { kind: "node", id: crId, type: "eng/ChangeRequest@1",
-                  attributes: { title: "PR #42", risk: "standard", status: "proposed" } } },
+      {
+        create: {
+          kind: "node",
+          id: crId,
+          type: "eng/ChangeRequest@1",
+          attributes: { title: "PR #42", risk: "standard", status: "proposed" },
+        },
+      },
     ]);
-    expect(["saved", "pending"], "eng/ChangeRequest node must be saved or pending").toContain(crResult.status);
+    expect(["saved", "pending"], "eng/ChangeRequest node must be saved or pending").toContain(
+      crResult.status
+    );
 
     const sfId = crypto.randomUUID();
     const sfResult = await commitAndApprove("owner", "Create code/SourceFile", [
-      { create: { kind: "node", id: sfId, type: "code/SourceFile@1",
-                  attributes: { path: "src/lib.rs", blob: "git:repo#abc:src/lib.rs" } } },
+      {
+        create: {
+          kind: "node",
+          id: sfId,
+          type: "code/SourceFile@1",
+          attributes: { path: "src/lib.rs", blob: "git:repo#abc:src/lib.rs" },
+        },
+      },
     ]);
-    expect(["saved", "pending"], "code/SourceFile node must be saved or pending").toContain(sfResult.status);
+    expect(["saved", "pending"], "code/SourceFile node must be saved or pending").toContain(
+      sfResult.status
+    );
 
     // ── 6. Create all four edges ──────────────────────────────────────────────
     //
@@ -486,32 +528,42 @@ describe("GraphManager", () => {
     // concerns:   ReviewComment → code/SourceFile (cross-ontology; code ontology installed)
 
     const partOfResult = await relate(
-      fh.graph, "owner",
-      comment1Id, reviewId,
+      fh.graph,
+      "owner",
+      comment1Id,
+      reviewId,
       edgeTypeRef("part_of")
     );
-    expect(["saved", "pending"], "part_of edge must be saved or pending").toContain(partOfResult.status);
+    expect(["saved", "pending"], "part_of edge must be saved or pending").toContain(
+      partOfResult.status
+    );
 
     const repliesToResult = await relate(
-      fh.graph, "owner",
-      comment2Id, comment1Id,
+      fh.graph,
+      "owner",
+      comment2Id,
+      comment1Id,
       edgeTypeRef("replies_to")
     );
-    expect(["saved", "pending"], "replies_to edge must be saved or pending").toContain(repliesToResult.status);
-
-    const reviewsResult = await relate(
-      fh.graph, "owner",
-      reviewId, crId,
-      edgeTypeRef("reviews")
+    expect(["saved", "pending"], "replies_to edge must be saved or pending").toContain(
+      repliesToResult.status
     );
-    expect(["saved", "pending"], "reviews edge must be saved or pending").toContain(reviewsResult.status);
+
+    const reviewsResult = await relate(fh.graph, "owner", reviewId, crId, edgeTypeRef("reviews"));
+    expect(["saved", "pending"], "reviews edge must be saved or pending").toContain(
+      reviewsResult.status
+    );
 
     const concernsResult = await relate(
-      fh.graph, "owner",
-      comment1Id, sfId,
+      fh.graph,
+      "owner",
+      comment1Id,
+      sfId,
       edgeTypeRef("concerns")
     );
-    expect(["saved", "pending"], "concerns edge must be saved or pending").toContain(concernsResult.status);
+    expect(["saved", "pending"], "concerns edge must be saved or pending").toContain(
+      concernsResult.status
+    );
 
     // ── 7. All four edges accounted for ──────────────────────────────────────
     // If we reach here without throwing, SP3's flow is viable with eng/code

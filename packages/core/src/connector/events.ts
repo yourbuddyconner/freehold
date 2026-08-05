@@ -12,20 +12,29 @@
  * Never logs secrets or tokens.
  */
 
-import { basename } from "node:path";
 import { existsSync, readFileSync } from "node:fs";
+import { basename } from "node:path";
 import { join } from "node:path";
 import { load as yamlLoad } from "js-yaml";
-import { withGraph } from "../lock.js";
 import type { Freehold } from "../graphs.js";
+import { withGraph } from "../lock.js";
 
 // ── Public types ──────────────────────────────────────────────────────────────
 
 export type ConnectorEvent =
   | { kind: "push"; ref: string; headSha: string }
   | { kind: "pr"; action: string; number: number; headSha: string }
-  | { kind: "comment"; action: "created" | "edited" | "deleted"; id: string; body: string;
-      author: string; path?: string; commitSha?: string; prNumber?: number; inReplyTo?: string }
+  | {
+      kind: "comment";
+      action: "created" | "edited" | "deleted";
+      id: string;
+      body: string;
+      author: string;
+      path?: string;
+      commitSha?: string;
+      prNumber?: number;
+      inReplyTo?: string;
+    }
   | { kind: "check"; sha: string; name: string; status: string; conclusion?: string };
 
 export interface IngestResult {
@@ -49,7 +58,6 @@ interface ParsedNode {
   status: "saved" | "pending";
   nodeRev: string | null;
 }
-
 
 // ── Dedup: find existing comment node by external_id ─────────────────────────
 
@@ -89,10 +97,7 @@ async function findCommentByExternalId(
   });
 }
 
-function _findCommentByExternalIdSync(
-  fh: Freehold,
-  externalId: string
-): ParsedNode | null {
+function _findCommentByExternalIdSync(fh: Freehold, externalId: string): ParsedNode | null {
   // ── 1. Admitted log ────────────────────────────────────────────────────────
   let log: Array<{ hash: string }> = [];
   try {
@@ -131,21 +136,32 @@ function _findCommentByExternalIdSync(
         // Fetch current node rev
         let nodeRev: string | null = null;
         try {
-          nodeRev = (fh.graph as unknown as { node_rev(id: string): string | null }).node_rev(found.nodeId);
-        } catch { /* ignore */ }
+          nodeRev = (fh.graph as unknown as { node_rev(id: string): string | null }).node_rev(
+            found.nodeId
+          );
+        } catch {
+          /* ignore */
+        }
 
         // Fetch current attributes from fold state (admitted nodes are always in fold state).
         // The changeset YAML only reflects the op that wrote the entry; fold state has the
         // latest merged attributes (e.g. a subsequent tombstone update).
         let currentAttrs: Record<string, unknown> | undefined;
         try {
-          const currentObj = (fh.graph as unknown as {
-            object_get(kind: string, id: string): { content?: { attributes?: Record<string, unknown> } } | null
-          }).object_get("node", found.nodeId);
+          const currentObj = (
+            fh.graph as unknown as {
+              object_get(
+                kind: string,
+                id: string
+              ): { content?: { attributes?: Record<string, unknown> } } | null;
+            }
+          ).object_get("node", found.nodeId);
           if (currentObj?.content?.attributes) {
             currentAttrs = currentObj.content.attributes;
           }
-        } catch { /* ignore — fall back to changeset attrs */ }
+        } catch {
+          /* ignore — fall back to changeset attrs */
+        }
 
         return { ...found, attributes: currentAttrs ?? found.attributes, nodeRev };
       }
@@ -164,9 +180,11 @@ function _findCommentByExternalIdSync(
     for (const p of proposals) {
       let cs: { operations?: Array<Record<string, unknown>> } | null = null;
       try {
-        cs = (fh.graph as unknown as {
-          proposal_get(hash: string): { operations?: Array<Record<string, unknown>> }
-        }).proposal_get(p.hash);
+        cs = (
+          fh.graph as unknown as {
+            proposal_get(hash: string): { operations?: Array<Record<string, unknown>> };
+          }
+        ).proposal_get(p.hash);
       } catch {
         continue;
       }
@@ -176,8 +194,12 @@ function _findCommentByExternalIdSync(
       if (found) {
         let nodeRev: string | null = null;
         try {
-          nodeRev = (fh.graph as unknown as { node_rev(id: string): string | null }).node_rev(found.nodeId);
-        } catch { /* ignore */ }
+          nodeRev = (fh.graph as unknown as { node_rev(id: string): string | null }).node_rev(
+            found.nodeId
+          );
+        } catch {
+          /* ignore */
+        }
         return { ...found, nodeRev };
       }
     }
@@ -252,14 +274,7 @@ export async function handleConnectorEvent(
   }
 
   if (ev.kind === "check") {
-    await upsertCheckStatus(
-      fh,
-      fh.graphId,
-      ev.sha,
-      ev.name,
-      ev.status,
-      ev.conclusion
-    );
+    await upsertCheckStatus(fh, fh.graphId, ev.sha, ev.name, ev.status, ev.conclusion);
     return null;
   }
 
@@ -301,7 +316,9 @@ export async function handleConnectorEvent(
     };
 
     await withGraph(fh.graph, async () => {
-      const rev = (fh.graph as unknown as { node_rev(id: string): string | null }).node_rev(existing.nodeId);
+      const rev = (fh.graph as unknown as { node_rev(id: string): string | null }).node_rev(
+        existing.nodeId
+      );
       if (!rev) {
         // Node is pending (not yet in fold state). We can't update it via WASM.
         // Record a soft tombstone in PGlite so resurrection knows the node was deleted.
@@ -323,12 +340,20 @@ export async function handleConnectorEvent(
           attributes: tombstoneAttrs,
         },
       };
-      await (fh.graph as unknown as {
-        commit(author: string, intent: string, ops: unknown[], envelopes: unknown[], sign: boolean): Promise<unknown>
-      }).commit(CONNECTOR_PRINCIPAL, `Tombstone ReviewComment ${ev.id}`, [updateOp], [], true);
+      await (
+        fh.graph as unknown as {
+          commit(
+            author: string,
+            intent: string,
+            ops: unknown[],
+            envelopes: unknown[],
+            sign: boolean
+          ): Promise<unknown>;
+        }
+      ).commit(CONNECTOR_PRINCIPAL, `Tombstone ReviewComment ${ev.id}`, [updateOp], [], true);
       // Clear any soft tombstone — the WASM update supersedes it
       await fh.db.pg.query(
-        `DELETE FROM connector_soft_tombstone WHERE graph_id = $1 AND external_id = $2`,
+        "DELETE FROM connector_soft_tombstone WHERE graph_id = $1 AND external_id = $2",
         [fh.graphId, ev.id]
       );
     });
@@ -343,42 +368,49 @@ export async function handleConnectorEvent(
     let isSoftTombstoned = false;
     try {
       const tombRows = await fh.db.pg.query<{ node_id: string }>(
-        `SELECT node_id FROM connector_soft_tombstone WHERE graph_id = $1 AND external_id = $2`,
+        "SELECT node_id FROM connector_soft_tombstone WHERE graph_id = $1 AND external_id = $2",
         [fh.graphId, ev.id]
       );
       isSoftTombstoned = tombRows.rows.length > 0;
-    } catch { /* table may not exist in edge cases — treat as not tombstoned */ }
+    } catch {
+      /* table may not exist in edge cases — treat as not tombstoned */
+    }
 
     // Get current attributes from fold state if available; fall back to changeset attrs.
     // For nodes in fold state, object_get returns the latest merged attributes (e.g. post-tombstone).
     let liveAttrs = existing.attributes;
     try {
       const liveObj = await withGraph(fh.graph, () =>
-        (fh.graph as unknown as {
-          object_get(kind: string, id: string): { content?: { attributes?: Record<string, unknown> } } | null
-        }).object_get("node", existing.nodeId)
+        (
+          fh.graph as unknown as {
+            object_get(
+              kind: string,
+              id: string
+            ): { content?: { attributes?: Record<string, unknown> } } | null;
+          }
+        ).object_get("node", existing.nodeId)
       );
       if (liveObj?.content?.attributes) {
         liveAttrs = liveObj.content.attributes;
       }
-    } catch { /* ignore — use changeset-derived attrs */ }
+    } catch {
+      /* ignore — use changeset-derived attrs */
+    }
 
     // Check if the body and status are unchanged (idempotent re-delivery).
     // A soft-tombstoned node is never "unchanged" — it needs resurrection.
     const existingBody = liveAttrs.body as string | undefined;
     const existingStatus = liveAttrs.status as string | undefined;
 
-    if (
-      !isSoftTombstoned &&
-      existingBody === ev.body &&
-      existingStatus === "open"
-    ) {
+    if (!isSoftTombstoned && existingBody === ev.body && existingStatus === "open") {
       return { written: "unchanged", nodeId: existing.nodeId };
     }
 
     // Body or status changed — update the node
     await withGraph(fh.graph, async () => {
-      const rev = (fh.graph as unknown as { node_rev(id: string): string | null }).node_rev(existing.nodeId);
+      const rev = (fh.graph as unknown as { node_rev(id: string): string | null }).node_rev(
+        existing.nodeId
+      );
       if (!rev) {
         // Node is pending and not in fold state — skip the WASM update.
         // (The pending proposal has the old body; we can't update it via WASM.)
@@ -394,18 +426,28 @@ export async function handleConnectorEvent(
           attributes: activeAttrs,
         },
       };
-      await (fh.graph as unknown as {
-        commit(author: string, intent: string, ops: unknown[], envelopes: unknown[], sign: boolean): Promise<unknown>
-      }).commit(CONNECTOR_PRINCIPAL, `Update ReviewComment ${ev.id}`, [updateOp], [], true);
+      await (
+        fh.graph as unknown as {
+          commit(
+            author: string,
+            intent: string,
+            ops: unknown[],
+            envelopes: unknown[],
+            sign: boolean
+          ): Promise<unknown>;
+        }
+      ).commit(CONNECTOR_PRINCIPAL, `Update ReviewComment ${ev.id}`, [updateOp], [], true);
     });
 
     // Clear any soft tombstone — the node has been resurrected/updated.
     try {
       await fh.db.pg.query(
-        `DELETE FROM connector_soft_tombstone WHERE graph_id = $1 AND external_id = $2`,
+        "DELETE FROM connector_soft_tombstone WHERE graph_id = $1 AND external_id = $2",
         [fh.graphId, ev.id]
       );
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
 
     return { written: "updated", nodeId: existing.nodeId };
   }
@@ -422,9 +464,17 @@ export async function handleConnectorEvent(
   };
 
   await withGraph(fh.graph, async () => {
-    await (fh.graph as unknown as {
-      commit(author: string, intent: string, ops: unknown[], envelopes: unknown[], sign: boolean): Promise<unknown>
-    }).commit(CONNECTOR_PRINCIPAL, `Ingest ReviewComment ${ev.id}`, [createOp], [], true);
+    await (
+      fh.graph as unknown as {
+        commit(
+          author: string,
+          intent: string,
+          ops: unknown[],
+          envelopes: unknown[],
+          sign: boolean
+        ): Promise<unknown>;
+      }
+    ).commit(CONNECTOR_PRINCIPAL, `Ingest ReviewComment ${ev.id}`, [createOp], [], true);
   });
 
   return { written: "created", nodeId };

@@ -242,16 +242,12 @@ export async function openDb(pgDir: string): Promise<DbHandle> {
 
   // Migrate: create graph-scoped indexes (IF NOT EXISTS = idempotent).
   try {
-    await pg.exec(
-      "CREATE INDEX IF NOT EXISTS objects_graph_idx     ON objects (graph_id)"
-    );
+    await pg.exec("CREATE INDEX IF NOT EXISTS objects_graph_idx     ON objects (graph_id)");
   } catch {
     // Ignore
   }
   try {
-    await pg.exec(
-      "CREATE INDEX IF NOT EXISTS graph_edges_graph_idx ON graph_edges (graph_id)"
-    );
+    await pg.exec("CREATE INDEX IF NOT EXISTS graph_edges_graph_idx ON graph_edges (graph_id)");
   } catch {
     // Ignore
   }
@@ -357,9 +353,7 @@ export async function openDb(pgDir: string): Promise<DbHandle> {
       EXCEPTION WHEN OTHERS THEN NULL;
       END $$
     `);
-    await pg.exec(
-      "ALTER TABLE node_terms ADD PRIMARY KEY (graph_id, subject_id, term)"
-    );
+    await pg.exec("ALTER TABLE node_terms ADD PRIMARY KEY (graph_id, subject_id, term)");
   } catch {
     // Already has the composite PK (fresh DB or previously migrated)
   }

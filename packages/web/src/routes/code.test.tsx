@@ -27,7 +27,9 @@ vi.mock("~/lib/hooks", () => ({
   useListGraphs: vi.fn(),
   useGitHubBlobUrl: vi.fn().mockReturnValue(null),
   useCodeNeighborhood: vi.fn(),
-  useGitProposals: vi.fn().mockReturnValue({ data: { proposals: [] }, isLoading: false, isError: false, error: null }),
+  useGitProposals: vi
+    .fn()
+    .mockReturnValue({ data: { proposals: [] }, isLoading: false, isError: false, error: null }),
 }));
 
 vi.mock("~/lib/api", () => ({
@@ -54,7 +56,13 @@ const sampleTree = [
     path: "src",
     kind: "dir",
     children: [
-      { name: "main.ts", path: "src/main.ts", kind: "file", language: "typescript", terms: ["workspace/core"] },
+      {
+        name: "main.ts",
+        path: "src/main.ts",
+        kind: "file",
+        language: "typescript",
+        terms: ["workspace/core"],
+      },
       { name: "utils.ts", path: "src/utils.ts", kind: "file", language: "typescript", terms: [] },
     ],
   },
@@ -107,9 +115,7 @@ const sampleNeighborhood = {
     { id: "node-file-1", label: "src/main.ts", type: "code/SourceFile@1", terms: [] },
     { id: "node-item-1", label: "main", type: "code/Function@1", terms: [] },
   ],
-  edges: [
-    { id: "edge-1", from: "node-file-1", to: "node-item-1", type: "code/declares" },
-  ],
+  edges: [{ id: "edge-1", from: "node-file-1", to: "node-item-1", type: "code/declares" }],
 };
 
 function setupHooks(
@@ -208,17 +214,15 @@ function setupHooks(
     overrides.blobUrl !== undefined ? overrides.blobUrl : null
   );
   vi.mocked(hooks.useCodeNeighborhood).mockReturnValue({
-    data: overrides.neighborhood === null ? undefined : (overrides.neighborhood ?? sampleNeighborhood),
+    data:
+      overrides.neighborhood === null ? undefined : (overrides.neighborhood ?? sampleNeighborhood),
     isLoading: false,
     isError: overrides.neighborhood === null,
     error: null,
   } as unknown as ReturnType<typeof hooks.useCodeNeighborhood>);
 }
 
-async function renderCode(
-  overrides: Parameters<typeof setupHooks>[0] = {},
-  initialPath = "/code"
-) {
+async function renderCode(overrides: Parameters<typeof setupHooks>[0] = {}, initialPath = "/code") {
   setupHooks(overrides);
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const router = createRouter({
@@ -252,9 +256,7 @@ describe("Code workspace", () => {
 
   describe("Nav gating", () => {
     it("Code nav item is hidden when active graph is memory kind", async () => {
-      const graphs = [
-        { id: "main", name: "main", kind: "memory" as GraphKind },
-      ];
+      const graphs = [{ id: "main", name: "main", kind: "memory" as GraphKind }];
       await renderCode({ graphs, activeGraphId: "main" });
       expect(screen.queryByRole("link", { name: /^code$/i })).not.toBeInTheDocument();
     });
@@ -363,10 +365,7 @@ describe("Code workspace", () => {
       );
       const link = screen.getByTestId("github-blob-link");
       expect(link).toBeInTheDocument();
-      expect(link).toHaveAttribute(
-        "href",
-        "https://github.com/acme/myrepo/blob/HEAD/src/main.ts"
-      );
+      expect(link).toHaveAttribute("href", "https://github.com/acme/myrepo/blob/HEAD/src/main.ts");
     });
   });
 

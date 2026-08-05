@@ -79,16 +79,19 @@ function InboxPage() {
               Commits
             </span>
             {gitProposals.length > 0 && (
-              <span className="font-mono text-[11px] text-(--fg-muted)">({gitProposals.length})</span>
+              <span className="font-mono text-[11px] text-(--fg-muted)">
+                ({gitProposals.length})
+              </span>
             )}
           </div>
 
-          {gitLoading && (
-            <p className="text-(--fg-muted) text-sm">Loading commits…</p>
-          )}
+          {gitLoading && <p className="text-(--fg-muted) text-sm">Loading commits…</p>}
 
           {!gitLoading && gitProposals.length === 0 && (
-            <p className="text-sm text-(--fg-muted)">No commit proposals. Branch heads are listed here when there are unresolved governance requirements.</p>
+            <p className="text-sm text-(--fg-muted)">
+              No commit proposals. Branch heads are listed here when there are unresolved governance
+              requirements.
+            </p>
           )}
 
           {!gitLoading && gitProposals.length > 0 && (

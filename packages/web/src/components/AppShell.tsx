@@ -37,7 +37,10 @@ export function AppShell() {
 
   const { data: gitData } = useGitProposals(activeKind === "repo");
   const nativePendingCount = data?.proposals?.length ?? 0;
-  const gitPendingCount = activeKind === "repo" ? (gitData?.proposals ?? []).filter(p => p.decided === "undecided").length : 0;
+  const gitPendingCount =
+    activeKind === "repo"
+      ? (gitData?.proposals ?? []).filter((p) => p.decided === "undecided").length
+      : 0;
   const pendingCount = nativePendingCount + gitPendingCount;
 
   function handleGraphChange(e: React.ChangeEvent<HTMLSelectElement>) {

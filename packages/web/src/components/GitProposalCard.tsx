@@ -1,7 +1,7 @@
+import type { DecideResult, GitProposal } from "@freehold/client";
 import * as Dialog from "@radix-ui/react-dialog";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import type { DecideResult, GitProposal } from "@freehold/client";
 import { ApiError } from "~/lib/api";
 import { apiClient } from "~/lib/api";
 import { cn } from "~/lib/cn";
@@ -29,7 +29,12 @@ function ChecklistRow({ item, unmet }: { item: unknown; unmet: string[] }) {
           isMet ? "bg-green-500" : "bg-red-400"
         )}
       />
-      <span className={cn("font-mono text-[11px]", isMet ? "text-(--fg)" : "text-red-600 dark:text-red-400")}>
+      <span
+        className={cn(
+          "font-mono text-[11px]",
+          isMet ? "text-(--fg)" : "text-red-600 dark:text-red-400"
+        )}
+      >
         {label}
       </span>
     </div>
@@ -97,7 +102,9 @@ interface ReviewComposerProps {
 }
 
 function ReviewComposer({ sha, paths, by, onDone }: ReviewComposerProps) {
-  const [verdict, setVerdict] = useState<"approve" | "approve-with-comments" | "request-changes">("approve");
+  const [verdict, setVerdict] = useState<"approve" | "approve-with-comments" | "request-changes">(
+    "approve"
+  );
   const [body, setBody] = useState("");
   const [comments, setComments] = useState<{ path: string; anchor: string; body: string }[]>([]);
   const [status, setStatus] = useState<null | "saved" | "pending" | "error">(null);
@@ -160,11 +167,12 @@ function ReviewComposer({ sha, paths, by, onDone }: ReviewComposerProps) {
   return (
     <div className="border border-(--border) bg-(--bg-subtle) p-3 space-y-3">
       <div className="flex items-center gap-2">
-        <label className="text-[11px] font-mono uppercase text-(--fg-muted) shrink-0">Verdict</label>
+        <span className="text-[11px] font-mono uppercase text-(--fg-muted) shrink-0">Verdict</span>
         <select
           value={verdict}
           onChange={(e) => setVerdict(e.target.value as typeof verdict)}
           className="text-xs border border-(--border) bg-(--bg) px-2 py-1 text-(--fg)"
+          aria-label="Verdict"
         >
           <option value="approve">Approve</option>
           <option value="approve-with-comments">Approve with comments</option>
@@ -183,7 +191,7 @@ function ReviewComposer({ sha, paths, by, onDone }: ReviewComposerProps) {
         // biome-ignore lint/suspicious/noArrayIndexKey: stable UI list keyed by index
         <div key={idx} className="border border-(--border) p-2 space-y-1.5 bg-(--bg)">
           <div className="flex items-center gap-2">
-            <label className="text-[10px] font-mono uppercase text-(--fg-muted) shrink-0">Path</label>
+            <span className="text-[10px] font-mono uppercase text-(--fg-muted) shrink-0">Path</span>
             <select
               value={comment.path}
               onChange={(e) => updateComment(idx, "path", e.target.value)}
@@ -192,10 +200,18 @@ function ReviewComposer({ sha, paths, by, onDone }: ReviewComposerProps) {
             >
               <option value="">— pick a path —</option>
               {paths.map((p) => (
-                <option key={p.path} value={p.path}>{p.path}</option>
+                <option key={p.path} value={p.path}>
+                  {p.path}
+                </option>
               ))}
             </select>
-            <button type="button" onClick={() => removeComment(idx)} className="text-[10px] text-red-500 font-mono">✕</button>
+            <button
+              type="button"
+              onClick={() => removeComment(idx)}
+              className="text-[10px] text-red-500 font-mono"
+            >
+              ✕
+            </button>
           </div>
           <input
             value={comment.anchor}
@@ -232,19 +248,28 @@ function ReviewComposer({ sha, paths, by, onDone }: ReviewComposerProps) {
         </button>
         <button
           type="button"
-          onClick={() => { setOpen(false); setStatus(null); }}
+          onClick={() => {
+            setOpen(false);
+            setStatus(null);
+          }}
           className="border border-(--border) text-(--fg-muted) font-mono text-[12px] uppercase px-3 py-1.5 hover:text-(--fg)"
         >
           Cancel
         </button>
         {status === "saved" && (
-          <span data-testid="review-status" className="text-xs text-green-600 font-mono">saved</span>
+          <span data-testid="review-status" className="text-xs text-green-600 font-mono">
+            saved
+          </span>
         )}
         {status === "pending" && (
-          <span data-testid="review-status" className="text-xs text-(--fg-muted) font-mono">pending</span>
+          <span data-testid="review-status" className="text-xs text-(--fg-muted) font-mono">
+            pending
+          </span>
         )}
         {status === "error" && (
-          <span data-testid="review-status" className="text-xs text-red-600 font-mono">error submitting review</span>
+          <span data-testid="review-status" className="text-xs text-red-600 font-mono">
+            error submitting review
+          </span>
         )}
       </div>
     </div>
@@ -327,7 +352,9 @@ export function GitProposalCard({ proposal, by }: GitProposalCardProps) {
             <span className="text-xs text-(--fg-muted)">·</span>
             <span className="text-xs text-(--fg-muted)">{timeDisplay}</span>
             <span className="text-xs text-(--fg-muted)">on</span>
-            <span className="font-mono text-[11px] text-(--fg-muted)">{ref.replace("refs/heads/", "")}</span>
+            <span className="font-mono text-[11px] text-(--fg-muted)">
+              {ref.replace("refs/heads/", "")}
+            </span>
             <DecidedChip decided={decided} />
           </div>
           <p className="text-sm text-(--fg) mt-1 leading-snug">{message}</p>
@@ -345,7 +372,9 @@ export function GitProposalCard({ proposal, by }: GitProposalCardProps) {
 
       {checklist.length > 0 && (
         <div className="space-y-1" data-testid="checklist">
-          <div className="text-[10px] font-mono uppercase text-(--fg-muted) tracking-[0.08em]">Checklist</div>
+          <div className="text-[10px] font-mono uppercase text-(--fg-muted) tracking-[0.08em]">
+            Checklist
+          </div>
           {checklist.map((item, i) => (
             // biome-ignore lint/suspicious/noArrayIndexKey: checklist items are stable for a given sha
             <ChecklistRow key={i} item={item} unmet={unmet} />
@@ -354,19 +383,31 @@ export function GitProposalCard({ proposal, by }: GitProposalCardProps) {
       )}
 
       {decideOutcome && "outcome" in decideOutcome && decideOutcome.outcome === "incomplete" && (
-        <div data-testid="incomplete-unmet" className="border border-amber-300 bg-amber-50 dark:bg-amber-950 px-3 py-2 space-y-1">
-          <div className="text-[10px] font-mono uppercase text-amber-700 dark:text-amber-300">Decision recorded — requirements still unmet</div>
+        <div
+          data-testid="incomplete-unmet"
+          className="border border-amber-300 bg-amber-50 dark:bg-amber-950 px-3 py-2 space-y-1"
+        >
+          <div className="text-[10px] font-mono uppercase text-amber-700 dark:text-amber-300">
+            Decision recorded — requirements still unmet
+          </div>
           <ul className="space-y-0.5">
             {decideOutcome.unmet.map((u) => (
-              <li key={u} className="text-xs text-amber-800 dark:text-amber-200 font-mono">{u}</li>
+              <li key={u} className="text-xs text-amber-800 dark:text-amber-200 font-mono">
+                {u}
+              </li>
             ))}
           </ul>
         </div>
       )}
 
       {savedLocally && (
-        <div data-testid="saved-locally-notice" className="flex items-center gap-2 border border-(--border) bg-(--bg-subtle) px-3 py-2">
-          <span className="text-xs text-(--fg)">Decision saved locally — push to remote failed.</span>
+        <div
+          data-testid="saved-locally-notice"
+          className="flex items-center gap-2 border border-(--border) bg-(--bg-subtle) px-3 py-2"
+        >
+          <span className="text-xs text-(--fg)">
+            Decision saved locally — push to remote failed.
+          </span>
           <button
             type="button"
             data-testid="retry-push"
@@ -387,7 +428,9 @@ export function GitProposalCard({ proposal, by }: GitProposalCardProps) {
 
       {proposal.checks && proposal.checks.length > 0 && (
         <div className="space-y-1" data-testid="checks-section">
-          <div className="text-[10px] font-mono uppercase text-(--fg-muted) tracking-[0.08em]">CI checks</div>
+          <div className="text-[10px] font-mono uppercase text-(--fg-muted) tracking-[0.08em]">
+            CI checks
+          </div>
           {[...proposal.checks]
             .sort((a, b) => {
               const aIsGov = /governance/i.test(a.name);
@@ -409,9 +452,14 @@ export function GitProposalCard({ proposal, by }: GitProposalCardProps) {
                       "inline-block h-2 w-2 rounded-full shrink-0",
                       check.conclusion === "success" && "bg-green-500",
                       check.conclusion === "failure" && "bg-red-400",
-                      (check.status === "in_progress" || check.status === "queued") && "bg-amber-400",
+                      (check.status === "in_progress" || check.status === "queued") &&
+                        "bg-amber-400",
                       !check.conclusion && check.status === "completed" && "bg-gray-400",
-                      !check.conclusion && check.status !== "in_progress" && check.status !== "queued" && check.status !== "completed" && "bg-gray-300",
+                      !check.conclusion &&
+                        check.status !== "in_progress" &&
+                        check.status !== "queued" &&
+                        check.status !== "completed" &&
+                        "bg-gray-300"
                     )}
                   />
                   <span className="font-mono text-[11px] text-(--fg)">{check.name}</span>
@@ -431,14 +479,18 @@ export function GitProposalCard({ proposal, by }: GitProposalCardProps) {
 
       {paths.length > 0 && (
         <div className="space-y-0.5" data-testid="paths-section">
-          <div className="text-[10px] font-mono uppercase text-(--fg-muted) tracking-[0.08em]">Touched paths</div>
+          <div className="text-[10px] font-mono uppercase text-(--fg-muted) tracking-[0.08em]">
+            Touched paths
+          </div>
           {paths.map((p) => (
             <PathRow key={p.path} path={p} />
           ))}
           {paths.some((p) => !p.indexed) && (
             <p className="text-[10px] text-(--fg-muted) pt-0.5">
               Paths marked "not yet indexed" can be indexed with{" "}
-              <code className="border border-(--border) bg-(--bg) px-1 font-mono">allod git index</code>
+              <code className="border border-(--border) bg-(--bg) px-1 font-mono">
+                allod git index
+              </code>
             </p>
           )}
         </div>
@@ -458,13 +510,20 @@ export function GitProposalCard({ proposal, by }: GitProposalCardProps) {
           <Dialog.Portal>
             <Dialog.Overlay className="fixed inset-0 bg-black/40 z-40" />
             <Dialog.Content className="fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 w-full max-w-sm bg-white dark:bg-neutral-900 border border-(--border) p-6 shadow-none space-y-4">
-              <Dialog.Title className="text-base font-semibold text-(--fg)">Approve commit</Dialog.Title>
+              <Dialog.Title className="text-base font-semibold text-(--fg)">
+                Approve commit
+              </Dialog.Title>
               <Dialog.Description className="text-sm text-(--fg-muted)">
                 This signs a decision record with your key.
               </Dialog.Description>
               <div className="flex gap-2 justify-end">
                 <Dialog.Close asChild>
-                  <button type="button" className="border border-(--border) text-(--fg-muted) font-mono text-[12px] uppercase px-3 py-1.5 hover:text-(--fg)">Cancel</button>
+                  <button
+                    type="button"
+                    className="border border-(--border) text-(--fg-muted) font-mono text-[12px] uppercase px-3 py-1.5 hover:text-(--fg)"
+                  >
+                    Cancel
+                  </button>
                 </Dialog.Close>
                 <Dialog.Close asChild>
                   <button
@@ -489,7 +548,12 @@ export function GitProposalCard({ proposal, by }: GitProposalCardProps) {
           {decideMut.isPending && decideMut.variables === "reject" ? "Rejecting…" : "Reject"}
         </button>
 
-        <ReviewComposer sha={sha} paths={paths} by={by} onDone={() => qc.invalidateQueries({ queryKey: ["git-proposals"] })} />
+        <ReviewComposer
+          sha={sha}
+          paths={paths}
+          by={by}
+          onDone={() => qc.invalidateQueries({ queryKey: ["git-proposals"] })}
+        />
       </div>
 
       <span className="reg-mark-bl" aria-hidden />

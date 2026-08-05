@@ -9,8 +9,7 @@ import { bearerAuth } from "./auth.js";
 import { handleMcpRequest } from "./mcp.js";
 import { getOpenApiDoc } from "./openapi.js";
 import { codeRouter } from "./routes/code.js";
-import { connectorRouter, connectorCallbackRouter } from "./routes/connector.js";
-import { githubWebhookRouter } from "./routes/webhook-github.js";
+import { connectorCallbackRouter, connectorRouter } from "./routes/connector.js";
 import { gitreviewRouter } from "./routes/gitreview.js";
 import { governanceRouter } from "./routes/governance.js";
 import { graphsRouter } from "./routes/graphs.js";
@@ -21,6 +20,7 @@ import { policyRouter } from "./routes/policy.js";
 import { retrievalRouter } from "./routes/retrieval.js";
 import { schemaRouter } from "./routes/schema.js";
 import { sessionRouter } from "./routes/session.js";
+import { githubWebhookRouter } from "./routes/webhook-github.js";
 import type { AppEnv } from "./types.js";
 
 /** Build the standard authenticated API sub-app (reused for default + scoped mounts). */

@@ -132,7 +132,13 @@ export type {
 export type { RecallResult, RecallFilters } from "./recall.js";
 
 // Git proposal review
-export { listGitProposals, gitProposal, decideGit, KeyMissingError, listReviewsForSha } from "./gitreview.js";
+export {
+  listGitProposals,
+  gitProposal,
+  decideGit,
+  KeyMissingError,
+  listReviewsForSha,
+} from "./gitreview.js";
 export { branchHeads, pushNotes } from "./git.js";
 export type { GitProposal, DecideResult, ReviewEntry, ReviewCommentEntry } from "./gitreview.js";
 
@@ -154,5 +160,10 @@ export { pollOnce, startPoller } from "./connector/poll.js";
 export type { PollResult } from "./connector/poll.js";
 
 // Connector GitHub App mode (JWT minting, installation tokens, manifest builder)
-export { mintAppJwt, makeAppClient, clearAppClientCache, buildConnectorManifest } from "./connector/app.js";
+export {
+  mintAppJwt,
+  makeAppClient,
+  clearAppClientCache,
+  buildConnectorManifest,
+} from "./connector/app.js";
 export type { AppManifest } from "./connector/app.js";

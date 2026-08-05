@@ -4,5 +4,10 @@
  * Tests import from this path so they can call mintAppJwt and makeAppClient
  * without depending on the internal package path.
  */
-export { mintAppJwt, makeAppClient, clearAppClientCache, buildConnectorManifest } from "@freehold/core";
+export {
+  mintAppJwt,
+  makeAppClient,
+  clearAppClientCache,
+  buildConnectorManifest,
+} from "@freehold/core";
 export type { AppManifest } from "@freehold/core";

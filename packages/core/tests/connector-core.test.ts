@@ -8,23 +8,18 @@ import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, test, beforeAll } from "vitest";
+import { beforeAll, describe, expect, test } from "vitest";
+import { createGraph } from "../src/allod.js";
 import { openDb } from "../src/db.js";
 import type { DbHandle } from "../src/db.js";
-import { createGraph } from "../src/allod.js";
+import { approve } from "../src/governance.js";
 import { openFreehold } from "../src/graphs.js";
 import type { Freehold } from "../src/graphs.js";
 import { installOntology } from "../src/schema.js";
-import { approve } from "../src/governance.js";
 
-import { parseOriginRemote, makeTokenClient } from "../src/connector/github.js";
-import {
-  getConnector,
-  setConnector,
-  getSecret,
-  deriveEncKey,
-} from "../src/connector/config.js";
+import { deriveEncKey, getConnector, getSecret, setConnector } from "../src/connector/config.js";
 import { handleConnectorEvent } from "../src/connector/events.js";
+import { makeTokenClient, parseOriginRemote } from "../src/connector/github.js";
 
 function reviewOntologyYaml(): string {
   const url = new URL("../assets/review-ontology.yaml", import.meta.url);
@@ -78,9 +73,7 @@ describe("makeTokenClient", () => {
   test("injects Authorization header with Bearer token", async () => {
     let capturedHeaders: Record<string, string> = {};
     const mockFetch = async (url: string, init?: RequestInit): Promise<Response> => {
-      capturedHeaders = Object.fromEntries(
-        new Headers(init?.headers as HeadersInit).entries()
-      );
+      capturedHeaders = Object.fromEntries(new Headers(init?.headers as HeadersInit).entries());
       return new Response(JSON.stringify({ login: "octocat" }), {
         status: 200,
         headers: { "content-type": "application/json" },
@@ -90,7 +83,7 @@ describe("makeTokenClient", () => {
     const client = makeTokenClient("ghp_testtoken", mockFetch as typeof fetch);
     const result = await client.rest<{ login: string }>("/user");
 
-    expect(capturedHeaders["authorization"]).toBe("Bearer ghp_testtoken");
+    expect(capturedHeaders.authorization).toBe("Bearer ghp_testtoken");
     expect(result.login).toBe("octocat");
   });
 
@@ -109,8 +102,8 @@ describe("makeTokenClient", () => {
       caught = e as Error;
     }
     expect(caught).not.toBeNull();
-    expect(caught!.message).toMatch(/401/);
-    expect(caught!.message).not.toContain("bad-token"); // token must not be leaked in error message
+    expect(caught?.message).toMatch(/401/);
+    expect(caught?.message).not.toContain("bad-token"); // token must not be leaked in error message
   });
 
   test("uses GITHUB_API_BASE env override when set", async () => {
@@ -131,7 +124,7 @@ describe("makeTokenClient", () => {
       expect(capturedUrl).toContain("ghes.example.com");
     } finally {
       if (origBase === undefined) {
-        delete process.env.GITHUB_API_BASE;
+        process.env.GITHUB_API_BASE = undefined;
       } else {
         process.env.GITHUB_API_BASE = origBase;
       }
@@ -166,11 +159,11 @@ describe("config round-trip", () => {
 
     const cfg = await getConnector(db, "g1");
     expect(cfg).not.toBeNull();
-    expect(cfg!.owner).toBe("acme");
-    expect(cfg!.repo).toBe("widgets");
-    expect(cfg!.mode).toBe("credential");
-    expect(cfg!.pollIntervalSec).toBe(300);
-    expect(cfg!.webhooksEnabled).toBe(false);
+    expect(cfg?.owner).toBe("acme");
+    expect(cfg?.repo).toBe("widgets");
+    expect(cfg?.mode).toBe("credential");
+    expect(cfg?.pollIntervalSec).toBe(300);
+    expect(cfg?.webhooksEnabled).toBe(false);
   });
 
   test("setConnector encrypts secrets: ciphertext differs from plaintext", async () => {
@@ -290,7 +283,12 @@ describe("handleConnectorEvent", () => {
     expect(result).toBeNull();
 
     // Verify row stored in PGlite
-    const rows = await fh.db.pg.query<{ sha: string; name: string; status: string; conclusion: string | null }>(
+    const rows = await fh.db.pg.query<{
+      sha: string;
+      name: string;
+      status: string;
+      conclusion: string | null;
+    }>(
       "SELECT sha, name, status, conclusion FROM check_status WHERE graph_id = $1 AND sha = $2 AND name = $3",
       ["main", "abc123", "CI / lint"]
     );
@@ -330,8 +328,8 @@ describe("handleConnectorEvent", () => {
       prNumber: 42,
     });
     expect(result).not.toBeNull();
-    expect(result!.written).toBe("created");
-    expect(typeof result!.nodeId).toBe("string");
+    expect(result?.written).toBe("created");
+    expect(typeof result?.nodeId).toBe("string");
   });
 
   test("comment edited returns updated result", async () => {
@@ -352,8 +350,8 @@ describe("handleConnectorEvent", () => {
       body: "Edited comment",
       author: "bob",
     });
-    expect(editResult!.written).toBe("updated");
-    expect(editResult!.nodeId).toBe(createResult!.nodeId); // same node, not a new one
+    expect(editResult?.written).toBe("updated");
+    expect(editResult?.nodeId).toBe(createResult?.nodeId); // same node, not a new one
   });
 
   test("comment redelivered (same body) returns unchanged and does NOT append a new changeset", async () => {
@@ -370,7 +368,7 @@ describe("handleConnectorEvent", () => {
     // Get log length before re-delivery
     const { withGraph } = await import("../src/lock.js");
     const logBefore = await withGraph(fh.graph, () => {
-      return (fh.graph as any).log() as unknown[];
+      return fh.graph.log() as unknown[];
     });
     const logLenBefore = Array.isArray(logBefore) ? logBefore.length : 0;
 
@@ -383,11 +381,11 @@ describe("handleConnectorEvent", () => {
       author: "carol",
     });
 
-    expect(result!.written).toBe("unchanged");
+    expect(result?.written).toBe("unchanged");
 
     // Log length must not have grown
     const logAfter = await withGraph(fh.graph, () => {
-      return (fh.graph as any).log() as unknown[];
+      return fh.graph.log() as unknown[];
     });
     const logLenAfter = Array.isArray(logAfter) ? logAfter.length : 0;
     expect(logLenAfter).toBe(logLenBefore);
@@ -411,7 +409,7 @@ describe("handleConnectorEvent", () => {
       body: "",
       author: "dave",
     });
-    expect(result!.written).toBe("tombstoned");
+    expect(result?.written).toBe("tombstoned");
   });
 
   test("tombstone then re-ingest same id+body resurrects as updated", async () => {
@@ -423,8 +421,8 @@ describe("handleConnectorEvent", () => {
       body: "Original body",
       author: "frank",
     });
-    expect(createResult!.written).toBe("created");
-    const originalNodeId = createResult!.nodeId;
+    expect(createResult?.written).toBe("created");
+    const originalNodeId = createResult?.nodeId;
 
     // Step 2: tombstone it
     const tombResult = await handleConnectorEvent(fh, {
@@ -434,7 +432,7 @@ describe("handleConnectorEvent", () => {
       body: "",
       author: "frank",
     });
-    expect(tombResult!.written).toBe("tombstoned");
+    expect(tombResult?.written).toBe("tombstoned");
 
     // Step 3: re-ingest with same id and same body — resurrection
     const resurrectResult = await handleConnectorEvent(fh, {
@@ -445,8 +443,8 @@ describe("handleConnectorEvent", () => {
       author: "frank",
     });
     // Node is tombstoned so it needs to be reactivated — must be "updated", not "unchanged"
-    expect(resurrectResult!.written).toBe("updated");
-    expect(resurrectResult!.nodeId).toBe(originalNodeId);
+    expect(resurrectResult?.written).toBe("updated");
+    expect(resurrectResult?.nodeId).toBe(originalNodeId);
   });
 
   test("dedup across two ingests of the same comment id", async () => {
@@ -458,8 +456,8 @@ describe("handleConnectorEvent", () => {
       body: "Dedup test",
       author: "eve",
     });
-    expect(first!.written).toBe("created");
-    const firstNodeId = first!.nodeId;
+    expect(first?.written).toBe("created");
+    const firstNodeId = first?.nodeId;
 
     // Second ingest of same id with same body — must be unchanged, same node
     const second = await handleConnectorEvent(fh, {
@@ -469,7 +467,7 @@ describe("handleConnectorEvent", () => {
       body: "Dedup test",
       author: "eve",
     });
-    expect(second!.written).toBe("unchanged");
-    expect(second!.nodeId).toBe(firstNodeId);
+    expect(second?.written).toBe("unchanged");
+    expect(second?.nodeId).toBe(firstNodeId);
   });
 });

@@ -15,7 +15,9 @@ vi.mock("~/lib/hooks", () => ({
   useSession: vi.fn(),
   useGraphs: vi.fn(),
   useActiveGraph: vi.fn(),
-  useGitProposals: vi.fn().mockReturnValue({ data: { proposals: [] }, isLoading: false, isError: false, error: null }),
+  useGitProposals: vi
+    .fn()
+    .mockReturnValue({ data: { proposals: [] }, isLoading: false, isError: false, error: null }),
 }));
 
 // Mock api.ts so localStorage/module-level calls don't fail in happy-dom

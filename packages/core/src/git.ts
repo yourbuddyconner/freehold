@@ -6,11 +6,11 @@
  */
 
 import { execFile } from "node:child_process";
-import { writeFileSync, unlinkSync } from "node:fs";
+import { unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import { load as yamlLoad, dump as yamlDump } from "js-yaml";
+import { dump as yamlDump, load as yamlLoad } from "js-yaml";
 
 const execFileAsync = promisify(execFile);
 
@@ -22,15 +22,19 @@ function withAppendLock<T>(repoDir: string, sha: string, fn: () => Promise<T>): 
   const key = `${repoDir}\0${sha}`;
   const prev = appendLocks.get(key) ?? Promise.resolve();
   let resolve!: () => void;
-  const next = new Promise<void>((r) => { resolve = r; });
-  appendLocks.set(key, next);
-  return prev.then(() => fn()).finally(() => {
-    resolve();
-    // Clean up if this is still the current tail to avoid unbounded growth
-    if (appendLocks.get(key) === next) {
-      appendLocks.delete(key);
-    }
+  const next = new Promise<void>((r) => {
+    resolve = r;
   });
+  appendLocks.set(key, next);
+  return prev
+    .then(() => fn())
+    .finally(() => {
+      resolve();
+      // Clean up if this is still the current tail to avoid unbounded growth
+      if (appendLocks.get(key) === next) {
+        appendLocks.delete(key);
+      }
+    });
 }
 
 /**
@@ -88,7 +92,13 @@ export interface CommitMeta {
  */
 export async function commitMeta(repoDir: string, sha: string): Promise<CommitMeta> {
   // Format: SHA\nAuthorName\nAuthorEmail\nISO8601timestamp\nParent SHAs\nBody…
-  const out = await git(repoDir, ["show", "-s", "--format=%H%n%an%n%ae%n%aI%n%P%n%B", "--end-of-options", sha]);
+  const out = await git(repoDir, [
+    "show",
+    "-s",
+    "--format=%H%n%an%n%ae%n%aI%n%P%n%B",
+    "--end-of-options",
+    sha,
+  ]);
   const lines = out.split("\n");
   const resultSha = lines[0].trim();
   const author = lines[1].trim();
@@ -115,7 +125,15 @@ export async function diffTreeOps(repoDir: string, sha: string): Promise<Array<[
     args = ["diff-tree", "--root", "--no-renames", "--name-status", "-r", "--end-of-options", sha];
   } else {
     // First-parent two-tree diff
-    args = ["diff-tree", "--no-renames", "--name-status", "-r", "--end-of-options", meta.parents[0], sha];
+    args = [
+      "diff-tree",
+      "--no-renames",
+      "--name-status",
+      "-r",
+      "--end-of-options",
+      meta.parents[0],
+      sha,
+    ];
   }
   const out = await git(repoDir, args);
   const results: Array<[string, string]> = [];
@@ -157,11 +175,7 @@ export async function readDecisions(repoDir: string, sha: string): Promise<unkno
  * Append a decision record to the allod-decisions git note for a commit SHA.
  * Reads existing decisions, appends, and writes back atomically via a temp file.
  */
-export async function appendDecision(
-  repoDir: string,
-  sha: string,
-  record: unknown
-): Promise<void> {
+export async function appendDecision(repoDir: string, sha: string, record: unknown): Promise<void> {
   assertSafeRef(sha, "sha"); // reject before locking
   return withAppendLock(repoDir, sha, async () => {
     const existing = await readDecisions(repoDir, sha);
@@ -193,9 +207,7 @@ export async function pushNotes(repoDir: string, remote = "origin"): Promise<voi
  * Return all local branch heads as { ref, sha } pairs.
  * Uses `git for-each-ref refs/heads --format=%(refname)%09%(objectname)`.
  */
-export async function branchHeads(
-  repoDir: string
-): Promise<Array<{ ref: string; sha: string }>> {
+export async function branchHeads(repoDir: string): Promise<Array<{ ref: string; sha: string }>> {
   const out = await git(repoDir, [
     "for-each-ref",
     "refs/heads",

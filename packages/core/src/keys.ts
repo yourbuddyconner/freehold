@@ -6,11 +6,11 @@
  */
 
 import { execFile } from "node:child_process";
-import { readFileSync, existsSync } from "node:fs";
+import { createPrivateKey, sign as cryptoSign } from "node:crypto";
+import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import { createPrivateKey, sign as cryptoSign } from "node:crypto";
 import { load as yamlLoad } from "js-yaml";
 
 const execFileAsync = promisify(execFile);
@@ -37,7 +37,7 @@ export interface ResolvedKey {
 }
 
 export interface KeyBackendOptions {
-  repoDir?: string;       // enables the legacy .allod/keys fallback
+  repoDir?: string; // enables the legacy .allod/keys fallback
   keychainService?: string; // default "allod"; tests override
 }
 
@@ -73,8 +73,13 @@ function parseKeyYaml(yamlStr: string, location: string): KeyYaml {
     throw new Error(`invalid key YAML at ${location}`);
   }
   const { name, key_id, algorithm, public: pub, secret } = doc;
-  if (typeof name !== "string" || typeof key_id !== "string" ||
-      typeof algorithm !== "string" || typeof pub !== "string" || typeof secret !== "string") {
+  if (
+    typeof name !== "string" ||
+    typeof key_id !== "string" ||
+    typeof algorithm !== "string" ||
+    typeof pub !== "string" ||
+    typeof secret !== "string"
+  ) {
     throw new Error(`key YAML at ${location} is missing required fields`);
   }
   if (algorithm !== "ed25519") {
@@ -128,8 +133,10 @@ async function fetchFromKeychain(service: string, account: string): Promise<stri
   try {
     const { stdout } = await execFileAsync("security", [
       "find-generic-password",
-      "-s", service,
-      "-a", account,
+      "-s",
+      service,
+      "-a",
+      account,
       "-w",
     ]);
     const raw = stdout.trim();
@@ -162,7 +169,7 @@ async function fetchFromKeychain(service: string, account: string): Promise<stri
 export async function resolveKey(
   allodGraphId: string,
   principal: string,
-  opts?: KeyBackendOptions,
+  opts?: KeyBackendOptions
 ): Promise<ResolvedKey> {
   const searched: string[] = [];
 
@@ -207,7 +214,7 @@ export async function signPayload(
   key: ResolvedKey,
   payload: string,
   allodGraphId: string,
-  opts?: KeyBackendOptions,
+  opts?: KeyBackendOptions
 ): Promise<string> {
   if (key.backend === "file") {
     const kp = loadKeyFile(key.location);
@@ -239,7 +246,7 @@ export async function signPayload(
 export async function publicHex(
   key: ResolvedKey,
   allodGraphId: string,
-  opts?: KeyBackendOptions,
+  opts?: KeyBackendOptions
 ): Promise<string> {
   if (key.backend === "file") {
     const kp = loadKeyFile(key.location);

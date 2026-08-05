@@ -110,7 +110,11 @@ describe("GET /api/v1/graphs", () => {
 
 describe("POST /api/v1/graphs", () => {
   test("registers a repo graph and it appears in list", async () => {
-    const { status, body } = await req("POST", "/api/v1/graphs", { path: repoDir, id: "test-repo", name: "Test Repo" });
+    const { status, body } = await req("POST", "/api/v1/graphs", {
+      path: repoDir,
+      id: "test-repo",
+      name: "Test Repo",
+    });
     expect(status).toBe(201);
     const entry = body as { id: string; kind: string; name: string };
     expect(entry.id).toBe("test-repo");
@@ -123,7 +127,9 @@ describe("POST /api/v1/graphs", () => {
   });
 
   test("returns 400 for bogus path", async () => {
-    const { status, body } = await req("POST", "/api/v1/graphs", { path: "/tmp/definitely-not-a-repo-xyzzy" });
+    const { status, body } = await req("POST", "/api/v1/graphs", {
+      path: "/tmp/definitely-not-a-repo-xyzzy",
+    });
     expect(status).toBe(400);
     const b = body as { error: string };
     expect(typeof b.error).toBe("string");
@@ -193,7 +199,10 @@ describe("Scoped routes: /api/v1/graphs/:graphId/*", () => {
   });
 
   test("unknown graph id → 404", async () => {
-    const { status, body } = await req("GET", "/api/v1/graphs/nonexistent-graph/memories?scope=all");
+    const { status, body } = await req(
+      "GET",
+      "/api/v1/graphs/nonexistent-graph/memories?scope=all"
+    );
     expect(status).toBe(404);
     const b = body as { error: string };
     expect(b.error).toBe("unknown graph");
@@ -228,11 +237,9 @@ describe("Data isolation: scoped graph memories", () => {
   test("memory written to scoped graph appears in scoped read but not in main", async () => {
     // Register an agent in the scoped (repo) graph
     const scopedAgent = `iso-agent-${Date.now()}`;
-    const { status: agentStatus } = await req(
-      "POST",
-      `/api/v1/graphs/${isoGraphId}/agents`,
-      { name: scopedAgent }
-    );
+    const { status: agentStatus } = await req("POST", `/api/v1/graphs/${isoGraphId}/agents`, {
+      name: scopedAgent,
+    });
     expect(agentStatus).toBe(200);
 
     // Write a memory through the scoped route (repo graph)
@@ -258,10 +265,7 @@ describe("Data isolation: scoped graph memories", () => {
     expect(foundInScoped).toBe(true);
 
     // Must NOT appear in the main graph's unscoped read
-    const { status: mainStatus, body: mainBody } = await req(
-      "GET",
-      "/api/v1/memories?scope=all"
-    );
+    const { status: mainStatus, body: mainBody } = await req("GET", "/api/v1/memories?scope=all");
     expect(mainStatus).toBe(200);
     const mainResults = (mainBody as { results: Array<{ title: string }> }).results;
     const foundInMain = mainResults.some((r) => r.title?.includes("isolation-canary-scoped"));
@@ -271,19 +275,14 @@ describe("Data isolation: scoped graph memories", () => {
   test("memory written to main graph does not appear in scoped graph read", async () => {
     // Register an agent in the main graph
     const mainAgent = `main-agent-${Date.now()}`;
-    const { status: agentStatus } = await req(
-      "POST",
-      "/api/v1/agents",
-      { name: mainAgent }
-    );
+    const { status: agentStatus } = await req("POST", "/api/v1/agents", { name: mainAgent });
     expect(agentStatus).toBe(200);
 
     // Write a memory through the main (unscoped) route
-    const { status: writeStatus, body: writeBody } = await req(
-      "POST",
-      "/api/v1/remember",
-      { agent: mainAgent, content: "isolation-canary-main" }
-    );
+    const { status: writeStatus, body: writeBody } = await req("POST", "/api/v1/remember", {
+      agent: mainAgent,
+      content: "isolation-canary-main",
+    });
     expect(writeStatus).toBe(200);
     const wb = writeBody as { status: string };
     expect(wb.status).toBe("saved");
@@ -318,8 +317,8 @@ describe("GET /api/v1/session", () => {
     const b = body as { graphs: Array<{ id: string; name: string; kind: string }> };
     const main = b.graphs.find((g) => g.id === "main");
     expect(main).toBeDefined();
-    expect(main!.name).toBeDefined();
-    expect(main!.kind).toBe("memory");
+    expect(main?.name).toBeDefined();
+    expect(main?.kind).toBe("memory");
   });
 });
 
@@ -374,7 +373,6 @@ describe("MCP: recall tool graph param", () => {
     });
     await waitForDaemon(mcpPort);
 
-
     const url = new URL(`http://127.0.0.1:${mcpPort}/mcp`);
     const transport = new StreamableHTTPClientTransport(url, {
       requestInit: { headers: { Authorization: `Bearer ${mcpToken}` } },
@@ -393,7 +391,7 @@ describe("MCP: recall tool graph param", () => {
   });
 
   test("recall without graph param returns content array", async () => {
-    const result = await client!.callTool({ name: "recall", arguments: { query: "test" } });
+    const result = await client?.callTool({ name: "recall", arguments: { query: "test" } });
     expect(result.content).toBeDefined();
     expect(Array.isArray(result.content)).toBe(true);
     const text = (result.content as Array<{ type: string; text: string }>)[0]?.text;
@@ -403,7 +401,10 @@ describe("MCP: recall tool graph param", () => {
   });
 
   test("recall with graph: 'main' returns same shape", async () => {
-    const result = await client!.callTool({ name: "recall", arguments: { query: "test", graph: "main" } });
+    const result = await client?.callTool({
+      name: "recall",
+      arguments: { query: "test", graph: "main" },
+    });
     expect(result.content).toBeDefined();
     const text = (result.content as Array<{ type: string; text: string }>)[0]?.text;
     const parsed = JSON.parse(text);
@@ -411,7 +412,10 @@ describe("MCP: recall tool graph param", () => {
   });
 
   test("recall with unknown graph returns error result (not throw)", async () => {
-    const result = await client!.callTool({ name: "recall", arguments: { query: "test", graph: "no-such-graph" } });
+    const result = await client?.callTool({
+      name: "recall",
+      arguments: { query: "test", graph: "no-such-graph" },
+    });
     expect(result.content).toBeDefined();
     const text = (result.content as Array<{ type: string; text: string }>)[0]?.text;
     const parsed = JSON.parse(text);

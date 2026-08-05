@@ -14,8 +14,21 @@ vi.mock("~/lib/hooks", () => ({
   useEntity: vi.fn(),
   useGraphs: vi.fn().mockReturnValue({ graphs: [], defaultGraph: "main" }),
   useActiveGraph: vi.fn().mockReturnValue({ activeGraphId: "main", setActiveGraphId: vi.fn() }),
-  useGitProposals: vi.fn().mockReturnValue({ data: { proposals: [] }, isLoading: false, isError: false, error: null }),
-  useSession: vi.fn().mockReturnValue({ data: { owner: "owner", defaultAgent: "claude", port: 8710, graphs: [], defaultGraph: "main" }, isLoading: false, isError: false, error: null }),
+  useGitProposals: vi
+    .fn()
+    .mockReturnValue({ data: { proposals: [] }, isLoading: false, isError: false, error: null }),
+  useSession: vi.fn().mockReturnValue({
+    data: {
+      owner: "owner",
+      defaultAgent: "claude",
+      port: 8710,
+      graphs: [],
+      defaultGraph: "main",
+    },
+    isLoading: false,
+    isError: false,
+    error: null,
+  }),
 }));
 
 vi.mock("~/components/PierreDiff", () => ({
@@ -329,7 +342,13 @@ describe("Inbox", () => {
         error: null,
       } as unknown as ReturnType<typeof hooks.useGitProposals>);
       vi.mocked(hooks.useSession).mockReturnValue({
-        data: { owner: "alice", defaultAgent: "claude", port: 8710, graphs: [], defaultGraph: "main" },
+        data: {
+          owner: "alice",
+          defaultAgent: "claude",
+          port: 8710,
+          graphs: [],
+          defaultGraph: "main",
+        },
         isLoading: false,
         isError: false,
         error: null,
@@ -394,7 +413,13 @@ describe("Inbox", () => {
         error: null,
       } as unknown as ReturnType<typeof hooks.useGitProposals>);
       vi.mocked(hooks.useSession).mockReturnValue({
-        data: { owner: "alice", defaultAgent: "claude", port: 8710, graphs: [], defaultGraph: "main" },
+        data: {
+          owner: "alice",
+          defaultAgent: "claude",
+          port: 8710,
+          graphs: [],
+          defaultGraph: "main",
+        },
         isLoading: false,
         isError: false,
         error: null,
@@ -427,7 +452,7 @@ describe("Inbox", () => {
       });
       expect(screen.getByRole("button", { name: /reject/i })).toBeDisabled();
       expect(
-        screen.getAllByRole("button", { name: /approve/i }).find(b => !b.closest("[role=dialog]"))
+        screen.getAllByRole("button", { name: /approve/i }).find((b) => !b.closest("[role=dialog]"))
       ).toBeDisabled();
     });
 
@@ -441,7 +466,13 @@ describe("Inbox", () => {
         error: null,
       } as unknown as ReturnType<typeof hooks.useGitProposals>);
       vi.mocked(hooks.useSession).mockReturnValue({
-        data: { owner: "alice", defaultAgent: "claude", port: 8710, graphs: [], defaultGraph: "main" },
+        data: {
+          owner: "alice",
+          defaultAgent: "claude",
+          port: 8710,
+          graphs: [],
+          defaultGraph: "main",
+        },
         isLoading: false,
         isError: false,
         error: null,
@@ -493,7 +524,13 @@ describe("Inbox", () => {
         error: null,
       } as unknown as ReturnType<typeof hooks.useGitProposals>);
       vi.mocked(hooks.useSession).mockReturnValue({
-        data: { owner: "alice", defaultAgent: "claude", port: 8710, graphs: [], defaultGraph: "main" },
+        data: {
+          owner: "alice",
+          defaultAgent: "claude",
+          port: 8710,
+          graphs: [],
+          defaultGraph: "main",
+        },
         isLoading: false,
         isError: false,
         error: null,
@@ -554,7 +591,13 @@ describe("Inbox", () => {
         error: null,
       } as unknown as ReturnType<typeof hooks.useGitProposals>);
       vi.mocked(hooks.useSession).mockReturnValue({
-        data: { owner: "alice", defaultAgent: "claude", port: 8710, graphs: [], defaultGraph: "main" },
+        data: {
+          owner: "alice",
+          defaultAgent: "claude",
+          port: 8710,
+          graphs: [],
+          defaultGraph: "main",
+        },
         isLoading: false,
         isError: false,
         error: null,
@@ -586,9 +629,10 @@ describe("Inbox", () => {
         .getAllByRole("button", { name: /approve/i })
         .find((b) => b.closest("[role=dialog]"));
       expect(confirmBtn).toBeDefined();
+      if (!confirmBtn) return;
 
       await act(async () => {
-        fireEvent.click(confirmBtn!);
+        fireEvent.click(confirmBtn);
       });
 
       await waitFor(() => {
@@ -608,7 +652,13 @@ describe("Inbox", () => {
         error: null,
       } as unknown as ReturnType<typeof hooks.useGitProposals>);
       vi.mocked(hooks.useSession).mockReturnValue({
-        data: { owner: "alice", defaultAgent: "claude", port: 8710, graphs: [], defaultGraph: "main" },
+        data: {
+          owner: "alice",
+          defaultAgent: "claude",
+          port: 8710,
+          graphs: [],
+          defaultGraph: "main",
+        },
         isLoading: false,
         isError: false,
         error: null,
@@ -664,7 +714,13 @@ describe("Inbox", () => {
         error: null,
       } as unknown as ReturnType<typeof hooks.useGitProposals>);
       vi.mocked(hooks.useSession).mockReturnValue({
-        data: { owner: "alice", defaultAgent: "claude", port: 8710, graphs: [], defaultGraph: "main" },
+        data: {
+          owner: "alice",
+          defaultAgent: "claude",
+          port: 8710,
+          graphs: [],
+          defaultGraph: "main",
+        },
         isLoading: false,
         isError: false,
         error: null,
@@ -745,7 +801,13 @@ describe("Inbox", () => {
       error: null,
     } as unknown as ReturnType<typeof hooks.useGitProposals>);
     vi.mocked(hooks.useSession).mockReturnValue({
-      data: { owner: "owner", defaultAgent: "claude", port: 8710, graphs: [], defaultGraph: "main" },
+      data: {
+        owner: "owner",
+        defaultAgent: "claude",
+        port: 8710,
+        graphs: [],
+        defaultGraph: "main",
+      },
       isLoading: false,
       isError: false,
       error: null,

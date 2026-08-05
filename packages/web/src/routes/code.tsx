@@ -142,24 +142,22 @@ function RegionsPanel({ rules }: { rules: RegionRule[] }) {
                 {r.rule}
               </p>
               {reviewersText && (
-                <p className="font-mono text-[10px] text-(--fg-muted)">
-                  {reviewersText}
-                </p>
+                <p className="font-mono text-[10px] text-(--fg-muted)">{reviewersText}</p>
               )}
             </div>
-          <ul className="space-y-0.5">
-            {r.paths.map((p) => (
-              <li key={p}>
-                <Link
-                  to="/code/file"
-                  search={{ path: p }}
-                  className="block truncate px-1 py-0.5 font-mono text-[11px] text-(--fg-muted) hover:text-(--fg) hover:bg-(--bg-subtle)"
-                >
-                  {p}
-                </Link>
-              </li>
-            ))}
-          </ul>
+            <ul className="space-y-0.5">
+              {r.paths.map((p) => (
+                <li key={p}>
+                  <Link
+                    to="/code/file"
+                    search={{ path: p }}
+                    className="block truncate px-1 py-0.5 font-mono text-[11px] text-(--fg-muted) hover:text-(--fg) hover:bg-(--bg-subtle)"
+                  >
+                    {p}
+                  </Link>
+                </li>
+              ))}
+            </ul>
           </div>
         );
       })}
@@ -212,9 +210,7 @@ function CodeLayout() {
         </aside>
 
         {/* Right pane: child route or resting state */}
-        <div className="flex-1 min-w-0">
-          {isExact ? <RestingState /> : <Outlet />}
-        </div>
+        <div className="flex-1 min-w-0">{isExact ? <RestingState /> : <Outlet />}</div>
       </div>
     </div>
   );

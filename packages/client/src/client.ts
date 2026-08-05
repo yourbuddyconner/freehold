@@ -444,18 +444,31 @@ export class FreeholdClient {
 
   /** POST /api/v1/git/proposals/:sha/push-notes — push decision notes to remote */
   async pushGitNotes(sha: string): Promise<{ pushed: boolean; pushError?: string }> {
-    return this.fetch<{ pushed: boolean; pushError?: string }>("POST", `/api/v1/git/proposals/${sha}/push-notes`);
+    return this.fetch<{ pushed: boolean; pushError?: string }>(
+      "POST",
+      `/api/v1/git/proposals/${sha}/push-notes`
+    );
   }
 
   /** GET /connector — get connector status and config */
-  async getConnector(): Promise<{ configured: boolean; config?: Record<string, unknown>; status: { lastPollAt?: string; lastErrors?: string[] } }> {
+  async getConnector(): Promise<{
+    configured: boolean;
+    config?: Record<string, unknown>;
+    status: { lastPollAt?: string; lastErrors?: string[] };
+  }> {
     return this.fetch("GET", "/api/v1/connector");
   }
 
   /** PUT /connector — configure credential mode or update webhook settings */
-  async putConnector(body:
-    | { mode: "credential"; pollIntervalSec?: number; webhooksEnabled?: boolean; publicUrl?: string }
-    | { webhooksEnabled: boolean; publicUrl?: string }
+  async putConnector(
+    body:
+      | {
+          mode: "credential";
+          pollIntervalSec?: number;
+          webhooksEnabled?: boolean;
+          publicUrl?: string;
+        }
+      | { webhooksEnabled: boolean; publicUrl?: string }
   ): Promise<Record<string, unknown>> {
     return this.fetch("PUT", "/api/v1/connector", { body });
   }
@@ -471,8 +484,11 @@ export class FreeholdClient {
   }
 
   /** POST /connector/app/manifest — get manifest + URL for GitHub App creation form-POST */
-  async getConnectorManifest(): Promise<{ manifestUrl: string; manifest: Record<string, unknown>; state: string }> {
+  async getConnectorManifest(): Promise<{
+    manifestUrl: string;
+    manifest: Record<string, unknown>;
+    state: string;
+  }> {
     return this.fetch("POST", "/api/v1/connector/app/manifest");
   }
-
 }

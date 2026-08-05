@@ -9,22 +9,12 @@
  *   - PUT webhooksEnabled=true without publicUrl → 400
  */
 
-import {
-  mkdtempSync,
-  writeFileSync,
-  chmodSync,
-  rmSync,
-} from "node:fs";
 import { execFileSync } from "node:child_process";
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, test, beforeAll, afterAll } from "vitest";
-import {
-  GraphManager,
-  createGraph,
-  hashEmbedder,
-  loadConfig,
-} from "@freehold/core";
+import { GraphManager, createGraph, hashEmbedder, loadConfig } from "@freehold/core";
+import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { createApp } from "../src/app.js";
 
 function makeTempDir(prefix: string): string {
@@ -33,18 +23,34 @@ function makeTempDir(prefix: string): string {
 
 function stubGh(token: string): { restore: () => void } {
   const dir = makeTempDir("fh-smoke-gh-");
-  writeFileSync(join(dir, "gh"), `#!/bin/sh\nif [ "$1" = "auth" ] && [ "$2" = "token" ]; then echo '${token}'; exit 0; fi\nexit 1\n`);
+  writeFileSync(
+    join(dir, "gh"),
+    `#!/bin/sh\nif [ "$1" = "auth" ] && [ "$2" = "token" ]; then echo '${token}'; exit 0; fi\nexit 1\n`
+  );
   chmodSync(join(dir, "gh"), 0o755);
   const orig = process.env.PATH ?? "";
   process.env.PATH = `${dir}:${orig}`;
-  return { restore: () => { process.env.PATH = orig; rmSync(dir, { recursive: true, force: true }); } };
+  return {
+    restore: () => {
+      process.env.PATH = orig;
+      rmSync(dir, { recursive: true, force: true });
+    },
+  };
 }
 
 type FetchFn = typeof fetch;
 
 function makeMockFetch(opts: {
-  owner: string; repo: string;
-  comments: Array<{ id: number; body: string; user: { login: string }; path?: string; commit_id?: string; in_reply_to_id?: number }>;
+  owner: string;
+  repo: string;
+  comments: Array<{
+    id: number;
+    body: string;
+    user: { login: string };
+    path?: string;
+    commit_id?: string;
+    in_reply_to_id?: number;
+  }>;
   checkRuns: Array<{ name: string; status: string; conclusion: string | null }>;
   sha: string;
 }): FetchFn {
@@ -55,26 +61,39 @@ function makeMockFetch(opts: {
     const path = pathWithQuery.split("?")[0];
 
     if (path === `/repos/${opts.owner}/${opts.repo}/pulls`) {
-      return new Response(JSON.stringify([{ number: 1, head: { sha: opts.sha, ref: "feature/test" } }]),
-        { status: 200, headers: { "content-type": "application/json" } });
+      return new Response(
+        JSON.stringify([{ number: 1, head: { sha: opts.sha, ref: "feature/test" } }]),
+        { status: 200, headers: { "content-type": "application/json" } }
+      );
     }
     if (path === `/repos/${opts.owner}/${opts.repo}/pulls/1/comments`) {
-      return new Response(JSON.stringify(opts.comments),
-        { status: 200, headers: { "content-type": "application/json" } });
+      return new Response(JSON.stringify(opts.comments), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
     }
     if (path === `/repos/${opts.owner}/${opts.repo}/issues/1/comments`) {
-      return new Response(JSON.stringify([]),
-        { status: 200, headers: { "content-type": "application/json" } });
+      return new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
     }
     if (path === `/repos/${opts.owner}/${opts.repo}/pulls/1/reviews`) {
-      return new Response(JSON.stringify([]),
-        { status: 200, headers: { "content-type": "application/json" } });
+      return new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
     }
     if (path === `/repos/${opts.owner}/${opts.repo}/commits/${opts.sha}/check-runs`) {
-      return new Response(JSON.stringify({ check_runs: opts.checkRuns }),
-        { status: 200, headers: { "content-type": "application/json" } });
+      return new Response(JSON.stringify({ check_runs: opts.checkRuns }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
     }
-    return new Response(JSON.stringify({ message: "Not Found (smoke mock)" }), { status: 404, headers: { "content-type": "application/json" } });
+    return new Response(JSON.stringify({ message: "Not Found (smoke mock)" }), {
+      status: 404,
+      headers: { "content-type": "application/json" },
+    });
   };
 }
 
@@ -104,7 +123,11 @@ async function req(method: string, path: string, body?: unknown) {
   const res = await app.fetch(new Request(`http://localhost${path}`, init));
   let json: unknown;
   const text = await res.text();
-  try { json = JSON.parse(text); } catch { json = text; }
+  try {
+    json = JSON.parse(text);
+  } catch {
+    json = text;
+  }
   return { status: res.status, body: json };
 }
 
@@ -121,7 +144,9 @@ beforeAll(async () => {
   execFileSync("git", ["init"], { cwd: repoDir });
   execFileSync("git", ["config", "user.email", "smoke@test.com"], { cwd: repoDir });
   execFileSync("git", ["config", "user.name", "Smoke Test"], { cwd: repoDir });
-  execFileSync("git", ["remote", "add", "origin", `https://github.com/${OWNER}/${REPO}.git`], { cwd: repoDir });
+  execFileSync("git", ["remote", "add", "origin", `https://github.com/${OWNER}/${REPO}.git`], {
+    cwd: repoDir,
+  });
   writeFileSync(join(repoDir, "README.md"), "# Smoke test\n");
   execFileSync("git", ["add", "."], { cwd: repoDir });
   execFileSync("git", ["commit", "-m", "init"], { cwd: repoDir });
@@ -135,29 +160,40 @@ beforeAll(async () => {
     owner: OWNER,
     repo: REPO,
     sha: FAKE_SHA,
-    comments: [{
-      id: 99001,
-      body: "Smoke test review comment from GitHub",
-      user: { login: "smoke-reviewer" },
-      path: "README.md",
-      commit_id: FAKE_SHA,
-      in_reply_to_id: undefined,
-    }],
+    comments: [
+      {
+        id: 99001,
+        body: "Smoke test review comment from GitHub",
+        user: { login: "smoke-reviewer" },
+        path: "README.md",
+        commit_id: FAKE_SHA,
+        in_reply_to_id: undefined,
+      },
+    ],
     checkRuns: [{ name: "ci/test", status: "completed", conclusion: "success" }],
   });
 
   app = createApp(manager, hashEmbedder, config, { fetchFn: mockFetch as typeof fetch });
 
   // Register repo graph
-  const regRes = await req("POST", "/api/v1/graphs", { id: "smoke-repo", path: repoDir, kind: "repo" });
-  if (regRes.status !== 201) throw new Error(`Failed to register repo: ${JSON.stringify(regRes.body)}`);
+  const regRes = await req("POST", "/api/v1/graphs", {
+    id: "smoke-repo",
+    path: repoDir,
+    kind: "repo",
+  });
+  if (regRes.status !== 201)
+    throw new Error(`Failed to register repo: ${JSON.stringify(regRes.body)}`);
   repoGraphId = (regRes.body as { id: string }).id ?? "smoke-repo";
 }, 30000);
 
 afterAll(() => {
   ghRestore?.restore();
-  try { rmSync(home, { recursive: true, force: true }); } catch {}
-  try { rmSync(repoDir, { recursive: true, force: true }); } catch {}
+  try {
+    rmSync(home, { recursive: true, force: true });
+  } catch {}
+  try {
+    rmSync(repoDir, { recursive: true, force: true });
+  } catch {}
 });
 
 // ---------------------------------------------------------------------------
@@ -182,7 +218,7 @@ describe("T4 smoke: connector surface integration", () => {
   });
 
   test("[4] configure credential mode on repo graph", async () => {
-    const r = await req("PUT", `/api/v1/graphs/smoke-repo/connector`, { mode: "credential" });
+    const r = await req("PUT", "/api/v1/graphs/smoke-repo/connector", { mode: "credential" });
     expect(r.status).toBe(200);
     const b = r.body as { config: { mode: string } };
     expect(b.config?.mode).toBe("credential");
@@ -205,7 +241,7 @@ describe("T4 smoke: connector surface integration", () => {
   });
 
   test("[7] git/proposals endpoint returns array after poll", async () => {
-    const proposalsRes = await req("GET", `/api/v1/graphs/smoke-repo/git/proposals`);
+    const proposalsRes = await req("GET", "/api/v1/graphs/smoke-repo/git/proposals");
     expect(proposalsRes.status).toBe(200);
     const proposals = (proposalsRes.body as { proposals: Array<{ sha: string }> }).proposals;
     // The fake sha may or may not match a real git commit in the scratch repo

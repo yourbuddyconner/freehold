@@ -200,7 +200,7 @@ export function MemoryGraphPage() {
           footprint: n.footprint,
         },
       })),
-    [layout, expanded]
+    [layout]
   );
 
   const flowEdges = useMemo(

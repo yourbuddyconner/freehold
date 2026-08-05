@@ -2,7 +2,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createRoute, useNavigate } from "@tanstack/react-router";
 import { Check, Copy } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { type Principal, PrincipalCard } from "~/components/PrincipalCard";
 import { ApiError, apiClient } from "~/lib/api";
 import { cn } from "~/lib/cn";
@@ -444,7 +444,11 @@ function ConnectorSection() {
   const [selectedMode, setSelectedMode] = useState<"credential" | "app">("credential");
 
   // Poll result state
-  const [pollResult, setPollResult] = useState<{ events: number; unchanged: number; errors: string[] } | null>(null);
+  const [pollResult, setPollResult] = useState<{
+    events: number;
+    unchanged: number;
+    errors: string[];
+  } | null>(null);
 
   // Connect mutation (credential mode)
   const connectMut = useMutation({
@@ -459,7 +463,11 @@ function ConnectorSection() {
   });
 
   // Manifest form state
-  const [manifestData, setManifestData] = useState<{ manifestUrl: string; manifest: Record<string, unknown>; state: string } | null>(null);
+  const [manifestData, setManifestData] = useState<{
+    manifestUrl: string;
+    manifest: Record<string, unknown>;
+    state: string;
+  } | null>(null);
   const manifestMut = useMutation({
     mutationFn: () => apiClient.getConnectorManifest(),
     onSuccess: (data) => setManifestData(data),
@@ -556,10 +564,19 @@ function ConnectorSection() {
                 {connectMut.isPending ? "Connecting…" : "Connect with credential"}
               </button>
               {connectMut.isSuccess && (
-                <p className="text-xs text-green-700 dark:text-green-400" data-testid="connect-success">Connector configured.</p>
+                <p
+                  className="text-xs text-green-700 dark:text-green-400"
+                  data-testid="connect-success"
+                >
+                  Connector configured.
+                </p>
               )}
               {connectError && (
-                <p className="text-xs text-red-600 dark:text-red-400" role="alert" data-testid="connect-error">
+                <p
+                  className="text-xs text-red-600 dark:text-red-400"
+                  role="alert"
+                  data-testid="connect-error"
+                >
                   {connectError}
                 </p>
               )}
@@ -576,7 +593,8 @@ function ConnectorSection() {
               )}
               <div>
                 <p className="text-xs text-(--fg-muted) mb-2">
-                  Create a GitHub App using GitHub's manifest flow. A form will be submitted to GitHub.
+                  Create a GitHub App using GitHub's manifest flow. A form will be submitted to
+                  GitHub.
                 </p>
                 {!manifestData ? (
                   <button
@@ -589,12 +607,12 @@ function ConnectorSection() {
                     {manifestMut.isPending ? "Preparing…" : "Create GitHub App"}
                   </button>
                 ) : (
-                  <form
-                    method="post"
-                    action={manifestData.manifestUrl}
-                    data-testid="manifest-form"
-                  >
-                    <input type="hidden" name="manifest" value={JSON.stringify(manifestData.manifest)} />
+                  <form method="post" action={manifestData.manifestUrl} data-testid="manifest-form">
+                    <input
+                      type="hidden"
+                      name="manifest"
+                      value={JSON.stringify(manifestData.manifest)}
+                    />
                     <input type="hidden" name="state" value={manifestData.state} />
                     <button
                       type="submit"
@@ -607,7 +625,9 @@ function ConnectorSection() {
                 )}
                 {manifestMut.isError && (
                   <p className="text-xs text-red-600 dark:text-red-400" role="alert">
-                    {manifestMut.error instanceof Error ? manifestMut.error.message : "Failed to prepare manifest"}
+                    {manifestMut.error instanceof Error
+                      ? manifestMut.error.message
+                      : "Failed to prepare manifest"}
                   </p>
                 )}
               </div>
@@ -621,9 +641,15 @@ function ConnectorSection() {
           {cfg?.mode === "app" && (
             <div className="space-y-2 border-t border-(--border) pt-3">
               <div className="flex items-center gap-3">
-                <label className="text-xs text-(--fg-muted) w-24 shrink-0">Public URL</label>
+                <label
+                  htmlFor="public-url-input"
+                  className="text-xs text-(--fg-muted) w-24 shrink-0"
+                >
+                  Public URL
+                </label>
                 <input
                   type="text"
+                  id="public-url-input"
                   value={publicUrl}
                   onChange={(e) => setPublicUrl(e.target.value)}
                   placeholder="https://example.com"
@@ -632,11 +658,10 @@ function ConnectorSection() {
                 />
               </div>
               <div className="flex items-center gap-3">
-                <label className="text-xs text-(--fg-muted) w-24 shrink-0">Webhooks</label>
+                <span className="text-xs text-(--fg-muted) w-24 shrink-0">Webhooks</span>
                 <button
                   type="button"
-                  role="checkbox"
-                  aria-checked={cfg.webhooksEnabled ?? false}
+                  aria-pressed={cfg.webhooksEnabled ?? false}
                   disabled={!publicUrl.trim() || webhookMut.isPending}
                   data-testid="webhooks-toggle"
                   onClick={() => webhookMut.mutate(!(cfg.webhooksEnabled ?? false))}
@@ -651,7 +676,9 @@ function ConnectorSection() {
                   {cfg.webhooksEnabled ? "enabled" : "disabled"}
                 </button>
                 {!publicUrl.trim() && (
-                  <span className="text-[10px] text-(--fg-muted)">enter a public URL to enable webhooks</span>
+                  <span className="text-[10px] text-(--fg-muted)">
+                    enter a public URL to enable webhooks
+                  </span>
                 )}
               </div>
             </div>
@@ -672,7 +699,8 @@ function ConnectorSection() {
                 </button>
                 {pollResult && (
                   <span className="text-xs text-(--fg-muted) font-mono" data-testid="poll-result">
-                    {pollResult.events} events, {pollResult.unchanged} unchanged, {pollResult.errors.length} errors
+                    {pollResult.events} events, {pollResult.unchanged} unchanged,{" "}
+                    {pollResult.errors.length} errors
                   </span>
                 )}
               </div>

@@ -33,17 +33,13 @@ describe("git helpers", () => {
     writeFileSync(join(repoDir, "file.txt"), "hello");
     execFileSync("git", ["add", "file.txt"], { cwd: repoDir });
     execFileSync("git", ["commit", "-m", "initial commit"], { cwd: repoDir });
-    sha1 = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repoDir })
-      .toString()
-      .trim();
+    sha1 = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repoDir }).toString().trim();
 
     // Second commit (has one parent)
     writeFileSync(join(repoDir, "second.txt"), "world");
     execFileSync("git", ["add", "second.txt"], { cwd: repoDir });
     execFileSync("git", ["commit", "-m", "second commit"], { cwd: repoDir });
-    sha2 = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repoDir })
-      .toString()
-      .trim();
+    sha2 = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repoDir }).toString().trim();
   });
 
   test("headSha resolves to a 40-char hex string", async () => {
@@ -81,7 +77,7 @@ describe("git helpers", () => {
     // Root commit added file.txt
     const fileTxt = ops.find(([, path]) => path === "file.txt");
     expect(fileTxt).toBeDefined();
-    expect(fileTxt![0]).toBe("A");
+    expect(fileTxt?.[0]).toBe("A");
   });
 
   test("diffTreeOps on second commit returns correct ops", async () => {
@@ -90,7 +86,7 @@ describe("git helpers", () => {
     // Second commit added second.txt
     const secondTxt = ops.find(([, path]) => path === "second.txt");
     expect(secondTxt).toBeDefined();
-    expect(secondTxt![0]).toBe("A");
+    expect(secondTxt?.[0]).toBe("A");
     // file.txt should not appear (unchanged)
     const fileTxt = ops.find(([, path]) => path === "file.txt");
     expect(fileTxt).toBeUndefined();
@@ -152,7 +148,9 @@ describe("git helpers", () => {
 
   test("diffTreeOps on merge commit uses first-parent two-tree diff", async () => {
     // Get the current branch name (may be "main" or "master" depending on git config)
-    const currentBranch = execFileSync("git", ["rev-parse", "--abbrev-ref", "HEAD"], { cwd: repoDir })
+    const currentBranch = execFileSync("git", ["rev-parse", "--abbrev-ref", "HEAD"], {
+      cwd: repoDir,
+    })
       .toString()
       .trim();
 
@@ -174,10 +172,10 @@ describe("git helpers", () => {
       .toString()
       .trim();
 
-    execFileSync("git", ["merge", "--no-ff", "feature-branch", "-m", "merge branch"], { cwd: repoDir });
-    const mergeSha = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repoDir })
-      .toString()
-      .trim();
+    execFileSync("git", ["merge", "--no-ff", "feature-branch", "-m", "merge branch"], {
+      cwd: repoDir,
+    });
+    const mergeSha = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repoDir }).toString().trim();
 
     // diffTreeOps must use first-parent diff: mainBeforeMergeSha → mergeSha
     const ops = await diffTreeOps(repoDir, mergeSha);
@@ -203,6 +201,6 @@ describe("git helpers", () => {
     // So it DOES appear in the first-parent diff as "A".
     const branchOnlyOp = ops.find(([, p]) => p === "branch-only.txt");
     expect(branchOnlyOp).toBeDefined();
-    expect(branchOnlyOp![0]).toBe("A");
+    expect(branchOnlyOp?.[0]).toBe("A");
   });
 });

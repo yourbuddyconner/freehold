@@ -15,8 +15,8 @@
 
 import type { Freehold } from "../graphs.js";
 import type { ConnectorConfig } from "./config.js";
-import type { GithubClient } from "./github.js";
 import { handleConnectorEvent } from "./events.js";
+import type { GithubClient } from "./github.js";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -91,7 +91,7 @@ async function ensureCursorTable(fh: Freehold): Promise<void> {
 async function readCursor(fh: Freehold): Promise<CursorState> {
   await ensureCursorTable(fh);
   const result = await fh.db.pg.query<{ state: unknown }>(
-    `SELECT state FROM connector_cursor WHERE graph_id = $1`,
+    "SELECT state FROM connector_cursor WHERE graph_id = $1",
     [fh.graphId]
   );
   if (result.rows.length === 0) return { ingestedIdsByPr: {} };
@@ -153,9 +153,7 @@ export async function pollOnce(
   // 1. List open PRs
   let openPrs: GhPr[] = [];
   try {
-    openPrs = await client.rest<GhPr[]>(
-      `/repos/${owner}/${repo}/pulls?state=open&per_page=100`
-    );
+    openPrs = await client.rest<GhPr[]>(`/repos/${owner}/${repo}/pulls?state=open&per_page=100`);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     errors.push(`list-prs: ${msg}`);

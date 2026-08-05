@@ -15,15 +15,15 @@
  */
 
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { Hono } from "hono";
 import {
+  deriveEncKey,
   getConnector,
   getSecret,
-  deriveEncKey,
   handleConnectorEvent,
   parseOriginRemote,
 } from "@freehold/core";
 import type { ConnectorEvent } from "@freehold/core";
+import { Hono } from "hono";
 import type { AppEnv } from "../types.js";
 
 export const githubWebhookRouter = new Hono<AppEnv>();
@@ -144,9 +144,7 @@ function normalizeGithubEvent(eventType: string, payload: unknown): ConnectorEve
     const path = typeof comment.path === "string" ? comment.path : undefined;
     const commitSha = typeof comment.commit_id === "string" ? comment.commit_id : undefined;
     const inReplyTo =
-      typeof comment.in_reply_to_id === "number"
-        ? String(comment.in_reply_to_id)
-        : undefined;
+      typeof comment.in_reply_to_id === "number" ? String(comment.in_reply_to_id) : undefined;
     const pr = isRecord(payload.pull_request) ? payload.pull_request : null;
     const prNumber = pr && typeof pr.number === "number" ? pr.number : undefined;
     const action = typeof payload.action === "string" ? payload.action : "created";
@@ -192,7 +190,8 @@ githubWebhookRouter.post("/webhooks/github", async (c) => {
 
   // Extract owner/repo from repository.full_name
   const repository = isRecord(payload.repository) ? payload.repository : null;
-  const fullName = repository && typeof repository.full_name === "string" ? repository.full_name : null;
+  const fullName =
+    repository && typeof repository.full_name === "string" ? repository.full_name : null;
 
   if (!fullName) {
     // No repo to match — probably a ping or unrecognized event shape.
@@ -236,9 +235,7 @@ githubWebhookRouter.post("/webhooks/github", async (c) => {
       matchedFh = fh;
       matchedWebhookSecret = secret;
       break;
-    } catch {
-      continue;
-    }
+    } catch {}
   }
 
   // Unknown repo → 204 silent

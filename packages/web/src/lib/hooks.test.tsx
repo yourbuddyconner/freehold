@@ -18,15 +18,18 @@ vi.mock("~/lib/api", () => ({
   ApiError: class ApiError extends Error {},
 }));
 
-import { useActiveGraph } from "./hooks";
 import * as api from "./api";
+import { useActiveGraph } from "./hooks";
 
 type GraphKind = "memory" | "repo";
 
 // happy-dom's localStorage lacks clear() in this version; stub it with a Map.
 const localStore = new Map<string, string>();
 
-function makeWrapper(graphs: { id: string; name: string; kind: GraphKind }[], defaultGraph = "main") {
+function makeWrapper(
+  graphs: { id: string; name: string; kind: GraphKind }[],
+  defaultGraph = "main"
+) {
   // Pre-populate session data in the cache so useSession returns it synchronously.
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   qc.setQueryData(["session"], {

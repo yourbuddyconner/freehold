@@ -14,9 +14,7 @@
  *   5 = unreachable (network error / ECONNREFUSED)
  */
 
-// biome-ignore lint: bootstrap must be the first import — it sets
-// ALLOD_WASM_PATH before any module pulls in @allod/core.
-import "./bootstrap.js";
+import "./bootstrap.js"; // bootstrap must be first — sets ALLOD_WASM_PATH before any module pulls in @allod/core.
 import * as os from "node:os";
 import * as path from "node:path";
 import { runApprove } from "./commands/approve.js";

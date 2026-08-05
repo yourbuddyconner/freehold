@@ -1,16 +1,16 @@
 import {
   GraphManager,
+  deriveEncKey,
+  getConnector,
+  getSecret,
   hashEmbedder,
   loadConfig,
-  makeEmbedder,
-  syncIndex,
-  getConnector,
-  makeTokenClient,
   makeAppClient,
-  deriveEncKey,
-  getSecret,
-  startPoller,
+  makeEmbedder,
+  makeTokenClient,
   pollOnce,
+  startPoller,
+  syncIndex,
 } from "@freehold/core";
 import { serve } from "@hono/node-server";
 import { createApp } from "./app.js";
@@ -48,64 +48,70 @@ async function main() {
   // Start pollers for all registered repo graphs with credential-mode connector configs.
   // Each poller runs in the background; the daemon lifetime is the stop condition.
   const pollerHandles: Array<{ stop(): void }> = [];
-  manager.list().then(async (entries) => {
-    for (const entry of entries) {
-      if (entry.kind !== "repo") continue;
-      try {
-        const fh = await manager.get(entry.id);
-        const cfg = await getConnector(fh.db, entry.id);
-        if (!cfg) continue;
+  manager
+    .list()
+    .then(async (entries) => {
+      for (const entry of entries) {
+        if (entry.kind !== "repo") continue;
+        try {
+          const fh = await manager.get(entry.id);
+          const cfg = await getConnector(fh.db, entry.id);
+          if (!cfg) continue;
 
-        const encKey = deriveEncKey(config.token);
+          const encKey = deriveEncKey(config.token);
 
-        // Catch-up poll at startup for webhook-enabled graphs (webhooks may have
-        // fired while the daemon was down; run one poll to close the gap).
-        if (cfg.webhooksEnabled) {
-          let catchUpClient = null;
-          if (cfg.mode === "credential") {
-            const credToken = await getSecret(fh.db, entry.id, "credentialToken", encKey);
-            if (credToken) {
-              catchUpClient = makeTokenClient(credToken);
+          // Catch-up poll at startup for webhook-enabled graphs (webhooks may have
+          // fired while the daemon was down; run one poll to close the gap).
+          if (cfg.webhooksEnabled) {
+            let catchUpClient = null;
+            if (cfg.mode === "credential") {
+              const credToken = await getSecret(fh.db, entry.id, "credentialToken", encKey);
+              if (credToken) {
+                catchUpClient = makeTokenClient(credToken);
+              }
+            } else if (cfg.mode === "app") {
+              catchUpClient = await makeAppClient({ db: fh.db, graphId: entry.id }, encKey).catch(
+                () => null
+              );
             }
-          } else if (cfg.mode === "app") {
-            catchUpClient = await makeAppClient({ db: fh.db, graphId: entry.id }, encKey).catch(() => null);
+            if (catchUpClient) {
+              pollOnce(fh, cfg, catchUpClient).catch((e) =>
+                console.error(`[connector] startup catch-up poll failed for ${entry.id}:`, e)
+              );
+            }
           }
-          if (catchUpClient) {
-            pollOnce(fh, cfg, catchUpClient).catch((e) =>
-              console.error(`[connector] startup catch-up poll failed for ${entry.id}:`, e)
-            );
-          }
+
+          if (cfg.mode !== "credential" && cfg.mode !== "app") continue;
+
+          const handle = startPoller(
+            fh,
+            async () => getConnector(fh.db, entry.id),
+            async () => {
+              const latestCfg = await getConnector(fh.db, entry.id);
+              if (!latestCfg) throw new Error(`no connector config for graph ${entry.id}`);
+              if (latestCfg.mode === "credential") {
+                const token = await getSecret(fh.db, entry.id, "credentialToken", encKey);
+                if (!token) throw new Error(`no stored token for graph ${entry.id}`);
+                return makeTokenClient(token);
+              }
+              if (latestCfg.mode === "app") {
+                const client = await makeAppClient({ db: fh.db, graphId: entry.id }, encKey);
+                if (!client) throw new Error(`app client not available for graph ${entry.id}`);
+                return client;
+              }
+              throw new Error(`unsupported connector mode ${latestCfg.mode}`);
+            }
+          );
+          pollerHandles.push(handle);
+          console.log(`[freehold] connector poller started for graph ${entry.id}`);
+        } catch (err) {
+          console.warn(`[freehold] connector poller start failed for ${entry.id}: ${err}`);
         }
-
-        if (cfg.mode !== "credential" && cfg.mode !== "app") continue;
-
-        const handle = startPoller(
-          fh,
-          async () => getConnector(fh.db, entry.id),
-          async () => {
-            const latestCfg = await getConnector(fh.db, entry.id);
-            if (!latestCfg) throw new Error("no connector config for graph " + entry.id);
-            if (latestCfg.mode === "credential") {
-              const token = await getSecret(fh.db, entry.id, "credentialToken", encKey);
-              if (!token) throw new Error("no stored token for graph " + entry.id);
-              return makeTokenClient(token);
-            } else if (latestCfg.mode === "app") {
-              const client = await makeAppClient({ db: fh.db, graphId: entry.id }, encKey);
-              if (!client) throw new Error("app client not available for graph " + entry.id);
-              return client;
-            }
-            throw new Error("unsupported connector mode " + latestCfg.mode);
-          }
-        );
-        pollerHandles.push(handle);
-        console.log(`[freehold] connector poller started for graph ${entry.id}`);
-      } catch (err) {
-        console.warn(`[freehold] connector poller start failed for ${entry.id}: ${err}`);
       }
-    }
-  }).catch((err) => {
-    console.warn(`[freehold] connector poller boot failed: ${err}`);
-  });
+    })
+    .catch((err) => {
+      console.warn(`[freehold] connector poller boot failed: ${err}`);
+    });
 
   serve(
     {

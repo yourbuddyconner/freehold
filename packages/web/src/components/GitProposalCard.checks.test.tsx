@@ -6,10 +6,10 @@
  * - A proposal with an empty or absent checks array does NOT render the checks section
  */
 
+import type { GitProposal } from "@freehold/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import type { GitProposal } from "@freehold/client";
 import { GitProposalCard } from "./GitProposalCard";
 
 // Mock hooks used by GitProposalCard
@@ -118,7 +118,9 @@ describe("GitProposalCard — checks section", () => {
 
     // Governance row appears before other check-rows in the DOM
     const checksSection = screen.getByTestId("checks-section");
-    const allRows = checksSection.querySelectorAll("[data-testid='governance-check-row'], [data-testid='check-row']");
+    const allRows = checksSection.querySelectorAll(
+      "[data-testid='governance-check-row'], [data-testid='check-row']"
+    );
     expect(allRows[0]).toHaveAttribute("data-testid", "governance-check-row");
   });
 });

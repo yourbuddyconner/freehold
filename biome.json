@@ -23,6 +23,7 @@
   },
   "files": {
     "ignore": [
+      ".claude",
       "node_modules",
       "dist",
       "pkg",

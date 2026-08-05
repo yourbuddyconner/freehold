@@ -10,21 +10,21 @@
  */
 
 import { existsSync, readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { basename, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { load as yamlLoad } from "js-yaml";
 import { createGraph } from "./allod.js";
 import { loadConfig } from "./config.js";
 import { DEFAULT_GRAPH_ID, openDb } from "./db.js";
 import type { DbHandle } from "./db.js";
-import { ensureHome } from "./home.js";
+import { hashEmbedder } from "./embed.js";
+import { originRemote } from "./git.js";
+import { approve } from "./governance.js";
 import type { Freehold } from "./graphs.js";
 import { openFreehold } from "./graphs.js";
-import { approve } from "./governance.js";
-import { describeSchema, installOntology } from "./schema.js";
-import { originRemote } from "./git.js";
+import { ensureHome } from "./home.js";
 import { syncIndex } from "./indexer.js";
-import { hashEmbedder } from "./embed.js";
+import { describeSchema, installOntology } from "./schema.js";
 
 export interface GraphEntry {
   id: string;
@@ -65,7 +65,9 @@ function readAllodGraphId(graphDir: string): string {
  * Uses the basename; sanitizes to [a-z0-9_-].
  */
 function makeRepoId(path: string): string {
-  return basename(path).replace(/[^a-z0-9_-]/gi, "-").toLowerCase();
+  return basename(path)
+    .replace(/[^a-z0-9_-]/gi, "-")
+    .toLowerCase();
 }
 
 /** Map a DB row (snake_case) to a GraphEntry (camelCase). */
@@ -116,10 +118,9 @@ export class GraphManager {
     const manager = new GraphManager(db, h);
 
     // Seed the default "main" graph if absent
-    const existing = await db.pg.query<{ id: string }>(
-      "SELECT id FROM graphs WHERE id = $1",
-      [DEFAULT_GRAPH_ID]
-    );
+    const existing = await db.pg.query<{ id: string }>("SELECT id FROM graphs WHERE id = $1", [
+      DEFAULT_GRAPH_ID,
+    ]);
     if (existing.rows.length === 0) {
       const mainGraphDir = join(h, "graphs", "main");
       // Ensure the graph directory exists on disk
@@ -259,7 +260,7 @@ export class GraphManager {
     const newAutoPushNotes = patch.autoPushNotes ?? e.autoPushNotes;
     const newEmbedder = patch.embedder ?? e.embedder;
     await this.db.pg.query(
-      `UPDATE graphs SET name = $1, auto_push_notes = $2, embedder = $3 WHERE id = $4`,
+      "UPDATE graphs SET name = $1, auto_push_notes = $2, embedder = $3 WHERE id = $4",
       [newName, newAutoPushNotes, newEmbedder, id]
     );
     return this.entry(id);
@@ -309,10 +310,9 @@ export class GraphManager {
     const embedder = opts.embedder ?? "hash";
 
     // Check registry — reject duplicates BEFORE any side effects
-    const existing = await this.db.pg.query<{ id: string }>(
-      "SELECT id FROM graphs WHERE id = $1",
-      [id]
-    );
+    const existing = await this.db.pg.query<{ id: string }>("SELECT id FROM graphs WHERE id = $1", [
+      id,
+    ]);
     if (existing.rows.length > 0) {
       throw new Error(`graph id already registered: ${id}`);
     }

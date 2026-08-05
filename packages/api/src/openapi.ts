@@ -137,7 +137,10 @@ const GraphInfo = z
 const RegisterGraphBody = z
   .object({
     path: z.string().openapi({ description: "Absolute path to the repo checkout" }),
-    id: z.string().optional().openapi({ description: "Registry slug id; defaults to basename of path" }),
+    id: z
+      .string()
+      .optional()
+      .openapi({ description: "Registry slug id; defaults to basename of path" }),
     name: z.string().optional().openapi({ description: "Display name; defaults to id" }),
   })
   .openapi("RegisterGraphBody");
@@ -163,7 +166,7 @@ const CodeItem = z
   })
   .openapi("CodeItem");
 
-const CodeTreeNode: z.ZodType<any> = z.lazy(() =>
+const CodeTreeNode: z.ZodType<unknown> = z.lazy(() =>
   z
     .object({
       name: z.string(),
@@ -351,8 +354,14 @@ const SchemaDescription = z
 
 const ConnectorStatus = z
   .object({
-    lastPollAt: z.string().optional().openapi({ description: "ISO timestamp of last successful poll" }),
-    lastErrors: z.array(z.string()).optional().openapi({ description: "Errors from last poll cycle" }),
+    lastPollAt: z
+      .string()
+      .optional()
+      .openapi({ description: "ISO timestamp of last successful poll" }),
+    lastErrors: z
+      .array(z.string())
+      .optional()
+      .openapi({ description: "Errors from last poll cycle" }),
   })
   .openapi("ConnectorStatus");
 
@@ -380,9 +389,19 @@ const ConnectorResponse = z
 const PutConnectorBody = z
   .union([
     z.object({
-      mode: z.literal("credential").openapi({ description: "Credential mode uses gh CLI token discovery" }),
-      pollIntervalSec: z.number().int().positive().optional().openapi({ description: "Poll interval in seconds (default 300)" }),
-      webhooksEnabled: z.boolean().optional().openapi({ description: "Enable webhook delivery (requires publicUrl)" }),
+      mode: z
+        .literal("credential")
+        .openapi({ description: "Credential mode uses gh CLI token discovery" }),
+      pollIntervalSec: z
+        .number()
+        .int()
+        .positive()
+        .optional()
+        .openapi({ description: "Poll interval in seconds (default 300)" }),
+      webhooksEnabled: z
+        .boolean()
+        .optional()
+        .openapi({ description: "Enable webhook delivery (requires publicUrl)" }),
       publicUrl: z.string().optional().openapi({ description: "Public URL for webhook delivery" }),
     }),
     z.object({
@@ -395,7 +414,9 @@ const PutConnectorBody = z
 const PollResult = z
   .object({
     events: z.number().openapi({ description: "Number of events processed" }),
-    errors: z.array(z.string()).openapi({ description: "Non-fatal errors encountered during poll" }),
+    errors: z
+      .array(z.string())
+      .openapi({ description: "Non-fatal errors encountered during poll" }),
     unchanged: z.number().openapi({ description: "Number of items unchanged" }),
   })
   .openapi("PollResult");
@@ -962,7 +983,8 @@ function buildRegistry(): OpenAPIRegistry {
     method: "get",
     path: "/api/v1/code/tree",
     summary: "Code file tree",
-    description: "Nested directory tree of all indexed SourceFile nodes. Only available for repo graphs.",
+    description:
+      "Nested directory tree of all indexed SourceFile nodes. Only available for repo graphs.",
     security: auth,
     responses: {
       "200": {
@@ -1125,7 +1147,10 @@ function buildRegistry(): OpenAPIRegistry {
       z.object({
         outcome: z.enum(["approved", "rejected"]),
         pushed: z.boolean(),
-        pushSkipped: z.boolean().optional().openapi({ description: "True when push was not attempted because auto-push is off or no remote is configured." }),
+        pushSkipped: z.boolean().optional().openapi({
+          description:
+            "True when push was not attempted because auto-push is off or no remote is configured.",
+        }),
         pushError: z.string().optional(),
       }),
       z.object({
@@ -1198,7 +1223,8 @@ function buildRegistry(): OpenAPIRegistry {
     method: "get",
     path: "/api/v1/git/proposals",
     summary: "List git proposals",
-    description: "Lists all branch-head commits as proposals with checklist and decided state. Only available for repo graphs.",
+    description:
+      "Lists all branch-head commits as proposals with checklist and decided state. Only available for repo graphs.",
     security: auth,
     responses: {
       "200": {
@@ -1237,7 +1263,8 @@ function buildRegistry(): OpenAPIRegistry {
     method: "post",
     path: "/api/v1/git/proposals/{sha}/decide",
     summary: "Decide a git proposal",
-    description: "Signs a decision record (approve/reject) via the key backend and appends it to refs/notes/allod-decisions.",
+    description:
+      "Signs a decision record (approve/reject) via the key backend and appends it to refs/notes/allod-decisions.",
     security: auth,
     request: {
       params: z.object({ sha: z.string() }),
@@ -1260,7 +1287,8 @@ function buildRegistry(): OpenAPIRegistry {
     method: "post",
     path: "/api/v1/git/proposals/{sha}/reviews",
     summary: "Post a code review for a git proposal",
-    description: "Creates a review/Review@1 node and optional review/ReviewComment@1 nodes with part_of edges.",
+    description:
+      "Creates a review/Review@1 node and optional review/ReviewComment@1 nodes with part_of edges.",
     security: auth,
     request: {
       params: z.object({ sha: z.string() }),
@@ -1281,7 +1309,8 @@ function buildRegistry(): OpenAPIRegistry {
     method: "post",
     path: "/api/v1/git/proposals/{sha}/push-notes",
     summary: "Push decision notes to remote",
-    description: "Pushes refs/notes/allod-decisions to the graph's origin remote. Returns {pushed:true} on success or {pushed:false, pushError} on failure.",
+    description:
+      "Pushes refs/notes/allod-decisions to the graph's origin remote. Returns {pushed:true} on success or {pushed:false, pushError} on failure.",
     security: auth,
     request: { params: z.object({ sha: z.string() }) },
     responses: {

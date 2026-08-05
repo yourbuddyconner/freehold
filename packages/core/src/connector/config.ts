@@ -8,7 +8,7 @@
  * Never logs secrets or tokens.
  */
 
-import { scryptSync, randomBytes, createCipheriv, createDecipheriv } from "node:crypto";
+import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from "node:crypto";
 import type { DbHandle } from "../db.js";
 
 // ── Encryption parameters ─────────────────────────────────────────────────────
@@ -21,7 +21,7 @@ const SCRYPT_N = 16384;
 const SCRYPT_R = 8;
 const SCRYPT_P = 1;
 const KEY_LEN = 32;
-const IV_LEN = 12;  // GCM standard
+const IV_LEN = 12; // GCM standard
 
 // ── Public types ──────────────────────────────────────────────────────────────
 
@@ -96,7 +96,7 @@ async function ensureTables(db: DbHandle): Promise<void> {
   `);
 
   // Schema migrations — run separately so IF NOT EXISTS works on pre-existing tables.
-  await db.pg.query(`ALTER TABLE connector_config ADD COLUMN IF NOT EXISTS public_url text`);
+  await db.pg.query("ALTER TABLE connector_config ADD COLUMN IF NOT EXISTS public_url text");
 }
 
 // ── deriveEncKey ──────────────────────────────────────────────────────────────
@@ -115,7 +115,10 @@ export function deriveEncKey(daemonToken: string): Buffer {
 
 // ── encrypt / decrypt ─────────────────────────────────────────────────────────
 
-function encryptSecret(plaintext: string, key: Buffer): { ciphertext: Buffer; iv: Buffer; tag: Buffer } {
+function encryptSecret(
+  plaintext: string,
+  key: Buffer
+): { ciphertext: Buffer; iv: Buffer; tag: Buffer } {
   const iv = randomBytes(IV_LEN);
   const cipher = createCipheriv("aes-256-gcm", key, iv);
   const ct = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
@@ -182,7 +185,12 @@ export async function getConnector(db: DbHandle, graphId: string): Promise<Conne
 export async function setConnector(
   db: DbHandle,
   cfg: ConnectorConfig,
-  secrets?: { pem?: string; credentialToken?: string; webhookSecret?: string; clientSecret?: string },
+  secrets?: {
+    pem?: string;
+    credentialToken?: string;
+    webhookSecret?: string;
+    clientSecret?: string;
+  },
   encKey?: Buffer
 ): Promise<void> {
   await ensureTables(db);
@@ -219,7 +227,8 @@ export async function setConnector(
   if (secrets && encKey) {
     const entries: Array<[string, string]> = [];
     if (secrets.pem !== undefined) entries.push(["pem", secrets.pem]);
-    if (secrets.credentialToken !== undefined) entries.push(["credentialToken", secrets.credentialToken]);
+    if (secrets.credentialToken !== undefined)
+      entries.push(["credentialToken", secrets.credentialToken]);
     if (secrets.webhookSecret !== undefined) entries.push(["webhookSecret", secrets.webhookSecret]);
     if (secrets.clientSecret !== undefined) entries.push(["clientSecret", secrets.clientSecret]);
 
@@ -252,7 +261,7 @@ export async function getSecret(
   await ensureTables(db);
 
   const result = await db.pg.query<{ ciphertext: Buffer; iv: Buffer; tag: Buffer }>(
-    `SELECT ciphertext, iv, tag FROM connector_secrets WHERE graph_id = $1 AND name = $2`,
+    "SELECT ciphertext, iv, tag FROM connector_secrets WHERE graph_id = $1 AND name = $2",
     [graphId, name]
   );
 
