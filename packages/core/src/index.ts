@@ -112,4 +112,21 @@ export type {
   GraphNode,
   GraphEdge,
 } from "./graphview.js";
+
+// Code graph views
+export {
+  codeTree,
+  codeFile,
+  codeItem,
+  codeNeighborhood,
+  codeRegions,
+} from "./codeview.js";
+export type {
+  CodeTreeNode,
+  CodeItem,
+  CodeFileView,
+  CodeItemView,
+  CodeNeighborhood,
+  RegionRule,
+} from "./codeview.js";
 export type { RecallResult, RecallFilters } from "./recall.js";
