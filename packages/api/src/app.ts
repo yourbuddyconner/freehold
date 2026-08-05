@@ -80,6 +80,16 @@ export function createApp(
   // Graph-scoped mount: /api/v1/graphs/:graphId/*
   // The resolver middleware looks up :graphId and sets c.set("freehold", ...)
   // for that specific graph. All API routes are then re-served under this mount.
+  //
+  // Routing invariant: scopedApi's /:graphId/* wildcard only matches paths with
+  // a segment after the graph id (e.g. /main/memories). Bare /:graphId paths
+  // (e.g. PATCH /api/v1/graphs/main, DELETE /api/v1/graphs/main) fall through to
+  // graphsRouter on the main api sub-app, which handles them correctly.
+  //
+  // Note: sessionRouter is included in buildApiRoutes() and is therefore
+  // reachable at /api/v1/graphs/:id/session. This is harmless — session is
+  // read-only and manager-scoped, so graph selection has no effect on its
+  // output — but callers should prefer the canonical /api/v1/session.
   const scopedApi = new Hono<AppEnv>();
   scopedApi.use("*", bearerAuth(config.token));
   scopedApi.use("/:graphId/*", async (c, next) => {

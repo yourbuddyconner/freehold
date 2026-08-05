@@ -34,9 +34,11 @@ retrievalRouter.get("/recall", async (c) => {
 });
 
 retrievalRouter.get("/memories", async (c) => {
+  const fh = c.get("freehold");
   if (c.req.query("scope") === "all") {
-    const fh = c.get("freehold");
-    const results = await memoryIndex(fh);
+    // Pass fh.graphId so scoped mounts read from the correct graph's index
+    // rather than falling back to the DEFAULT_GRAPH_ID ("main").
+    const results = await memoryIndex(fh, undefined, fh.graphId);
     return c.json({ results });
   }
   const type = c.req.query("type");
@@ -44,7 +46,6 @@ retrievalRouter.get("/memories", async (c) => {
   const status = c.req.query("status");
   const limitRaw = c.req.query("limit");
   const limit = limitRaw ? Math.min(Number(limitRaw) || 50, 1000) : 50;
-  const fh = c.get("freehold");
   const results = await recentMemories(
     fh,
     {
@@ -52,7 +53,8 @@ retrievalRouter.get("/memories", async (c) => {
       author: author ?? undefined,
       approval: status ?? undefined,
     },
-    limit
+    limit,
+    fh.graphId
   );
   return c.json({ results });
 });

@@ -201,6 +201,106 @@ describe("Scoped routes: /api/v1/graphs/:graphId/*", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Data isolation: scoped write visible only in that graph
+// ---------------------------------------------------------------------------
+
+describe("Data isolation: scoped graph memories", () => {
+  let isoRepoDir: string;
+  let isoGraphId: string;
+
+  beforeAll(async () => {
+    // Register a second repo graph for isolation testing
+    isoRepoDir = makeTempDir("freehold-graphs-iso-");
+    await makeRepoGraph(isoRepoDir);
+    isoGraphId = `iso-graph-${Date.now()}`;
+    const { status } = await req("POST", "/api/v1/graphs", {
+      path: isoRepoDir,
+      id: isoGraphId,
+      name: "Isolation Test Graph",
+    });
+    expect(status).toBe(201);
+  });
+
+  afterAll(() => {
+    if (isoRepoDir) rmSync(isoRepoDir, { recursive: true, force: true });
+  });
+
+  test("memory written to scoped graph appears in scoped read but not in main", async () => {
+    // Register an agent in the scoped (repo) graph
+    const scopedAgent = `iso-agent-${Date.now()}`;
+    const { status: agentStatus } = await req(
+      "POST",
+      `/api/v1/graphs/${isoGraphId}/agents`,
+      { name: scopedAgent }
+    );
+    expect(agentStatus).toBe(200);
+
+    // Write a memory through the scoped route (repo graph)
+    const { status: writeStatus, body: writeBody } = await req(
+      "POST",
+      `/api/v1/graphs/${isoGraphId}/remember`,
+      { agent: scopedAgent, content: "isolation-canary-scoped" }
+    );
+    expect(writeStatus).toBe(200);
+    const wb = writeBody as { status: string };
+    expect(wb.status).toBe("saved");
+
+    // Read it back through the scoped route — must appear
+    // memoryIndex (scope=all) returns MemoryIndexEntry with a `title` field
+    // derived from the node's attributes.content text.
+    const { status: scopedStatus, body: scopedBody } = await req(
+      "GET",
+      `/api/v1/graphs/${isoGraphId}/memories?scope=all`
+    );
+    expect(scopedStatus).toBe(200);
+    const scopedResults = (scopedBody as { results: Array<{ title: string }> }).results;
+    const foundInScoped = scopedResults.some((r) => r.title?.includes("isolation-canary-scoped"));
+    expect(foundInScoped).toBe(true);
+
+    // Must NOT appear in the main graph's unscoped read
+    const { status: mainStatus, body: mainBody } = await req(
+      "GET",
+      "/api/v1/memories?scope=all"
+    );
+    expect(mainStatus).toBe(200);
+    const mainResults = (mainBody as { results: Array<{ title: string }> }).results;
+    const foundInMain = mainResults.some((r) => r.title?.includes("isolation-canary-scoped"));
+    expect(foundInMain).toBe(false);
+  });
+
+  test("memory written to main graph does not appear in scoped graph read", async () => {
+    // Register an agent in the main graph
+    const mainAgent = `main-agent-${Date.now()}`;
+    const { status: agentStatus } = await req(
+      "POST",
+      "/api/v1/agents",
+      { name: mainAgent }
+    );
+    expect(agentStatus).toBe(200);
+
+    // Write a memory through the main (unscoped) route
+    const { status: writeStatus, body: writeBody } = await req(
+      "POST",
+      "/api/v1/remember",
+      { agent: mainAgent, content: "isolation-canary-main" }
+    );
+    expect(writeStatus).toBe(200);
+    const wb = writeBody as { status: string };
+    expect(wb.status).toBe("saved");
+
+    // Must NOT appear in the scoped repo graph's read
+    const { status: scopedStatus, body: scopedBody } = await req(
+      "GET",
+      `/api/v1/graphs/${isoGraphId}/memories?scope=all`
+    );
+    expect(scopedStatus).toBe(200);
+    const scopedResults = (scopedBody as { results: Array<{ title: string }> }).results;
+    const foundInScoped = scopedResults.some((r) => r.title?.includes("isolation-canary-main"));
+    expect(foundInScoped).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Session includes graphs
 // ---------------------------------------------------------------------------
 
