@@ -73,6 +73,7 @@ interface TestProposal {
   rules: string[];
   diff: { key: string; before?: unknown; after?: unknown }[];
   isSchemaProposal: boolean;
+  subject?: { id: string; title: string } | null;
 }
 
 function setupHooks(proposals: TestProposal[]) {
@@ -193,6 +194,46 @@ describe("Inbox", () => {
     // The table should have at least 3 rows (title, description, status)
     const tables = screen.queryAllByRole("table");
     expect(tables.length).toBeGreaterThan(0);
+  });
+
+  it("shows the target row and previews the node on hover", async () => {
+    vi.mocked(hooks.useEntity).mockReturnValue({
+      data: {
+        type: "memory/Note@1",
+        attributes: { content: "Quarterly planning kickoff\nfull note body" },
+        classifications: ["work@1"],
+      },
+      isLoading: false,
+      isError: false,
+      error: null,
+    } as unknown as ReturnType<typeof hooks.useEntity>);
+    await renderInbox([
+      { ...normalProposal, subject: { id: "node-1", title: "Quarterly planning kickoff" } },
+    ]);
+    const link = screen.getByTestId("subject-link-node-1");
+    expect(link).toHaveTextContent("Quarterly planning kickoff");
+    expect(screen.queryByTestId("subject-preview")).not.toBeInTheDocument();
+    await act(async () => {
+      fireEvent.mouseEnter(link.parentElement as HTMLElement);
+    });
+    const preview = screen.getByTestId("subject-preview");
+    expect(preview).toHaveTextContent("memory/Note");
+    expect(preview).toHaveTextContent("full note body");
+    expect(preview).toHaveTextContent("work");
+  });
+
+  it("hover preview says so when the target node is gone", async () => {
+    vi.mocked(hooks.useEntity).mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      error: new Error("not found"),
+    } as unknown as ReturnType<typeof hooks.useEntity>);
+    await renderInbox([{ ...normalProposal, subject: { id: "ghost-1", title: "ghost-1…" } }]);
+    await act(async () => {
+      fireEvent.mouseEnter(screen.getByTestId("subject-link-ghost-1").parentElement as HTMLElement);
+    });
+    expect(screen.getByTestId("subject-preview")).toHaveTextContent(/no longer exists/i);
   });
 
   it("diff toggle shows aria-expanded attribute", async () => {

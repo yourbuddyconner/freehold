@@ -1,6 +1,8 @@
 import * as Dialog from "@radix-ui/react-dialog";
+import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { cn } from "~/lib/cn";
+import { useEntity } from "~/lib/hooks";
 import { PierreDiff } from "./PierreDiff";
 
 interface DiffEntry {
@@ -23,6 +25,78 @@ interface Proposal {
   rules: string[];
   diff: DiffEntry[];
   isSchemaProposal: boolean;
+  /** The existing node this proposal targets, when there is one */
+  subject?: { id: string; title: string } | null;
+}
+
+/**
+ * Link to the proposal's target node, with a hover card previewing its
+ * current contents so the change can be judged in context. The entity is
+ * fetched lazily on first hover.
+ */
+function SubjectPreview({ id, title }: { id: string; title: string }) {
+  const [hovered, setHovered] = useState(false);
+  const [everHovered, setEverHovered] = useState(false);
+  const { data, isLoading, isError } = useEntity(everHovered ? id : undefined);
+  const entity = data as
+    | { type?: string; attributes?: Record<string, unknown>; classifications?: string[] }
+    | undefined;
+
+  const attrs = entity?.attributes ?? {};
+  const body =
+    typeof attrs.content === "string"
+      ? attrs.content
+      : typeof attrs.statement === "string"
+        ? attrs.statement
+        : Object.entries(attrs)
+            .map(([k, v]) => `${k}: ${typeof v === "string" ? v : JSON.stringify(v)}`)
+            .join("\n");
+
+  return (
+    <span
+      className="relative inline-block"
+      onMouseEnter={() => {
+        setHovered(true);
+        setEverHovered(true);
+      }}
+      onMouseLeave={() => setHovered(false)}
+    >
+      <Link
+        to="/memory/$id"
+        params={{ id }}
+        data-testid={`subject-link-${id}`}
+        className="text-(--fg) underline decoration-dotted underline-offset-2 hover:decoration-[var(--color-accent)]"
+      >
+        {title}
+      </Link>
+      {hovered && (
+        <span
+          data-testid="subject-preview"
+          className="absolute left-0 top-full z-50 mt-1.5 block w-80 border border-(--border) bg-(--bg) p-3 shadow-md"
+        >
+          {isLoading && <span className="block text-xs text-(--fg-muted)">Loading…</span>}
+          {isError && (
+            <span className="block text-xs text-(--fg)">
+              This node no longer exists in the graph — the proposal targets something that was
+              removed or never admitted.
+            </span>
+          )}
+          {entity && (
+            <>
+              <span className="block font-mono text-[10px] uppercase tracking-[0.06em] text-(--fg-muted)">
+                {(entity.type ?? "").split("@")[0]}
+                {(entity.classifications ?? []).length > 0 &&
+                  ` · ${(entity.classifications ?? []).map((c) => c.split("@")[0]).join(", ")}`}
+              </span>
+              <span className="mt-1.5 block max-h-40 overflow-hidden whitespace-pre-wrap text-xs leading-relaxed text-(--fg)">
+                {body || "No content."}
+              </span>
+            </>
+          )}
+        </span>
+      )}
+    </span>
+  );
 }
 
 interface ProposalCardProps {
@@ -159,6 +233,15 @@ export function ProposalCard({
 
       {/* Summary */}
       <p className="text-sm text-(--fg) leading-relaxed">{summary}</p>
+
+      {/* Target node, previewable in place */}
+      {proposal.subject && (
+        <p className="text-xs text-(--fg-muted)" data-testid="subject-row">
+          <span className="font-mono text-[10px] uppercase tracking-[0.06em]">Target</span>{" "}
+          <SubjectPreview id={proposal.subject.id} title={proposal.subject.title} /> — hover to
+          preview, click to open.
+        </p>
+      )}
 
       {/* Rules */}
       {rules.length > 0 && (

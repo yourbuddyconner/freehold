@@ -222,6 +222,27 @@ function buildDiff(graph: AllodGraph, ops: RawOp[]): AttributeDiff[] {
 }
 
 /**
+ * The existing node a proposal targets: a classification's subject or an
+ * update's node. Creates return null — their content is the diff.
+ * Must be called from within a withGraph critical section.
+ */
+function resolveSubject(graph: AllodGraph, ops: RawOp[]): { id: string; title: string } | null {
+  const classOp = ops.find((o) => o.create?.kind === "classification" && o.create.subject);
+  if (classOp?.create?.subject) {
+    const ref = classOp.create.subject;
+    const colon = ref.indexOf(":");
+    const id = colon >= 0 ? ref.slice(colon + 1) : ref;
+    return { id, title: subjectTitle(graph, ref) };
+  }
+  const updateOp = ops.find((o) => o.update?.kind === "node" && o.update.id);
+  if (updateOp?.update?.id) {
+    const id = updateOp.update.id;
+    return { id, title: subjectTitle(graph, `node:${id}`) };
+  }
+  return null;
+}
+
+/**
  * Check whether any op targets a meta/* type node (schema change indicator).
  */
 function checkIsSchemaProposal(ops: RawOp[]): boolean {
@@ -278,8 +299,9 @@ export async function pending(graph: AllodGraph): Promise<ProposalView[]> {
       const summary = buildSummary(graph, agent, ops);
       const diff = buildDiff(graph, ops);
       const isSchemaProposal = checkIsSchemaProposal(ops);
+      const subject = resolveSubject(graph, ops);
 
-      return { hash, agent, intent, summary, rules, diff, isSchemaProposal };
+      return { hash, agent, intent, summary, rules, diff, isSchemaProposal, subject };
     });
   });
 }

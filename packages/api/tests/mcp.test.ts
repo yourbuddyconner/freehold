@@ -322,8 +322,7 @@ describe("propose_policy_change", () => {
     const res = await client().callTool({
       name: "propose_policy_change",
       arguments: {
-        policy_yaml:
-          "policy: agent-suggested\ndefault_posture: restricted\nroles: {}\nrules: []",
+        policy_yaml: "policy: agent-suggested\ndefault_posture: restricted\nroles: {}\nrules: []",
         rationale: "Tighten the default while testing",
         agent: "test-agent",
       },

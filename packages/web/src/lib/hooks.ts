@@ -80,6 +80,8 @@ export function useEntity(id: string | undefined) {
     // biome-ignore lint/style/noNonNullAssertion: enabled guard above ensures id is defined
     queryFn: () => apiClient.getEntity(id!),
     enabled: !!id,
+    // A 404 is a real answer (the node is gone) — surface it, don't retry
+    retry: false,
   });
 }
 

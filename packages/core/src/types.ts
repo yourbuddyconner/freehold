@@ -44,6 +44,10 @@ export interface ProposalView {
   rules: string[];
   diff: AttributeDiff[];
   isSchemaProposal: boolean;
+  /** The existing node this proposal targets (classification subject or
+   *  update target), with its resolved display title. Null for creates —
+   *  their content is the diff itself. */
+  subject: { id: string; title: string } | null;
 }
 
 export interface AttributeDiff {

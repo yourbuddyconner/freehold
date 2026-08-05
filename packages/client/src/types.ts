@@ -1366,6 +1366,11 @@ export interface components {
                 after?: unknown;
             }[];
             isSchemaProposal: boolean;
+            /** @description The existing node this proposal targets, with its resolved title; null for creates */
+            subject: {
+                id: string;
+                title: string;
+            } | null;
         };
         RecallResult: {
             id: string;

@@ -131,6 +131,10 @@ const ProposalView = z
     rules: z.array(z.string()),
     diff: z.array(z.object({ key: z.string(), before: z.unknown(), after: z.unknown() })),
     isSchemaProposal: z.boolean(),
+    subject: z.object({ id: z.string(), title: z.string() }).nullable().openapi({
+      description:
+        "The existing node this proposal targets, with its resolved title; null for creates",
+    }),
   })
   .openapi("ProposalView");
 
