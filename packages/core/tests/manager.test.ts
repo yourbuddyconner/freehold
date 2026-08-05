@@ -3,12 +3,47 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 import { createGraph } from "../src/allod.js";
 import { GraphManager } from "../src/manager.js";
+
+/**
+ * Strip leading comment lines and the `imports:` block from an ontology YAML.
+ * The wasm install_package path requires the document to start with `ontology:`
+ * and does not process cross-package imports at install time.
+ */
+function stripOntologyPreamble(yaml: string): string {
+  const lines = yaml.split("\n");
+  // Drop leading comment lines
+  let start = 0;
+  while (start < lines.length && lines[start].trimStart().startsWith("#")) {
+    start++;
+  }
+  // Strip the imports: block (all indented lines that follow "imports:")
+  const result: string[] = [];
+  let inImports = false;
+  for (let i = start; i < lines.length; i++) {
+    const line = lines[i];
+    if (/^imports:/.test(line)) { inImports = true; continue; }
+    if (inImports && (line.startsWith(" ") || line.startsWith("\t") || line === "")) {
+      if (line === "") inImports = false; // blank line ends the imports block
+      continue;
+    }
+    inImports = false;
+    result.push(line);
+  }
+  return result.join("\n");
+}
+
+/** Read a bundled asset YAML relative to this file's directory. */
+function assetYaml(name: string): string {
+  const url = new URL(`../assets/${name}`, import.meta.url);
+  return readFileSync(fileURLToPath(url), "utf-8");
+}
 
 function makeTempDir(prefix: string): string {
   return mkdtempSync(join(tmpdir(), prefix));
@@ -264,5 +299,193 @@ describe("GraphManager", () => {
     const edgeNames = schema.edgeTypes.map((et: { name: string }) => et.name);
     expect(edgeNames.some((n: string) => n.includes("part_of") || n.includes("part-of"))).toBe(true);
     expect(edgeNames.some((n: string) => n.includes("replies_to") || n.includes("replies-to"))).toBe(true);
+  });
+
+  /**
+   * SP3 end-to-end flow: create-review in a registered repo graph.
+   *
+   * Probes what the wasm engine enforces:
+   *   - Are all four review edge types present in describe_schema?
+   *   - Can cross-ontology edge TARGETS (eng/ChangeRequest, code/SourceFile) be
+   *     created as typed nodes? (They may require those ontologies to be installed.)
+   *   - Can node endpoints and edges sharing a changeset work, or must endpoints
+   *     be committed before the edges?
+   *   - Are the resulting changesets admitted or held (pending approval)?
+   *
+   * This test must FAIL if SP3's flow would fail — it asserts admission
+   * status on every edge, not just "no throw".
+   */
+  test("SP3 create-review flow: all four edge types work in a registered graph", async () => {
+    const home = makeTempDir("freehold-mgr-test-");
+    const repoDir = makeTempDir("freehold-mgr-repo-");
+    await makeRepoGraph(repoDir);
+    const manager = await GraphManager.open(home);
+    const entry = await manager.registerRepo(repoDir, { name: "SP3 Flow Test", id: "sp3-flow" });
+    const fh = await manager.get(entry.id);
+
+    const { describeSchema } = await import("../src/schema.js");
+    const { createEntity, relate } = await import("../src/knowledge.js");
+    const { approve } = await import("../src/governance.js");
+
+    // ── 1. All four review edge types must appear in describe_schema ──────────
+    const schema = await describeSchema(fh.graph);
+    const edgeNames = schema.edgeTypes.map((et: { name: string }) => et.name);
+
+    // Normalize names: allod may use "review/part_of" or plain "part_of"
+    const hasEdge = (fragment: string) =>
+      edgeNames.some((n: string) => n === fragment || n.endsWith(`/${fragment}`));
+
+    expect(hasEdge("reviews"),    "edge type 'reviews' missing from schema").toBe(true);
+    expect(hasEdge("part_of"),    "edge type 'part_of' missing from schema").toBe(true);
+    expect(hasEdge("replies_to"), "edge type 'replies_to' missing from schema").toBe(true);
+    expect(hasEdge("concerns"),   "edge type 'concerns' missing from schema").toBe(true);
+
+    // ── 2. Determine the edge type refs (schema may prefix with package name) ──
+    const edgeTypeRef = (fragment: string): string => {
+      const found = edgeNames.find(
+        (n: string) => n === fragment || n.endsWith(`/${fragment}`)
+      );
+      return found ?? fragment;
+    };
+
+    // ── 3. Install cross-ontology dependencies (code + eng) ──────────────────
+    //
+    // Empirical finding: the wasm engine enforces node type resolution at commit
+    // time. Creating "eng/ChangeRequest@1" without the eng ontology installed
+    // throws: `node type "eng/ChangeRequest@1" does not resolve`.
+    //
+    // SP3 prerequisite: install code and eng ontologies before creating
+    // cross-ontology typed nodes. We strip the imports: block because the wasm
+    // install_package path does not process cross-package imports; it requires
+    // the document to start with `ontology:` (no leading block comments either).
+    //
+    // Install order: code first (eng depends on code via its edge type domains).
+
+    const { installOntology } = await import("../src/schema.js");
+
+    const codeOntologyYaml = stripOntologyPreamble(assetYaml("code-ontology.yaml"));
+    const codeInstall = await installOntology(fh.graph, codeOntologyYaml);
+    if (codeInstall.status === "pending" && codeInstall.hash) {
+      const d = await approve(fh.graph, "owner", codeInstall.hash);
+      expect(d.status, "code ontology approval").toBe("approved");
+    }
+
+    // eng ontology depends on code (edge types reference code/Repository etc.)
+    const engOntologyYaml = stripOntologyPreamble(assetYaml("eng-ontology.yaml"));
+    const engInstall = await installOntology(fh.graph, engOntologyYaml);
+    if (engInstall.status === "pending" && engInstall.hash) {
+      const d = await approve(fh.graph, "owner", engInstall.hash);
+      expect(d.status, "eng ontology approval").toBe("approved");
+    }
+
+    // ── 4. Commit helper: commit ops and auto-approve if held ─────────────────
+
+    async function commitAndApprove(
+      author: string,
+      intent: string,
+      ops: unknown[]
+    ): Promise<{ status: "saved" | "pending"; hash: string }> {
+      // Wasm commit() signature: commit(author, intent, ops, [], sign_envelope)
+      const raw = await (fh.graph as any).commit(author, intent, ops, [], true);
+      if (raw && typeof raw === "object" && "Admitted" in raw) {
+        return { status: "saved", hash: (raw as any).Admitted.hash };
+      }
+      if (raw && typeof raw === "object" && "Held" in raw) {
+        const hash: string = (raw as any).Held.hash;
+        const decision = await approve(fh.graph, "owner", hash);
+        expect(decision.status, `approval of '${intent}' failed`).toBe("approved");
+        return { status: "pending", hash };
+      }
+      throw new Error(`Unexpected commit result for '${intent}': ${JSON.stringify(raw)}`);
+    }
+
+    // ── 5a. Create the Review node (review/Review) ────────────────────────────
+    const reviewId = crypto.randomUUID();
+    const r1 = await commitAndApprove("owner", "Create Review", [
+      { create: { kind: "node", id: reviewId, type: "review/Review@1",
+                  attributes: { verdict: "approve", body: "LGTM" } } },
+    ]);
+    expect(["saved", "pending"], "Review node must be saved or pending").toContain(r1.status);
+
+    // ── 5b. Create two ReviewComment nodes ────────────────────────────────────
+    const comment1Id = crypto.randomUUID();
+    const comment2Id = crypto.randomUUID();
+
+    const rc1 = await commitAndApprove("owner", "Create ReviewComment 1", [
+      { create: { kind: "node", id: comment1Id, type: "review/ReviewComment@1",
+                  attributes: { body: "This function is too long" } } },
+    ]);
+    expect(["saved", "pending"]).toContain(rc1.status);
+
+    const rc2 = await commitAndApprove("owner", "Create ReviewComment 2", [
+      { create: { kind: "node", id: comment2Id, type: "review/ReviewComment@1",
+                  attributes: { body: "Agreed on the length issue" } } },
+    ]);
+    expect(["saved", "pending"]).toContain(rc2.status);
+
+    // ── 5c. Create cross-ontology typed nodes ─────────────────────────────────
+    //
+    // With code/eng ontologies installed, these must now succeed.
+    // `reviews` edge target: eng/ChangeRequest
+    // `concerns` edge target: code/SourceFile
+    //
+    // Also probes whether nodes and edges can share a changeset:
+    // we commit the cross-ontology nodes first (separate changesets),
+    // because the engine must see the nodes in fold state before we can
+    // create edges that reference them. (Same-changeset create + edge
+    // is not tested here — separate commits is the safe SP3 pattern.)
+
+    const crId = crypto.randomUUID();
+    const crResult = await commitAndApprove("owner", "Create eng/ChangeRequest", [
+      { create: { kind: "node", id: crId, type: "eng/ChangeRequest@1",
+                  attributes: { title: "PR #42", risk: "standard", status: "proposed" } } },
+    ]);
+    expect(["saved", "pending"], "eng/ChangeRequest node must be saved or pending").toContain(crResult.status);
+
+    const sfId = crypto.randomUUID();
+    const sfResult = await commitAndApprove("owner", "Create code/SourceFile", [
+      { create: { kind: "node", id: sfId, type: "code/SourceFile@1",
+                  attributes: { path: "src/lib.rs", blob: "git:repo#abc:src/lib.rs" } } },
+    ]);
+    expect(["saved", "pending"], "code/SourceFile node must be saved or pending").toContain(sfResult.status);
+
+    // ── 6. Create all four edges ──────────────────────────────────────────────
+    //
+    // part_of:    ReviewComment → Review (same-ontology)
+    // replies_to: ReviewComment → ReviewComment (same-ontology)
+    // reviews:    Review → eng/ChangeRequest (cross-ontology; eng ontology installed)
+    // concerns:   ReviewComment → code/SourceFile (cross-ontology; code ontology installed)
+
+    const partOfResult = await relate(
+      fh.graph, "owner",
+      comment1Id, reviewId,
+      edgeTypeRef("part_of")
+    );
+    expect(["saved", "pending"], "part_of edge must be saved or pending").toContain(partOfResult.status);
+
+    const repliesToResult = await relate(
+      fh.graph, "owner",
+      comment2Id, comment1Id,
+      edgeTypeRef("replies_to")
+    );
+    expect(["saved", "pending"], "replies_to edge must be saved or pending").toContain(repliesToResult.status);
+
+    const reviewsResult = await relate(
+      fh.graph, "owner",
+      reviewId, crId,
+      edgeTypeRef("reviews")
+    );
+    expect(["saved", "pending"], "reviews edge must be saved or pending").toContain(reviewsResult.status);
+
+    const concernsResult = await relate(
+      fh.graph, "owner",
+      comment1Id, sfId,
+      edgeTypeRef("concerns")
+    );
+    expect(["saved", "pending"], "concerns edge must be saved or pending").toContain(concernsResult.status);
+
+    // ── 7. All four edges accounted for ──────────────────────────────────────
+    // If we reach here without throwing, SP3's flow is viable with eng/code
+    // ontologies installed first.
   });
 });
