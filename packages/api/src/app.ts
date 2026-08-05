@@ -10,6 +10,7 @@ import { handleMcpRequest } from "./mcp.js";
 import { getOpenApiDoc } from "./openapi.js";
 import { codeRouter } from "./routes/code.js";
 import { connectorRouter } from "./routes/connector.js";
+import { githubWebhookRouter } from "./routes/webhook-github.js";
 import { gitreviewRouter } from "./routes/gitreview.js";
 import { governanceRouter } from "./routes/governance.js";
 import { graphsRouter } from "./routes/graphs.js";
@@ -72,6 +73,8 @@ export function createApp(
 
   // Open routes (no auth)
   app.route("/", healthRouter);
+  // GitHub webhook — unauthenticated by bearer; HMAC-verified inside the handler.
+  app.route("/", githubWebhookRouter);
   app.get("/api/v1/openapi.json", (c) => c.json(getOpenApiDoc()));
 
   // Authenticated API — default graph (unscoped, byte-identical behaviour)

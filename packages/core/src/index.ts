@@ -152,3 +152,7 @@ export type { ConnectorEvent, IngestResult, CommentNodeInfo } from "./connector/
 // Connector polling transport
 export { pollOnce, startPoller } from "./connector/poll.js";
 export type { PollResult } from "./connector/poll.js";
+
+// Connector GitHub App mode (JWT minting, installation tokens, manifest builder)
+export { mintAppJwt, makeAppClient, clearAppClientCache, buildConnectorManifest } from "./connector/app.js";
+export type { AppManifest } from "./connector/app.js";
