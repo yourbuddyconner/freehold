@@ -56,7 +56,7 @@ export interface GitProposal {
 // ── DecideResult ──────────────────────────────────────────────────────────────
 
 export type DecideResult =
-  | { outcome: "approved" | "rejected"; pushed: boolean; pushError?: string }
+  | { outcome: "approved" | "rejected"; pushed: boolean; pushSkipped?: boolean; pushError?: string }
   | { outcome: "incomplete"; unmet: string[] };
 
 // ── Internal wasm cast helpers ────────────────────────────────────────────────
@@ -451,7 +451,7 @@ export async function decideGit(
     }
   }
 
-  return { outcome, pushed: false };
+  return { outcome, pushed: false, pushSkipped: true };
 }
 
 // ── ReviewEntry + listReviewsForSha ──────────────────────────────────────────

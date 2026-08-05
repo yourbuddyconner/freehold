@@ -334,6 +334,11 @@ describe("decideGit — approve with reviewer (role-bound)", () => {
 
     // Should be approved (reviewer role is bound and quorum=1)
     expect(result.outcome).toBe("approved");
+    // autoPushNotes:false → push was skipped, not failed
+    if (result.outcome === "approved" || result.outcome === "rejected") {
+      expect(result.pushed).toBe(false);
+      expect(result.pushSkipped).toBe(true);
+    }
 
     // Note must be readable and contain a signed decider
     const decisions = await readDecisions(repoDir, featureSha);
@@ -436,6 +441,11 @@ describe("decideGit — reject path", () => {
     });
 
     expect(result.outcome).toBe("rejected");
+    // autoPushNotes:false → push was skipped, not failed
+    if (result.outcome === "rejected") {
+      expect(result.pushed).toBe(false);
+      expect(result.pushSkipped).toBe(true);
+    }
 
     // Single sha query shows rejected
     const p = await gitProposal(fh, rejectSha);

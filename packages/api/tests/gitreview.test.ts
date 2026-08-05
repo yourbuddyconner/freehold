@@ -388,6 +388,9 @@ describe("POST /api/v1/graphs/:id/git/proposals/:sha/decide — approve", () => 
     expect(status).toBe(200);
     const b = body as Record<string, unknown>;
     expect(b.outcome).toBe("approved");
+    // autoPushNotes defaults to false → push skipped, not failed
+    expect(b.pushed).toBe(false);
+    expect(b.pushSkipped).toBe(true);
   });
 
   test("note persists on disk after decide", async () => {

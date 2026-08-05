@@ -267,6 +267,7 @@ export function GitProposalCard({ proposal, by }: GitProposalCardProps) {
   const [decideOutcome, setDecideOutcome] = useState<DecideResult | null>(null);
   const [keyMissingReason, setKeyMissingReason] = useState<string | null>(null);
   const [savedLocally, setSavedLocally] = useState(false);
+  const [pushSkippedNotice, setPushSkippedNotice] = useState(false);
   const [retrying, setRetrying] = useState(false);
 
   const decideMut = useMutation({
@@ -275,7 +276,11 @@ export function GitProposalCard({ proposal, by }: GitProposalCardProps) {
     onSuccess: (result) => {
       setDecideOutcome(result);
       if ("pushed" in result && !result.pushed) {
-        setSavedLocally(true);
+        if ("pushError" in result && result.pushError) {
+          setSavedLocally(true);
+        } else if ("pushSkipped" in result && result.pushSkipped) {
+          setPushSkippedNotice(true);
+        }
       }
       qc.invalidateQueries({ queryKey: ["git-proposals"] });
     },
@@ -371,6 +376,12 @@ export function GitProposalCard({ proposal, by }: GitProposalCardProps) {
           >
             {retrying ? "Retrying…" : "Retry"}
           </button>
+        </div>
+      )}
+
+      {pushSkippedNotice && (
+        <div className="text-xs text-(--fg-muted) px-3 py-1 font-mono">
+          not pushed (auto-push off)
         </div>
       )}
 
