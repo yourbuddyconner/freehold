@@ -12,9 +12,26 @@ vi.mock("~/lib/hooks", () => ({
   useRecall: vi.fn(),
   useVerify: vi.fn(),
   useSchema: vi.fn(),
+  useSession: vi.fn(),
+  useGraphs: vi.fn(),
+  useActiveGraph: vi.fn(),
 }));
 
-async function renderWithRouter(pendingCount: number) {
+// Mock api.ts so localStorage/module-level calls don't fail in happy-dom
+vi.mock("~/lib/api", () => ({
+  GRAPH_STORAGE_KEY: "freehold-graph",
+  setActiveGraph: vi.fn(),
+  apiClient: { proposals: vi.fn(), session: vi.fn() },
+  ApiError: class ApiError extends Error {},
+}));
+
+type GraphKind = "memory" | "repo";
+
+async function renderWithRouter(
+  pendingCount: number,
+  graphs: { id: string; name: string; kind: GraphKind }[] = [],
+  activeGraphId = "main"
+) {
   const mockUsePending = vi.mocked(hooks.usePending);
   mockUsePending.mockReturnValue({
     data: {
@@ -24,6 +41,12 @@ async function renderWithRouter(pendingCount: number) {
     isError: false,
     error: null,
   } as ReturnType<typeof hooks.usePending>);
+
+  vi.mocked(hooks.useGraphs).mockReturnValue({ graphs, defaultGraph: "main" });
+  vi.mocked(hooks.useActiveGraph).mockReturnValue({
+    activeGraphId,
+    setActiveGraphId: vi.fn(),
+  });
 
   const router = createRouter({
     routeTree,
@@ -45,7 +68,7 @@ describe("AppShell", () => {
     vi.clearAllMocks();
   });
 
-  it("renders all six nav areas", async () => {
+  it("renders all six nav areas for the default memory graph", async () => {
     await renderWithRouter(0);
     expect(screen.getByRole("link", { name: /inbox/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /memory/i })).toBeInTheDocument();
@@ -63,5 +86,44 @@ describe("AppShell", () => {
   it("hides inbox badge when there are no pending proposals", async () => {
     await renderWithRouter(0);
     expect(screen.queryByLabelText(/pending/)).not.toBeInTheDocument();
+  });
+
+  it("hides Memory and Schema nav items when the active graph is a repo graph", async () => {
+    const graphs = [
+      { id: "main", name: "main", kind: "memory" as GraphKind },
+      { id: "g-repo", name: "my-repo", kind: "repo" as GraphKind },
+    ];
+    await renderWithRouter(0, graphs, "g-repo");
+    expect(screen.queryByRole("link", { name: /memory/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /schema/i })).not.toBeInTheDocument();
+    // Other items still present
+    expect(screen.getByRole("link", { name: /inbox/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /policy/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /verify/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /settings/i })).toBeInTheDocument();
+  });
+
+  it("shows Memory and Schema nav items when the active graph is a memory graph", async () => {
+    const graphs = [
+      { id: "main", name: "main", kind: "memory" as GraphKind },
+      { id: "g-mem", name: "notes", kind: "memory" as GraphKind },
+    ];
+    await renderWithRouter(0, graphs, "g-mem");
+    expect(screen.getByRole("link", { name: /memory/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /schema/i })).toBeInTheDocument();
+  });
+
+  it("does not render the graph switcher when only one graph is registered", async () => {
+    await renderWithRouter(0, [{ id: "main", name: "main", kind: "memory" as GraphKind }]);
+    expect(screen.queryByRole("combobox", { name: /active graph/i })).not.toBeInTheDocument();
+  });
+
+  it("renders the graph switcher when multiple graphs are registered", async () => {
+    const graphs = [
+      { id: "main", name: "main", kind: "memory" as GraphKind },
+      { id: "g-repo", name: "my-repo", kind: "repo" as GraphKind },
+    ];
+    await renderWithRouter(0, graphs);
+    expect(screen.getByRole("combobox", { name: /active graph/i })).toBeInTheDocument();
   });
 });

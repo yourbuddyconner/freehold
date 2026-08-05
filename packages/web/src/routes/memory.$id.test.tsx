@@ -14,9 +14,13 @@ vi.mock("~/lib/hooks", () => ({
   useMemoryIndex: vi.fn(),
   useUpdateMemory: vi.fn(),
   useSession: vi.fn(),
+  useGraphs: vi.fn().mockReturnValue({ graphs: [], defaultGraph: "main" }),
+  useActiveGraph: vi.fn().mockReturnValue({ activeGraphId: "main", setActiveGraphId: vi.fn() }),
 }));
 
 vi.mock("~/lib/api", () => ({
+  GRAPH_STORAGE_KEY: "freehold-graph",
+  setActiveGraph: vi.fn(),
   ApiError: class ApiError extends Error {
     code: string;
     status: number;

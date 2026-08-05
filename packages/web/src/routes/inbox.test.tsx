@@ -12,6 +12,8 @@ vi.mock("~/lib/hooks", () => ({
   useVerify: vi.fn(),
   useSchema: vi.fn(),
   useEntity: vi.fn(),
+  useGraphs: vi.fn().mockReturnValue({ graphs: [], defaultGraph: "main" }),
+  useActiveGraph: vi.fn().mockReturnValue({ activeGraphId: "main", setActiveGraphId: vi.fn() }),
 }));
 
 vi.mock("~/components/PierreDiff", () => ({
@@ -21,6 +23,8 @@ vi.mock("~/components/PierreDiff", () => ({
 }));
 
 vi.mock("~/lib/api", () => ({
+  GRAPH_STORAGE_KEY: "freehold-graph",
+  setActiveGraph: vi.fn(),
   apiClient: {
     proposals: vi.fn(),
     approve: vi.fn().mockResolvedValue({}),

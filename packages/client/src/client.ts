@@ -39,6 +39,9 @@ export type AttachDocumentBody = Schemas["AttachDocumentBody"];
 export type RegisterAgentBody = Schemas["RegisterAgentBody"];
 export type ProposeOntologyBody = Schemas["ProposeOntologyBody"];
 export type InstallOntologyBody = Schemas["InstallOntologyBody"];
+export type GraphInfo = Schemas["GraphInfo"];
+export type RegisterGraphBody = Schemas["RegisterGraphBody"];
+export type UpdateGraphBody = Schemas["UpdateGraphBody"];
 
 // ---------------------------------------------------------------------------
 // Health response (inline in openapi)
@@ -78,15 +81,60 @@ interface ErrorBody {
 export interface FreeholdClientOptions {
   baseUrl: string;
   token: string;
+  /**
+   * When set, all graph-scoped /api/v1/... paths are rewritten to
+   * /api/v1/graphs/<graphId>/... Graph-agnostic routes (session, agents,
+   * openapi.json, graphs CRUD) are never rewritten.
+   */
+  graphId?: string;
 }
+
+/**
+ * Routes under /api/v1/ that are NOT graph-scoped.
+ * Paths starting with these segments are passed through unchanged even when
+ * graphId is set.
+ */
+const GRAPH_AGNOSTIC_PREFIXES = [
+  "/api/v1/session",
+  "/api/v1/agents",
+  "/api/v1/openapi.json",
+  "/api/v1/graphs",
+];
 
 export class FreeholdClient {
   private readonly baseUrl: string;
   private readonly token: string;
+  private graphId: string | undefined;
 
-  constructor({ baseUrl, token }: FreeholdClientOptions) {
+  constructor({ baseUrl, token, graphId }: FreeholdClientOptions) {
     this.baseUrl = baseUrl.replace(/\/$/, "");
     this.token = token;
+    this.graphId = graphId;
+  }
+
+  /** Switch the active graph. Call after updating localStorage. */
+  setGraphId(id: string | undefined): void {
+    this.graphId = id;
+  }
+
+  /** Returns the currently active graph id, or undefined for the default. */
+  getGraphId(): string | undefined {
+    return this.graphId;
+  }
+
+  /**
+   * Rewrite a /api/v1/... path to /api/v1/graphs/<graphId>/... when graphId
+   * is set and the path is graph-scoped.
+   */
+  private scopePath(path: string): string {
+    if (!this.graphId) return path;
+    if (GRAPH_AGNOSTIC_PREFIXES.some((p) => path === p || path.startsWith(`${p}/`))) {
+      return path;
+    }
+    if (path.startsWith("/api/v1/")) {
+      return `/api/v1/graphs/${this.graphId}/${path.slice("/api/v1/".length)}`;
+    }
+    return path;
   }
 
   // -------------------------------------------------------------------------
@@ -98,7 +146,7 @@ export class FreeholdClient {
     path: string,
     opts: { body?: unknown; query?: Record<string, string | undefined> } = {}
   ): Promise<T> {
-    let url = `${this.baseUrl}${path}`;
+    let url = `${this.baseUrl}${this.scopePath(path)}`;
 
     if (opts.query) {
       const params = new URLSearchParams();
@@ -311,5 +359,20 @@ export class FreeholdClient {
   /** GET /api/v1/openapi.json */
   async openapiSpec(): Promise<unknown> {
     return this.fetch<unknown>("GET", "/api/v1/openapi.json");
+  }
+
+  /** GET /api/v1/graphs — list all registered graphs */
+  async listGraphs(): Promise<{ graphs: GraphInfo[] }> {
+    return this.fetch<{ graphs: GraphInfo[] }>("GET", "/api/v1/graphs");
+  }
+
+  /** POST /api/v1/graphs — register a new graph */
+  async registerGraph(body: RegisterGraphBody): Promise<GraphInfo> {
+    return this.fetch<GraphInfo>("POST", "/api/v1/graphs", { body });
+  }
+
+  /** PATCH /api/v1/graphs/:id — update graph metadata */
+  async updateGraph(id: string, body: UpdateGraphBody): Promise<GraphInfo> {
+    return this.fetch<GraphInfo>("PATCH", `/api/v1/graphs/${id}`, { body });
   }
 }

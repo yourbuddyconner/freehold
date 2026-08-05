@@ -422,6 +422,17 @@
           "owner": {
             "type": "string",
             "description": "The graph's owner principal; console edits sign as this name"
+          },
+          "graphs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GraphInfo"
+            },
+            "description": "All registered graphs"
+          },
+          "defaultGraph": {
+            "type": "string",
+            "description": "Id of the default graph"
           }
         },
         "required": ["defaultAgent", "embedder", "port", "owner"]
@@ -521,6 +532,43 @@
           }
         },
         "required": ["nodes", "edges", "truncated"]
+      },
+      "GraphInfo": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": ["memory", "repo"]
+          }
+        },
+        "required": ["id", "name", "kind"]
+      },
+      "RegisterGraphBody": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": ["memory", "repo"]
+          }
+        },
+        "required": ["name", "kind"]
+      },
+      "UpdateGraphBody": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        }
       }
     },
     "parameters": {}
@@ -1421,6 +1469,131 @@
           },
           "401": {
             "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/graphs": {
+      "get": {
+        "summary": "List all registered graphs",
+        "responses": {
+          "200": {
+            "description": "Graph list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "graphs": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/GraphInfo"
+                      }
+                    }
+                  },
+                  "required": ["graphs"]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      },
+      "post": {
+        "summary": "Register a new graph",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterGraphBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Created graph",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GraphInfo"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/graphs/{id}": {
+      "patch": {
+        "summary": "Update graph metadata",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateGraphBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated graph",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GraphInfo"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete a graph",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deleted"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not found"
           }
         }
       }

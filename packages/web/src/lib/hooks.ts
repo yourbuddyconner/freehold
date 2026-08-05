@@ -1,5 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiClient } from "./api";
+import { useState } from "react";
+import type { GraphInfo } from "@freehold/client";
+import { GRAPH_STORAGE_KEY, apiClient, setActiveGraph } from "./api";
 
 /** Pending proposals (the Inbox). */
 export function usePending() {
@@ -126,10 +128,47 @@ export function usePrincipals() {
   });
 }
 
-/** Daemon session config (defaultAgent, embedder, port). */
+/** Daemon session config (defaultAgent, embedder, port, graphs, defaultGraph). */
 export function useSession() {
   return useQuery({
     queryKey: ["session"],
     queryFn: () => apiClient.session(),
   });
+}
+
+/** All registered graphs from the session response. Falls back to empty list. */
+export function useGraphs(): { graphs: GraphInfo[]; defaultGraph: string } {
+  const { data } = useSession();
+  return {
+    graphs: data?.graphs ?? [],
+    defaultGraph: data?.defaultGraph ?? "main",
+  };
+}
+
+/**
+ * Returns the id of the currently active graph (from localStorage) and a
+ * setter that persists the choice and invalidates all queries.
+ */
+export function useActiveGraph(): {
+  activeGraphId: string;
+  setActiveGraphId: (id: string) => void;
+} {
+  const { defaultGraph } = useGraphs();
+  const queryClient = useQueryClient();
+
+  const [activeGraphId, setLocalActiveGraphId] = useState<string>(() => {
+    try {
+      return localStorage.getItem(GRAPH_STORAGE_KEY) ?? defaultGraph;
+    } catch {
+      return defaultGraph;
+    }
+  });
+
+  function setActiveGraphId(id: string) {
+    setLocalActiveGraphId(id);
+    setActiveGraph(id);
+    queryClient.invalidateQueries();
+  }
+
+  return { activeGraphId, setActiveGraphId };
 }
