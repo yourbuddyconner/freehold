@@ -52,6 +52,9 @@ const ClassifyBody = z
     agent: z.string(),
     nodeId: z.string(),
     term: z.string(),
+    basis: z.enum(["model-assisted", "manual"]).optional().openapi({
+      description: "How the classification was derived; manual assertions skip the envelope rule",
+    }),
   })
   .openapi("ClassifyBody");
 
@@ -407,7 +410,7 @@ function buildRegistry(): OpenAPIRegistry {
         type: z.string().optional(),
         author: z.string().optional(),
         status: z.string().optional(),
-        limit: z.string().optional().openapi({ description: "Max results (default 50, cap 200)" }),
+        limit: z.string().optional().openapi({ description: "Max results (default 50, cap 1000)" }),
       }),
     },
     responses: {

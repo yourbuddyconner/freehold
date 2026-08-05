@@ -60,6 +60,36 @@ describe("buildMemoryTree", () => {
     if (leaf.kind === "leaf") expect(leaf.entry.approval).toBe("pending");
   });
 
+  it("nests items by hierarchical terms inside the type folder", () => {
+    const tree = buildMemoryTree([
+      entry({ id: "a", terms: ["projects/agent-auth@1", "workspace/scratch@1"] }),
+      entry({ id: "b", terms: ["projects@1"] }),
+      entry({ id: "c", terms: [] }),
+    ]);
+    const notes = tree[0];
+    // c has no filing term — sits directly under Notes (after folders)
+    const looseIds = notes.children.filter((n) => n.kind === "leaf").map((n) => n.entry.id);
+    expect(looseIds).toEqual(["c"]);
+    const projects = notes.children.find((n) => n.kind === "folder" && n.label === "projects");
+    expect(projects?.kind).toBe("folder");
+    if (projects?.kind !== "folder") return;
+    expect(projects.count).toBe(2);
+    // b files at projects/, a nests one level deeper
+    expect(projects.children.some((n) => n.kind === "leaf" && n.entry.id === "b")).toBe(true);
+    const agentAuth = projects.children.find(
+      (n) => n.kind === "folder" && n.label === "agent-auth"
+    );
+    if (agentAuth?.kind !== "folder") throw new Error("missing nested folder");
+    expect(agentAuth.children.some((n) => n.kind === "leaf" && n.entry.id === "a")).toBe(true);
+  });
+
+  it("status namespaces never become folders", () => {
+    const tree = buildMemoryTree([
+      entry({ id: "s", terms: ["workspace/scratch@1", "sensitivity/private@1"] }),
+    ]);
+    expect(tree[0].children.every((n) => n.kind === "leaf")).toBe(true);
+  });
+
   it("merges types sharing a display name into one folder", () => {
     const tree = buildMemoryTree([
       entry({ id: "a", type: "memory/Person@1" }),

@@ -1319,6 +1319,11 @@ export interface components {
             agent: string;
             nodeId: string;
             term: string;
+            /**
+             * @description How the classification was derived; manual assertions skip the envelope rule
+             * @enum {string}
+             */
+            basis?: "model-assisted" | "manual";
         };
         AttachDocumentBody: {
             agent: string;

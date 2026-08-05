@@ -1,10 +1,12 @@
 /**
  * Tree derivation for the Memory workspace.
  *
- * The tree is the ontology: top-level folders come from root entity types
- * (People, Notes, Documents, …), nested folders follow type-path segments,
- * and items are leaves. Taxonomy terms are labels on items, never folders.
- * Pure functions — the server ships a flat listing, the client owns shape.
+ * Top-level folders come from root entity types (People, Notes, …). Inside
+ * a type folder, items nest by their hierarchical taxonomy terms — a note
+ * classified `projects/agent-auth` files under Notes → projects →
+ * agent-auth. Terms in status namespaces (workspace/*, sensitivity/*) are
+ * labels, never folders. Pure functions — the server ships a flat listing,
+ * the client owns shape.
  */
 
 import type { MemoryIndexEntry } from "@freehold/client";
@@ -12,8 +14,8 @@ import type { MemoryIndexEntry } from "@freehold/client";
 export interface TreeFolder {
   kind: "folder";
   label: string;
-  /** Bare type path this folder groups, e.g. "memory/Note" */
-  typePrefix: string;
+  /** Stable identity for open-state persistence, e.g. "Notes/projects/agent-auth" */
+  id: string;
   children: TreeNode[];
   /** Leaf count including nested folders */
   count: number;
@@ -49,9 +51,23 @@ export function displayTypeName(typeRef: string): string {
   return capped.endsWith("s") ? capped : `${capped}s`;
 }
 
-/** Bare type path without version: "memory/Note@1" → "memory/Note". */
-function barePath(typeRef: string): string {
-  return typeRef.split("@")[0];
+/** Term namespaces that are statuses, not places — never folders. */
+const STATUS_NAMESPACES = new Set(["workspace", "sensitivity"]);
+
+/**
+ * The term that files this entry into a folder: the deepest classification
+ * outside the status namespaces, without its version suffix. Undefined when
+ * the entry has no filing term — it sits directly in its type folder.
+ */
+export function folderTermOf(entry: MemoryIndexEntry): string | undefined {
+  const qualifying = entry.terms
+    .map((t) => t.split("@")[0])
+    .filter((t) => !STATUS_NAMESPACES.has(t.split("/")[0]));
+  if (qualifying.length === 0) return undefined;
+  qualifying.sort(
+    (a, b) => b.split("/").length - a.split("/").length || b.length - a.length || a.localeCompare(b)
+  );
+  return qualifying[0];
 }
 
 function leafCompare(a: TreeLeaf, b: TreeLeaf): number {
@@ -59,28 +75,63 @@ function leafCompare(a: TreeLeaf, b: TreeLeaf): number {
   return b.entry.updatedAt.localeCompare(a.entry.updatedAt);
 }
 
+function sortFolder(folder: TreeFolder): void {
+  const folders = folder.children.filter((c): c is TreeFolder => c.kind === "folder");
+  const leaves = folder.children.filter((c): c is TreeLeaf => c.kind === "leaf");
+  folders.sort((a, b) => a.label.localeCompare(b.label));
+  leaves.sort(leafCompare);
+  folder.children = [...folders, ...leaves];
+  for (const f of folders) sortFolder(f);
+}
+
+function countLeaves(folder: TreeFolder): number {
+  let n = 0;
+  for (const c of folder.children) {
+    n += c.kind === "leaf" ? 1 : countLeaves(c);
+  }
+  folder.count = n;
+  return n;
+}
+
 /**
  * Build the workspace tree: one folder per display name (types that map to
- * the same display name — Person, Colleague — share a folder), leaves
- * sorted newest first, folders sorted alphabetically.
+ * the same display name — Person, Colleague — share a folder), with items
+ * nested by their filing terms. Subfolders sort alphabetically before
+ * leaves; leaves sort newest first.
  */
 export function buildMemoryTree(entries: MemoryIndexEntry[]): TreeFolder[] {
-  const folders = new Map<string, TreeFolder>();
+  const roots = new Map<string, TreeFolder>();
+
+  function folderFor(root: TreeFolder, termPath: string | undefined): TreeFolder {
+    if (!termPath) return root;
+    let current = root;
+    const segments = termPath.split("/");
+    for (let i = 0; i < segments.length; i++) {
+      const id = `${root.id}/${segments.slice(0, i + 1).join("/")}`;
+      let next = current.children.find((c): c is TreeFolder => c.kind === "folder" && c.id === id);
+      if (!next) {
+        next = { kind: "folder", label: segments[i], id, children: [], count: 0 };
+        current.children.push(next);
+      }
+      current = next;
+    }
+    return current;
+  }
 
   for (const entry of entries) {
     const label = displayTypeName(entry.type);
-    let folder = folders.get(label);
-    if (!folder) {
-      folder = { kind: "folder", label, typePrefix: barePath(entry.type), children: [], count: 0 };
-      folders.set(label, folder);
+    let root = roots.get(label);
+    if (!root) {
+      root = { kind: "folder", label, id: label, children: [], count: 0 };
+      roots.set(label, root);
     }
-    folder.children.push({ kind: "leaf", entry });
-    folder.count += 1;
+    folderFor(root, folderTermOf(entry)).children.push({ kind: "leaf", entry });
   }
 
-  const result = [...folders.values()];
-  for (const folder of result) {
-    (folder.children as TreeLeaf[]).sort(leafCompare);
+  const result = [...roots.values()];
+  for (const root of result) {
+    sortFolder(root);
+    countLeaves(root);
   }
   result.sort((a, b) => a.label.localeCompare(b.label));
   return result;

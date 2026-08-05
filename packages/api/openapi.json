@@ -110,6 +110,11 @@
           },
           "term": {
             "type": "string"
+          },
+          "basis": {
+            "type": "string",
+            "enum": ["model-assisted", "manual"],
+            "description": "How the classification was derived; manual assertions skip the envelope rule"
           }
         },
         "required": ["agent", "nodeId", "term"]
@@ -855,7 +860,7 @@
           {
             "schema": {
               "type": "string",
-              "description": "Max results (default 50, cap 200)"
+              "description": "Max results (default 50, cap 1000)"
             },
             "required": false,
             "name": "limit",

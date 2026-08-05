@@ -43,7 +43,7 @@ retrievalRouter.get("/memories", async (c) => {
   const author = c.req.query("author");
   const status = c.req.query("status");
   const limitRaw = c.req.query("limit");
-  const limit = limitRaw ? Math.min(Number(limitRaw) || 50, 200) : 50;
+  const limit = limitRaw ? Math.min(Number(limitRaw) || 50, 1000) : 50;
   const fh = c.get("freehold");
   const results = await recentMemories(
     fh,

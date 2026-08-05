@@ -282,10 +282,11 @@ export async function classifyEntity(
   graph: AllodGraph,
   agent: string,
   nodeId: string,
-  term: string
+  term: string,
+  basis: "model-assisted" | "manual" = "model-assisted"
 ): Promise<ClassifyResult> {
   return withGraph(graph, async () => {
-    const raw = await graph.classify(nodeId, term, agent, "model-assisted");
+    const raw = await graph.classify(nodeId, term, agent, basis);
     const admission = parseAdmission(raw as AllodAdmission);
     return { status: admission.status, changeset: admission.hash };
   });

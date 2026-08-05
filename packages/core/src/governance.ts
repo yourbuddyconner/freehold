@@ -262,12 +262,33 @@ function checkIsSchemaProposal(ops: RawOp[]): boolean {
  * a plain-language summary, op-level diff, matched policy rule names,
  * and a schema-proposal flag.
  */
+/**
+ * Per-proposal enrichment (checklist re-evaluation, diff, subject lookup)
+ * costs real wasm time. Beyond this many proposals, the rest return slim
+ * entries so the Inbox stays responsive under a flooded queue.
+ */
+const ENRICH_CAP = 100;
+
 export async function pending(graph: AllodGraph): Promise<ProposalView[]> {
   return withGraph(graph, () => {
     const raw = graph.proposals() as RawProposalSummary[];
     if (!Array.isArray(raw)) return [];
 
-    return raw.map((p) => {
+    return raw.map((p, index) => {
+      if (index >= ENRICH_CAP) {
+        const hash = p.hash ?? "";
+        const agent = principalName(p.author);
+        return {
+          hash,
+          agent,
+          intent: p.intent ?? "",
+          summary: p.intent ?? `${agent} wants to make a change`,
+          rules: [],
+          diff: [],
+          isSchemaProposal: false,
+          subject: null,
+        };
+      }
       const hash = p.hash ?? "";
       const intent = p.intent ?? "";
       const agent = principalName(p.author);

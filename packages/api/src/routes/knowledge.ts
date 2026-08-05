@@ -126,6 +126,7 @@ const ClassifyBody = z.object({
   agent: z.string(),
   nodeId: z.string(),
   term: z.string(),
+  basis: z.enum(["model-assisted", "manual"]).optional(),
 });
 
 knowledgeRouter.post("/classifications", async (c) => {
@@ -134,10 +135,10 @@ knowledgeRouter.post("/classifications", async (c) => {
   if (!parsed.success) {
     return apiError(c, 400, ERROR_CODES.VALIDATION, "Invalid request body");
   }
-  const { agent, nodeId, term } = parsed.data;
+  const { agent, nodeId, term, basis } = parsed.data;
   const fh = c.get("freehold");
   const embedder = c.get("embedder");
-  const result = await classifyEntity(fh.graph, agent, nodeId, term);
+  const result = await classifyEntity(fh.graph, agent, nodeId, term, basis);
   if (result.status === "saved") {
     await syncIndex(fh, embedder);
   }
