@@ -63,9 +63,13 @@ function ClassifyPanel({ nodeId }: { nodeId: string }) {
       </form>
       {result && (
         <p className="font-mono text-[11px] text-(--fg-muted)">
-          {result.status === "saved"
-            ? "Saved."
-            : "Pending — review in the Inbox."}
+          {result.status === "saved" ? (
+            "Saved."
+          ) : (
+            <>
+              Pending — review in the <Link to="/inbox">Inbox</Link>.
+            </>
+          )}
         </p>
       )}
     </section>

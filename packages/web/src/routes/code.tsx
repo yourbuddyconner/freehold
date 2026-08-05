@@ -26,10 +26,6 @@ interface RegionRule {
   paths: string[];
 }
 
-function encodeFilePath(path: string): string {
-  return encodeURIComponent(path);
-}
-
 function FileNode({ node, depth = 0 }: { node: CodeTreeNode; depth?: number }) {
   const [open, setOpen] = useState(true);
   const { location } = useRouterState();
@@ -68,7 +64,7 @@ function FileNode({ node, depth = 0 }: { node: CodeTreeNode; depth?: number }) {
         to="/code/file"
         search={{ path: node.path }}
         data-testid={`code-file-${node.path}`}
-        className={`flex items-center gap-1 py-1 text-xs hover:bg-(--bg-subtle) ${
+        className={`flex items-center gap-1 py-1 text-xs hover:bg-(--bg-subtle) flex-wrap ${
           isActive ? "bg-(--bg-subtle) text-(--fg)" : "text-(--fg-muted) hover:text-(--fg)"
         }`}
         style={{ paddingLeft: 6 + depth * 12 }}
@@ -79,6 +75,14 @@ function FileNode({ node, depth = 0 }: { node: CodeTreeNode; depth?: number }) {
             {node.language}
           </span>
         )}
+        {(node.terms ?? []).map((t) => (
+          <span
+            key={t}
+            className="shrink-0 border border-(--border) px-1 font-mono text-[9px] text-(--fg-muted)"
+          >
+            {t.split("@")[0]}
+          </span>
+        ))}
       </Link>
     </li>
   );
@@ -101,16 +105,48 @@ function CodeTree({ tree }: { tree: CodeTreeNode[] }) {
 
 function RegionsPanel({ rules }: { rules: RegionRule[] }) {
   if (rules.length === 0) return null;
+
+  function renderReviewers(reviewers: unknown): string {
+    if (!reviewers) return "";
+    if (typeof reviewers === "string") return reviewers;
+    if (Array.isArray(reviewers)) {
+      return reviewers
+        .map((r) => {
+          if (typeof r === "string") return r;
+          if (typeof r === "object" && r !== null && "name" in r) return String(r.name);
+          if (typeof r === "object" && r !== null && "role" in r) return String(r.role);
+          return String(r);
+        })
+        .join(", ");
+    }
+    if (typeof reviewers === "object" && reviewers !== null && "name" in reviewers) {
+      return String((reviewers as Record<string, unknown>).name);
+    }
+    if (typeof reviewers === "object" && reviewers !== null && "role" in reviewers) {
+      return String((reviewers as Record<string, unknown>).role);
+    }
+    return String(reviewers);
+  }
+
   return (
     <div className="mt-4 border-t border-(--border) pt-3 space-y-3">
       <p className="font-mono text-[10px] uppercase tracking-[0.08em] text-(--fg-muted)">
         Governed paths
       </p>
-      {rules.map((r) => (
-        <div key={r.rule} className="space-y-1">
-          <p className="font-mono text-[11px] text-(--fg) truncate" title={r.rule}>
-            {r.rule}
-          </p>
+      {rules.map((r) => {
+        const reviewersText = renderReviewers(r.reviewers);
+        return (
+          <div key={r.rule} className="space-y-1">
+            <div className="space-y-0.5">
+              <p className="font-mono text-[11px] text-(--fg) truncate" title={r.rule}>
+                {r.rule}
+              </p>
+              {reviewersText && (
+                <p className="font-mono text-[10px] text-(--fg-muted)">
+                  {reviewersText}
+                </p>
+              )}
+            </div>
           <ul className="space-y-0.5">
             {r.paths.map((p) => (
               <li key={p}>
@@ -124,8 +160,9 @@ function RegionsPanel({ rules }: { rules: RegionRule[] }) {
               </li>
             ))}
           </ul>
-        </div>
-      ))}
+          </div>
+        );
+      })}
     </div>
   );
 }

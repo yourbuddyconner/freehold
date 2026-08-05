@@ -53,7 +53,7 @@ const sampleTree = [
     path: "src",
     kind: "dir",
     children: [
-      { name: "main.ts", path: "src/main.ts", kind: "file", language: "typescript", terms: [] },
+      { name: "main.ts", path: "src/main.ts", kind: "file", language: "typescript", terms: ["workspace/core"] },
       { name: "utils.ts", path: "src/utils.ts", kind: "file", language: "typescript", terms: [] },
     ],
   },
@@ -280,6 +280,16 @@ describe("Code workspace", () => {
       await renderCode();
       expect(screen.getByText(/select a file/i)).toBeInTheDocument();
     });
+
+    it("renders language chip after file name", async () => {
+      await renderCode();
+      expect(screen.getAllByText("typescript")).toHaveLength(2);
+    });
+
+    it("renders classification chips (node.terms) after language chip", async () => {
+      await renderCode();
+      expect(screen.getByText("workspace/core")).toBeInTheDocument();
+    });
   });
 
   describe("File page", () => {
@@ -313,6 +323,16 @@ describe("Code workspace", () => {
       await renderCode();
       expect(screen.getByText("policy/api-review")).toBeInTheDocument();
       expect(screen.getByText("src/api/routes.ts")).toBeInTheDocument();
+    });
+
+    it("renders reviewers as a comma-separated string when they arrive as array", async () => {
+      await renderCode();
+      expect(screen.getByText("alice, bob")).toBeInTheDocument();
+    });
+
+    it("renders single reviewer from array", async () => {
+      await renderCode();
+      expect(screen.getByText("charlie")).toBeInTheDocument();
     });
   });
 
@@ -364,6 +384,21 @@ describe("Code workspace", () => {
     it("graph page renders empty state when no nodes returned", async () => {
       await renderCode({ neighborhood: null }, "/code/graph?path=src%2Fmain.ts");
       expect(screen.getByText(/no neighborhood data/i)).toBeInTheDocument();
+    });
+  });
+
+  describe("Governed-path link navigation", () => {
+    it("renders governed paths as links in the regions panel", async () => {
+      await renderCode();
+      const pathLinks = screen.getAllByRole("link", { name: /src\/auth\// });
+      expect(pathLinks.length).toBeGreaterThan(0);
+      expect(pathLinks[0]).toHaveAttribute("href", expect.stringContaining("path="));
+    });
+
+    it("renders file tree links with correct path search param", async () => {
+      await renderCode();
+      const fileLink = screen.getByTestId("code-file-src/main.ts");
+      expect(fileLink).toHaveAttribute("href", expect.stringContaining("path="));
     });
   });
 });
