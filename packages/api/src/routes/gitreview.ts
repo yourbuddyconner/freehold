@@ -16,6 +16,7 @@ import {
 } from "@freehold/core";
 import { withGraph } from "@freehold/core";
 import { Hono } from "hono";
+import { basename } from "node:path";
 import { z } from "zod";
 import type { AppEnv } from "../types.js";
 
@@ -147,7 +148,17 @@ gitreviewRouter.post("/git/proposals/:sha/reviews", async (c) => {
   const { verdict, body: reviewBody, by, comments = [] } = parsed.data;
   const sha = c.req.param("sha");
 
+  // Verify sha exists as a known git proposal
+  const proposal = await gitProposal(fh, sha);
+  if (!proposal) {
+    return c.json({ error: "proposal not found" }, 404);
+  }
+
   const reviewId = crypto.randomUUID();
+
+  // Canonical external-ref format: git:<repo>#<sha>
+  const repoName = basename(fh.graphDir);
+  const commitRef = `git:${repoName}#${sha}`;
 
   // Commit 1: create the Review node
   // Engine invariant: endpoints must be admitted before edges — so Review node first.
@@ -159,7 +170,7 @@ gitreviewRouter.post("/git/proposals/:sha/reviews", async (c) => {
       attributes: {
         verdict,
         ...(reviewBody !== undefined ? { body: reviewBody } : {}),
-        commit: sha,
+        commit: commitRef,
       },
     },
   };

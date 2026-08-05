@@ -487,20 +487,93 @@ interface RawLogEntry {
  * List all review/Review@1 and their review/ReviewComment@1 nodes for a
  * given git commit sha.
  *
- * Scans admitted changesets (via freehold.graph.log() + changeset YAML files)
- * so results are available without syncIndex having been called.
+ * Scans admitted changesets (via freehold.graph.log() + changeset YAML files) and
+ * pending proposals (via freehold.graph.proposals() + proposal_get) so results are
+ * available without syncIndex having been called.
  */
+
+interface RawPendingProposal {
+  hash: string;
+  intent: string;
+  author: string;
+}
+
+interface RawPendingChangeset {
+  hash?: string;
+  intent?: string;
+  author?: { principal?: string } | string;
+  operations?: Array<Record<string, unknown>>;
+}
+
+/**
+ * Parse review-related operations from a changeset operations array into the
+ * shared maps. Status is passed in so admitted vs pending can be distinguished.
+ */
+function parseChangesetOps(
+  operations: Array<Record<string, unknown>>,
+  author: string,
+  status: "saved" | "pending",
+  sha: string,
+  repoBasename: string,
+  reviews: Map<string, { attrs: Record<string, unknown>; author: string; status: "saved" | "pending" }>,
+  comments: Map<string, { attrs: Record<string, unknown>; author: string }>,
+  commentToReview: Map<string, string>
+): void {
+  // Accept both canonical `git:<repo>#<sha>` and the bare sha (back-compat with
+  // any changesets written before the canonical format was adopted).
+  const canonicalRef = `git:${repoBasename}#${sha}`;
+
+  for (const op of operations) {
+    if (!op || typeof op !== "object" || Array.isArray(op)) continue;
+    const o = op as Record<string, unknown>;
+    const inner = o.create as Record<string, unknown> | undefined;
+    if (!inner || typeof inner !== "object") continue;
+
+    // Review node
+    if (
+      inner.kind === "node" &&
+      typeof inner.type === "string" &&
+      inner.type.startsWith("review/Review")
+    ) {
+      const attrs = (inner.attributes as Record<string, unknown> | undefined) ?? {};
+      const commit = attrs.commit as string | undefined;
+      if (commit && (commit === canonicalRef || commit === sha)) {
+        reviews.set(inner.id as string, { attrs, author, status });
+      }
+    }
+
+    // ReviewComment node
+    if (
+      inner.kind === "node" &&
+      typeof inner.type === "string" &&
+      inner.type.startsWith("review/ReviewComment")
+    ) {
+      const attrs = (inner.attributes as Record<string, unknown> | undefined) ?? {};
+      comments.set(inner.id as string, { attrs, author });
+    }
+
+    // part_of edge (from=comment node:..., to=review node:...)
+    if (
+      inner.kind === "edge" &&
+      typeof inner.type === "string" &&
+      inner.type.startsWith("review/part_of")
+    ) {
+      const from =
+        typeof inner.from === "string" ? inner.from.replace(/^node:/, "") : null;
+      const to =
+        typeof inner.to === "string" ? inner.to.replace(/^node:/, "") : null;
+      if (from && to) {
+        commentToReview.set(from, to);
+      }
+    }
+  }
+}
+
 export async function listReviewsForSha(
   fh: Freehold,
   sha: string
 ): Promise<ReviewEntry[]> {
-  // Read the admitted log from the wasm graph
-  const log = await withGraph(fh.graph, () => {
-    return (fh.graph as unknown as { log(): RawLogEntry[] }).log();
-  });
-  if (!Array.isArray(log)) return [];
-
-  const csDir = join(fh.graphDir, ".allod", "changesets");
+  const repoBasename = basename(fh.graphDir);
 
   // Maps: nodeId → { attrs, author, status }
   const reviews = new Map<
@@ -511,83 +584,99 @@ export async function listReviewsForSha(
   // part_of edge: commentId → reviewId
   const commentToReview = new Map<string, string>();
 
-  for (const entry of log) {
-    const bareHash = entry.hash.replace("sha256:", "");
-    const yamlPath = join(csDir, `${bareHash}.yaml`);
-    if (!existsSync(yamlPath)) continue;
+  // ── 1. Admitted changesets ────────────────────────────────────────────────
+  const log = await withGraph(fh.graph, () => {
+    return (fh.graph as unknown as { log(): RawLogEntry[] }).log();
+  });
 
-    let yaml: string;
-    try {
-      yaml = readFileSync(yamlPath, "utf-8");
-    } catch {
-      continue;
-    }
+  if (Array.isArray(log)) {
+    const csDir = join(fh.graphDir, ".allod", "changesets");
 
-    let doc: unknown;
-    try {
-      doc = yamlLoad(yaml);
-    } catch {
-      continue;
-    }
-    if (!doc || typeof doc !== "object" || Array.isArray(doc)) continue;
+    for (const entry of log) {
+      const bareHash = entry.hash.replace("sha256:", "");
+      const yamlPath = join(csDir, `${bareHash}.yaml`);
+      if (!existsSync(yamlPath)) continue;
 
-    const cs = doc as Record<string, unknown>;
-    const operations = cs.operations;
-    if (!Array.isArray(operations)) continue;
-
-    const authorRef = entry.author ?? "";
-    const author = authorRef.startsWith("principal:")
-      ? authorRef.slice("principal:".length)
-      : authorRef;
-
-    // All admitted log entries are saved (log only includes admitted changesets)
-    const status: "saved" | "pending" = "saved";
-
-    for (const op of operations) {
-      if (!op || typeof op !== "object" || Array.isArray(op)) continue;
-      const o = op as Record<string, unknown>;
-      const inner = o.create as Record<string, unknown> | undefined;
-      if (!inner || typeof inner !== "object") continue;
-
-      // Review node
-      if (
-        inner.kind === "node" &&
-        typeof inner.type === "string" &&
-        inner.type.startsWith("review/Review")
-      ) {
-        const attrs = (inner.attributes as Record<string, unknown> | undefined) ?? {};
-        const commit = attrs.commit as string | undefined;
-        if (commit && commit.includes(sha)) {
-          reviews.set(inner.id as string, { attrs, author, status });
-        }
+      let yaml: string;
+      try {
+        yaml = readFileSync(yamlPath, "utf-8");
+      } catch {
+        continue;
       }
 
-      // ReviewComment node
-      if (
-        inner.kind === "node" &&
-        typeof inner.type === "string" &&
-        inner.type.startsWith("review/ReviewComment")
-      ) {
-        const attrs = (inner.attributes as Record<string, unknown> | undefined) ?? {};
-        comments.set(inner.id as string, { attrs, author });
+      let doc: unknown;
+      try {
+        doc = yamlLoad(yaml);
+      } catch {
+        continue;
       }
+      if (!doc || typeof doc !== "object" || Array.isArray(doc)) continue;
 
-      // part_of edge (from=comment node:..., to=review node:...)
-      if (
-        inner.kind === "edge" &&
-        typeof inner.type === "string" &&
-        inner.type.startsWith("review/part_of")
-      ) {
-        const from =
-          typeof inner.from === "string" ? inner.from.replace(/^node:/, "") : null;
-        const to =
-          typeof inner.to === "string" ? inner.to.replace(/^node:/, "") : null;
-        if (from && to) {
-          commentToReview.set(from, to);
-        }
-      }
+      const cs = doc as Record<string, unknown>;
+      const operations = cs.operations;
+      if (!Array.isArray(operations)) continue;
+
+      const authorRef = entry.author ?? "";
+      const author = authorRef.startsWith("principal:")
+        ? authorRef.slice("principal:".length)
+        : authorRef;
+
+      // Admitted log entries are saved
+      parseChangesetOps(
+        operations as Array<Record<string, unknown>>,
+        author,
+        "saved",
+        sha,
+        repoBasename,
+        reviews,
+        comments,
+        commentToReview
+      );
     }
   }
+
+  // ── 2. Pending proposals ──────────────────────────────────────────────────
+  // proposals() returns the queue of held changesets awaiting governance approval.
+  // Each may contain review/Review@1 nodes that are visible via POST but not yet
+  // in the admitted log.
+  await withGraph(fh.graph, () => {
+    let pendingList: RawPendingProposal[];
+    try {
+      pendingList = (fh.graph as unknown as { proposals(): RawPendingProposal[] }).proposals();
+    } catch {
+      return;
+    }
+    if (!Array.isArray(pendingList)) return;
+
+    for (const p of pendingList) {
+      const hash = p.hash ?? "";
+      if (!hash) continue;
+
+      let cs: RawPendingChangeset;
+      try {
+        cs = (fh.graph as unknown as { proposal_get(hash: string): RawPendingChangeset }).proposal_get(hash);
+      } catch {
+        continue;
+      }
+      if (!cs || !Array.isArray(cs.operations)) continue;
+
+      const rawAuthor = p.author ?? "";
+      const author = rawAuthor.startsWith("principal:")
+        ? rawAuthor.slice("principal:".length)
+        : rawAuthor;
+
+      parseChangesetOps(
+        cs.operations as Array<Record<string, unknown>>,
+        author,
+        "pending",
+        sha,
+        repoBasename,
+        reviews,
+        comments,
+        commentToReview
+      );
+    }
+  });
 
   // Group comments by review
   const reviewComments = new Map<string, ReviewCommentEntry[]>();

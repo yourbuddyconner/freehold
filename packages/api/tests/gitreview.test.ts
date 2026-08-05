@@ -355,7 +355,17 @@ describe("POST /api/v1/graphs/:id/git/proposals/:sha/decide — approve", () => 
     );
     expect(status).toBe(200);
     const b = body as Record<string, unknown>;
-    expect(["approved", "incomplete"]).toContain(b.outcome);
+    expect(b.outcome).toBe("approved");
+  });
+
+  test("note persists on disk after decide", async () => {
+    // git notes show the allod-decisions note for featureSha in the actual repo
+    const note = execFileSync(
+      "git",
+      ["notes", "--ref=allod-decisions", "show", featureSha],
+      { cwd: repoDir }
+    ).toString().trim();
+    expect(note.length).toBeGreaterThan(0);
   });
 
   test("second list shows decided: approved for feature sha", async () => {
@@ -364,7 +374,7 @@ describe("POST /api/v1/graphs/:id/git/proposals/:sha/decide — approve", () => 
     const feature = b.proposals.find((p) => p.sha === featureSha);
     expect(feature).toBeDefined();
     // The decide call above approved it — it should be approved now
-    expect(["approved", "incomplete"]).toContain(feature!.decided as string);
+    expect(feature!.decided).toBe("approved");
   });
 });
 
@@ -481,6 +491,15 @@ describe("POST /api/v1/graphs/:id/git/proposals/:sha/reviews", () => {
     );
     expect(status).toBe(400);
   });
+
+  test("returns 404 for unknown sha", async () => {
+    const { status } = await req(
+      "POST",
+      `/api/v1/graphs/${repoGraphId}/git/proposals/0000000000000000000000000000000000000000/reviews`,
+      { verdict: "approve", body: "review for unknown sha", by: "reviewer" }
+    );
+    expect(status).toBe(404);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -515,20 +534,42 @@ describe("GET /api/v1/graphs/:id/git/proposals/:sha/reviews", () => {
         body: string;
         author: string;
         status: string;
-        comments: unknown[];
+        comments: Array<{ body: string; anchor?: string }>;
       }>;
     };
     expect(b.reviews.length).toBeGreaterThan(0);
     const review = b.reviews[0];
     expect(typeof review.reviewId).toBe("string");
     expect(typeof review.verdict).toBe("string");
-    // commit attribute should contain the sha
-    expect(review.commit).toContain(mainSha);
+    // commit attribute must be in canonical git:<repo>#<sha> format
+    expect(review.commit).toBe(`git:${repoBasename}#${mainSha}`);
     expect(Array.isArray(review.comments)).toBe(true);
     expect(["saved", "pending"]).toContain(review.status);
   });
 
-  test("reviews for featureSha returns empty array when no reviews posted", async () => {
+  test("GET reviews round-trip: comment count and body/anchor match what was posted", async () => {
+    const { body } = await req(
+      "GET",
+      `/api/v1/graphs/${repoGraphId}/git/proposals/${mainSha}/reviews`
+    );
+    const b = body as {
+      reviews: Array<{
+        verdict: string;
+        comments: Array<{ body: string; anchor?: string }>;
+      }>;
+    };
+    // The first POST review for mainSha posted 1 comment with body "Nice change"
+    // and anchor `git:repo#${mainSha}:README.md`
+    const reviewWithComment = b.reviews.find(
+      (r) => r.comments.length > 0
+    );
+    expect(reviewWithComment, "no review with comments found").toBeDefined();
+    expect(reviewWithComment!.comments.length).toBe(1);
+    expect(reviewWithComment!.comments[0].body).toBe("Nice change");
+    expect(reviewWithComment!.comments[0].anchor).toBe(`git:repo#${mainSha}:README.md`);
+  });
+
+  test("reviews for featureSha returns empty array (no reviews posted for that sha)", async () => {
     // featureSha had a decide call, but no POST /reviews
     const { status, body } = await req(
       "GET",
@@ -536,7 +577,6 @@ describe("GET /api/v1/graphs/:id/git/proposals/:sha/reviews", () => {
     );
     expect(status).toBe(200);
     const b = body as { reviews: unknown[] };
-    // Could be empty or have reviews; just verify shape
-    expect(Array.isArray(b.reviews)).toBe(true);
+    expect(b.reviews.length).toBe(0);
   });
 });
