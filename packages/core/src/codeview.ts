@@ -483,9 +483,16 @@ export async function codeRegions(
       if (Array.isArray(r?.matched)) {
         matched = r.matched.filter((x): x is string => typeof x === "string");
       }
-    } catch {
-      // git_checklist may throw if no policy is installed — skip silently
-      continue;
+    } catch (err: unknown) {
+      // git_checklist throws "no policy" (or similar) when the graph has no
+      // installed policy — that is expected and we skip silently. Any other
+      // error indicates a broken policy or wasm fault and we surface it so
+      // callers aren't silently handed an empty result.
+      const msg = err instanceof Error ? err.message : String(err);
+      if (/no.?policy/i.test(msg) || /not found/i.test(msg)) {
+        continue;
+      }
+      throw err;
     }
 
     // Collect rule metadata from the checklist array

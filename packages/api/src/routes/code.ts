@@ -1,5 +1,6 @@
 import { codeFile, codeItem, codeRegions, codeTree } from "@freehold/core";
 import { Hono } from "hono";
+import { basename } from "node:path";
 import type { AppEnv } from "../types.js";
 
 export const codeRouter = new Hono<AppEnv>();
@@ -56,10 +57,10 @@ codeRouter.get("/code/regions", async (c) => {
   if (!repoOnly(fh)) {
     return c.json({ error: "code view is only available for repo graphs" }, 400);
   }
-  // Resolve repoName from the graph entry basename (path basename is the repo name)
-  // codeRegions defaults to "repo" if no repoName is provided; for a registered graph
-  // we use the graphName which is set to the basename of the path.
-  const repoName = fh.graphName ?? "repo";
+  // Resolve repoName from the graph directory basename, which is the repository name
+  // that policy rules use in their repo: selector. graphName is the registry id and
+  // does not correspond to the filesystem name the policy was written against.
+  const repoName = basename(fh.graphDir);
   const rules = await codeRegions(fh, repoName);
   return c.json({ rules });
 });

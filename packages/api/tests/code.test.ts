@@ -19,7 +19,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import {
   GraphManager,
   createGraph,
@@ -95,6 +95,7 @@ async function commitAndApprove(
 
 let home: string;
 let repoDir: string;
+let repoBasename: string;
 let app: ReturnType<typeof createApp>;
 let token: string;
 let repoGraphId: string;
@@ -136,6 +137,7 @@ beforeAll(async () => {
 
   // Create repo dir with a git repo + allod graph
   repoDir = makeTempDir("freehold-code-repo-");
+  repoBasename = basename(repoDir);
 
   execFileSync("git", ["init"], { cwd: repoDir });
   execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: repoDir });
@@ -210,6 +212,33 @@ beforeAll(async () => {
       },
     },
   ]);
+
+  // Install a policy with a repo-binding path rule so code/regions has rules to return.
+  // The repo: selector uses the directory basename — matching what the fixed route
+  // derives via basename(fh.graphDir). Under the old graphName-based code this rule
+  // would not match (graphName is the registry id, not the dir basename).
+  const policyYaml = `policy: api-test-policy
+version: 1
+default_posture: permissive
+roles:
+  owner:
+    - principal:owner
+rules:
+  - name: repo-src-rule
+    select:
+      substrate: git
+      repo: "${repoBasename}"
+      path: "src/**"
+    require:
+      reviewers:
+        - role: owner
+          quorum: 1
+`;
+  const policyResult = await (fh.graph as any).install_policy(policyYaml, "owner");
+  if (policyResult && typeof policyResult === "object" && "Held" in policyResult) {
+    const d = await approve(fh.graph, "owner", (policyResult as any).Held.hash);
+    expect(d.status, "policy approval failed").toBe("approved");
+  }
 
   // Sync PGlite index so the code view queries can find the nodes
   await syncIndex(fh, hashEmbedder);
@@ -340,5 +369,32 @@ describe("GET /api/v1/graphs/:id/code/regions on repo graph", () => {
     expect(status).toBe(200);
     const b = body as { rules: unknown[] };
     expect(Array.isArray(b.rules)).toBe(true);
+  });
+
+  test("repo-src-rule appears in regions (repo: binding resolved via dir basename)", async () => {
+    // This test verifies that the route resolves repoName from basename(graphDir),
+    // not from graphName (the registry id). The policy rule uses repo: "<basename>",
+    // which only matches when the correct basename is passed to git_checklist.
+    // Under the old graphName-based code the rule would come back empty.
+    const { status, body } = await req("GET", `/api/v1/graphs/${repoGraphId}/code/regions`);
+    expect(status).toBe(200);
+    const b = body as { rules: Array<{ rule: string; paths: string[] }> };
+    const srcRule = b.rules.find((r) => r.rule === "repo-src-rule");
+    expect(srcRule, "repo-src-rule not found — repoName was not resolved from dir basename").toBeDefined();
+    // src/lib.rs matches the path pattern src/**
+    expect(srcRule!.paths).toContain("src/lib.rs");
+  });
+
+  test("repo-src-rule does not include unmatched paths", async () => {
+    const { status, body } = await req("GET", `/api/v1/graphs/${repoGraphId}/code/regions`);
+    expect(status).toBe(200);
+    const b = body as { rules: Array<{ rule: string; paths: string[] }> };
+    // The only indexed file is src/lib.rs — no file outside src/ exists in the fixture
+    const srcRule = b.rules.find((r) => r.rule === "repo-src-rule");
+    expect(srcRule).toBeDefined();
+    // All returned paths should start with src/
+    for (const p of srcRule!.paths) {
+      expect(p.startsWith("src/"), `unexpected path outside src/: ${p}`).toBe(true);
+    }
   });
 });
