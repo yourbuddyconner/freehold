@@ -3,12 +3,14 @@ import type {
   CodeItemView,
   CodeNeighborhood,
   CodeSource,
+  DecideResult,
+  DiffResponse,
   RegionRule,
   SessionGraphEntry,
 } from "@freehold/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { GRAPH_STORAGE_KEY, apiClient, setActiveGraph } from "./api";
+import { ApiError, GRAPH_STORAGE_KEY, apiClient, setActiveGraph } from "./api";
 
 /** Pending proposals (the Inbox). */
 export function usePending() {
@@ -312,8 +314,77 @@ export function useGitHubBlobUrl(filePath: string | undefined): string | null {
   return `https://github.com/${repoPath}/blob/HEAD/${filePath}`;
 }
 
+/**
+ * Encapsulates all decide-related state and mutation for a git proposal.
+ * Extracted from GitProposalCard to allow reuse in the review page.
+ */
+export function useDecideProposal(sha: string, by: string) {
+  const qc = useQueryClient();
+  const [decideOutcome, setDecideOutcome] = useState<DecideResult | null>(null);
+  const [keyMissingReason, setKeyMissingReason] = useState<string | null>(null);
+  const [savedLocally, setSavedLocally] = useState(false);
+  const [pushSkippedNotice, setPushSkippedNotice] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+
+  const decideMut = useMutation({
+    mutationFn: (verdict: "approve" | "reject") =>
+      apiClient.decideGitProposal(sha, { verdict, by }),
+    onSuccess: (result) => {
+      setDecideOutcome(result);
+      if ("pushed" in result && !result.pushed) {
+        if ("pushError" in result && result.pushError) {
+          setSavedLocally(true);
+        } else if ("pushSkipped" in result && (result as Record<string, unknown>).pushSkipped) {
+          setPushSkippedNotice(true);
+        }
+      }
+      qc.invalidateQueries({ queryKey: ["git-proposals"] });
+      qc.invalidateQueries({ queryKey: ["git-proposal", sha] });
+    },
+    onError: (err) => {
+      if (err instanceof ApiError && err.code === "key-missing") {
+        setKeyMissingReason(err.message);
+      }
+    },
+  });
+
+  async function handleRetry() {
+    setRetrying(true);
+    try {
+      const result = await apiClient.pushGitNotes(sha);
+      if (result.pushed) {
+        setSavedLocally(false);
+        setDecideOutcome(null);
+      }
+    } finally {
+      setRetrying(false);
+    }
+  }
+
+  return {
+    decideMut,
+    decideOutcome,
+    keyMissingReason,
+    savedLocally,
+    pushSkippedNotice,
+    retrying,
+    handleRetry,
+  };
+}
+
+/** Per-file unified diff for a git proposal. */
+export function useGitProposalDiff(sha: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: ["git-proposal-diff", sha],
+    queryFn: () => apiClient.gitProposalDiff(sha ?? ""),
+    enabled: enabled && !!sha,
+    retry: false,
+  });
+}
+
 // Re-export types for convenience in route components
 export type { CodeFileView, CodeItemView, CodeNeighborhood, RegionRule, CodeSource };
+export type { DiffResponse };
 export type {
   GitProposal,
   DecideResult,

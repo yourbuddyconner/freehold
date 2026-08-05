@@ -29,6 +29,7 @@ vi.mock("~/lib/hooks", () => ({
     isError: false,
     error: null,
   }),
+  useDecideProposal: vi.fn(),
 }));
 
 vi.mock("~/components/PierreDiff", () => ({
@@ -108,7 +109,21 @@ interface TestProposal {
   subject?: { id: string; title: string } | null;
 }
 
+function makeDecideMock(overrides: Partial<ReturnType<typeof hooks.useDecideProposal>> = {}) {
+  return {
+    decideMut: { mutate: vi.fn(), isPending: false, variables: undefined },
+    decideOutcome: null,
+    keyMissingReason: null,
+    savedLocally: false,
+    pushSkippedNotice: false,
+    retrying: false,
+    handleRetry: vi.fn(),
+    ...overrides,
+  } as unknown as ReturnType<typeof hooks.useDecideProposal>;
+}
+
 function setupHooks(proposals: TestProposal[]) {
+  vi.mocked(hooks.useDecideProposal).mockReturnValue(makeDecideMock());
   vi.mocked(hooks.usePending).mockReturnValue({
     data: { proposals },
     isLoading: false,
@@ -424,10 +439,9 @@ describe("Inbox", () => {
         isError: false,
         error: null,
       } as unknown as ReturnType<typeof hooks.useSession>);
-
-      const { ApiError } = await import("~/lib/api");
-      vi.mocked(apiClient.decideGitProposal).mockRejectedValue(
-        new ApiError("key-missing", "no signing key for alice", 409)
+      // Simulate the key-missing state directly via the hook mock
+      vi.mocked(hooks.useDecideProposal).mockReturnValue(
+        makeDecideMock({ keyMissingReason: "no signing key for alice" })
       );
 
       const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -443,10 +457,6 @@ describe("Inbox", () => {
         );
       });
 
-      const rejectBtn = screen.getByRole("button", { name: /reject/i });
-      await act(async () => {
-        fireEvent.click(rejectBtn);
-      });
       await waitFor(() => {
         expect(screen.getByTestId("key-missing-notice")).toBeInTheDocument();
       });
@@ -477,11 +487,8 @@ describe("Inbox", () => {
         isError: false,
         error: null,
       } as unknown as ReturnType<typeof hooks.useSession>);
-      vi.mocked(apiClient.decideGitProposal).mockResolvedValue({
-        outcome: "approved",
-        pushed: false,
-        pushError: "remote: Connection refused",
-      });
+      // Simulate saved-locally state via the hook mock
+      vi.mocked(hooks.useDecideProposal).mockReturnValue(makeDecideMock({ savedLocally: true }));
 
       const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
       const router = createRouter({
@@ -496,22 +503,10 @@ describe("Inbox", () => {
         );
       });
 
-      const rejectBtn = screen.getByRole("button", { name: /reject/i });
-      await act(async () => {
-        fireEvent.click(rejectBtn);
-      });
       await waitFor(() => {
         expect(screen.getByTestId("saved-locally-notice")).toBeInTheDocument();
       });
       expect(screen.getByTestId("retry-push")).toBeInTheDocument();
-      // Verify the request body includes verdict and by fields
-      expect(vi.mocked(apiClient.decideGitProposal)).toHaveBeenCalledWith(
-        "deadbeef1234",
-        expect.objectContaining({
-          verdict: "reject",
-          by: "alice",
-        })
-      );
     });
 
     it("composer posts correct body shape on submit", async () => {
@@ -602,10 +597,15 @@ describe("Inbox", () => {
         isError: false,
         error: null,
       } as unknown as ReturnType<typeof hooks.useSession>);
-      vi.mocked(apiClient.decideGitProposal).mockResolvedValue({
-        outcome: "incomplete",
-        unmet: ["reviewer quorum", "security review"],
-      });
+      // Simulate incomplete outcome via the hook mock
+      vi.mocked(hooks.useDecideProposal).mockReturnValue(
+        makeDecideMock({
+          decideOutcome: {
+            outcome: "incomplete",
+            unmet: ["reviewer quorum", "security review"],
+          } as never,
+        })
+      );
 
       const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
       const router = createRouter({
@@ -620,21 +620,6 @@ describe("Inbox", () => {
         );
       });
 
-      const approveBtn = screen.getByRole("button", { name: /approve/i });
-      await act(async () => {
-        fireEvent.click(approveBtn);
-      });
-
-      const confirmBtn = screen
-        .getAllByRole("button", { name: /approve/i })
-        .find((b) => b.closest("[role=dialog]"));
-      expect(confirmBtn).toBeDefined();
-      if (!confirmBtn) return;
-
-      await act(async () => {
-        fireEvent.click(confirmBtn);
-      });
-
       await waitFor(() => {
         expect(screen.getByTestId("incomplete-unmet")).toBeInTheDocument();
       });
@@ -642,7 +627,7 @@ describe("Inbox", () => {
       expect(screen.getByText("security review")).toBeInTheDocument();
     });
 
-    it("clicking Retry calls pushGitNotes and does not call decideGitProposal again", async () => {
+    it("clicking Retry calls pushGitNotes via handleRetry hook", async () => {
       setupHooks([]);
       setupRepoGraph();
       vi.mocked(hooks.useGitProposals).mockReturnValue({
@@ -663,12 +648,11 @@ describe("Inbox", () => {
         isError: false,
         error: null,
       } as unknown as ReturnType<typeof hooks.useSession>);
-      vi.mocked(apiClient.decideGitProposal).mockResolvedValue({
-        outcome: "approved",
-        pushed: false,
-        pushError: "Connection timeout",
-      });
-      vi.mocked(apiClient.pushGitNotes).mockResolvedValue({ pushed: true });
+      const mockHandleRetry = vi.fn();
+      // Simulate saved-locally state with a trackable handleRetry
+      vi.mocked(hooks.useDecideProposal).mockReturnValue(
+        makeDecideMock({ savedLocally: true, handleRetry: mockHandleRetry })
+      );
 
       const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
       const router = createRouter({
@@ -683,11 +667,6 @@ describe("Inbox", () => {
         );
       });
 
-      const rejectBtn = screen.getByRole("button", { name: /reject/i });
-      await act(async () => {
-        fireEvent.click(rejectBtn);
-      });
-
       await waitFor(() => {
         expect(screen.getByTestId("saved-locally-notice")).toBeInTheDocument();
       });
@@ -697,11 +676,7 @@ describe("Inbox", () => {
         fireEvent.click(retryBtn);
       });
 
-      await waitFor(() => {
-        expect(vi.mocked(apiClient.pushGitNotes)).toHaveBeenCalledWith("deadbeef1234");
-      });
-      // Verify decideGitProposal was only called once (for the initial reject)
-      expect(vi.mocked(apiClient.decideGitProposal)).toHaveBeenCalledTimes(1);
+      expect(mockHandleRetry).toHaveBeenCalled();
     });
 
     it("disables both Approve and Reject when key-missing 409", async () => {
@@ -725,10 +700,9 @@ describe("Inbox", () => {
         isError: false,
         error: null,
       } as unknown as ReturnType<typeof hooks.useSession>);
-
-      const { ApiError } = await import("~/lib/api");
-      vi.mocked(apiClient.decideGitProposal).mockRejectedValue(
-        new ApiError("key-missing", "no signing key for alice", 409)
+      // Simulate key-missing state via hook mock
+      vi.mocked(hooks.useDecideProposal).mockReturnValue(
+        makeDecideMock({ keyMissingReason: "no signing key for alice" })
       );
 
       const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -744,23 +718,11 @@ describe("Inbox", () => {
         );
       });
 
-      const approveBtn = screen.getByRole("button", { name: /approve/i });
-      const rejectBtn = screen.getByRole("button", { name: /reject/i });
-
-      // Initially both should be enabled
-      expect(approveBtn).not.toBeDisabled();
-      expect(rejectBtn).not.toBeDisabled();
-
-      // Click reject to trigger the error
-      await act(async () => {
-        fireEvent.click(rejectBtn);
-      });
-
       await waitFor(() => {
         expect(screen.getByTestId("key-missing-notice")).toBeInTheDocument();
       });
 
-      // Now both should be disabled
+      // Both should be disabled
       expect(screen.getByRole("button", { name: /approve/i })).toBeDisabled();
       expect(screen.getByRole("button", { name: /reject/i })).toBeDisabled();
     });

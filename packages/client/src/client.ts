@@ -59,6 +59,8 @@ export type PostReviewResult = Schemas["PostReviewResult"];
 export type ReviewEntry = Schemas["ReviewEntry"];
 export type ReviewComment = Schemas["ReviewComment"];
 export type ReviewCommentInput = Schemas["ReviewCommentInput"];
+export type FileDiffEntry = Schemas["FileDiffEntry"];
+export type DiffResponse = Schemas["DiffResponse"];
 
 // ---------------------------------------------------------------------------
 // Health response (inline in openapi)
@@ -454,6 +456,11 @@ export class FreeholdClient {
       "POST",
       `/api/v1/git/proposals/${sha}/push-notes`
     );
+  }
+
+  /** GET /api/v1/git/proposals/:sha/diff — get per-file unified diff for a commit */
+  async gitProposalDiff(sha: string): Promise<DiffResponse> {
+    return this.fetch<DiffResponse>("GET", `/api/v1/git/proposals/${sha}/diff`);
   }
 
   /** GET /connector — get connector status and config */

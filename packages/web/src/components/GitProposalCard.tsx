@@ -1,15 +1,16 @@
-import type { DecideResult, GitProposal } from "@freehold/client";
+import type { GitProposal } from "@freehold/client";
 import * as Dialog from "@radix-ui/react-dialog";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { ApiError } from "~/lib/api";
 import { apiClient } from "~/lib/api";
 import { cn } from "~/lib/cn";
-import { useSession } from "~/lib/hooks";
+import { useDecideProposal } from "~/lib/hooks";
 
 // ── Checklist row ─────────────────────────────────────────────────────────────
 
-function ChecklistRow({ item, unmet }: { item: unknown; unmet: string[] }) {
+export function ChecklistRow({ item, unmet }: { item: unknown; unmet: string[] }) {
   const entry = item as Record<string, unknown>;
   const label =
     typeof entry.role === "string"
@@ -43,7 +44,7 @@ function ChecklistRow({ item, unmet }: { item: unknown; unmet: string[] }) {
 
 // ── Path badge ────────────────────────────────────────────────────────────────
 
-function PathRow({ path }: { path: GitProposal["paths"][number] }) {
+export function PathRow({ path }: { path: GitProposal["paths"][number] }) {
   return (
     <div className="flex items-start gap-1.5 text-[11px] font-mono py-0.5">
       <span className="text-(--fg-muted) uppercase text-[10px] shrink-0 w-8">{path.verb}</span>
@@ -74,7 +75,7 @@ function PathRow({ path }: { path: GitProposal["paths"][number] }) {
 
 // ── Decided chip ──────────────────────────────────────────────────────────────
 
-function DecidedChip({ decided }: { decided: GitProposal["decided"] }) {
+export function DecidedChip({ decided }: { decided: GitProposal["decided"] }) {
   return (
     <span
       data-testid="decided-chip"
@@ -101,7 +102,7 @@ interface ReviewComposerProps {
   onDone: () => void;
 }
 
-function ReviewComposer({ sha, paths, by, onDone }: ReviewComposerProps) {
+export function ReviewComposer({ sha, paths, by, onDone }: ReviewComposerProps) {
   const [verdict, setVerdict] = useState<"approve" | "approve-with-comments" | "request-changes">(
     "approve"
   );
@@ -289,45 +290,15 @@ export function GitProposalCard({ proposal, by }: GitProposalCardProps) {
 
   const qc = useQueryClient();
 
-  const [decideOutcome, setDecideOutcome] = useState<DecideResult | null>(null);
-  const [keyMissingReason, setKeyMissingReason] = useState<string | null>(null);
-  const [savedLocally, setSavedLocally] = useState(false);
-  const [pushSkippedNotice, setPushSkippedNotice] = useState(false);
-  const [retrying, setRetrying] = useState(false);
-
-  const decideMut = useMutation({
-    mutationFn: (verdict: "approve" | "reject") =>
-      apiClient.decideGitProposal(sha, { verdict, by }),
-    onSuccess: (result) => {
-      setDecideOutcome(result);
-      if ("pushed" in result && !result.pushed) {
-        if ("pushError" in result && result.pushError) {
-          setSavedLocally(true);
-        } else if ("pushSkipped" in result && result.pushSkipped) {
-          setPushSkippedNotice(true);
-        }
-      }
-      qc.invalidateQueries({ queryKey: ["git-proposals"] });
-    },
-    onError: (err) => {
-      if (err instanceof ApiError && err.code === "key-missing") {
-        setKeyMissingReason(err.message);
-      }
-    },
-  });
-
-  async function handleRetry() {
-    setRetrying(true);
-    try {
-      const result = await apiClient.pushGitNotes(sha);
-      if (result.pushed) {
-        setSavedLocally(false);
-        setDecideOutcome(null);
-      }
-    } finally {
-      setRetrying(false);
-    }
-  }
+  const {
+    decideMut,
+    decideOutcome,
+    keyMissingReason,
+    savedLocally,
+    pushSkippedNotice,
+    retrying,
+    handleRetry,
+  } = useDecideProposal(sha, by);
 
   const actionsDisabled = !!keyMissingReason || decided !== "undecided";
 
@@ -547,6 +518,15 @@ export function GitProposalCard({ proposal, by }: GitProposalCardProps) {
         >
           {decideMut.isPending && decideMut.variables === "reject" ? "Rejecting…" : "Reject"}
         </button>
+
+        <Link
+          to="/review/$sha"
+          params={{ sha }}
+          className="border border-(--border) font-mono text-[12px] uppercase tracking-wide px-3 py-1.5 text-(--fg-muted) hover:text-(--fg) transition-colors"
+          data-testid="review-link"
+        >
+          Review
+        </Link>
 
         <ReviewComposer
           sha={sha}
