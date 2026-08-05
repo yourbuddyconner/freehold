@@ -26,6 +26,7 @@ export interface GraphNode {
   type: string;
   title: string;
   approval: string;
+  terms: string[];
 }
 
 export interface GraphEdge {
@@ -183,6 +184,16 @@ export async function memoryGraph(freehold: Freehold, nodeCap = 2000): Promise<M
   const truncated = rows.length >= nodeCap;
   const nodeIds = new Set(rows.map((r) => r.id));
 
+  const termsResult = await freehold.db.pg.query<{ subject_id: string; term: string }>(
+    "SELECT subject_id, term FROM node_terms"
+  );
+  const termsById = new Map<string, string[]>();
+  for (const row of termsResult.rows) {
+    const list = termsById.get(row.subject_id) ?? [];
+    list.push(row.term);
+    termsById.set(row.subject_id, list);
+  }
+
   // Edges come from the mirrored graph_edges table — one query, no wasm calls
   const edgeResult = await freehold.db.pg.query<{
     id: string;
@@ -200,6 +211,7 @@ export async function memoryGraph(freehold: Freehold, nodeCap = 2000): Promise<M
       type: row.type,
       title: deriveTitle(row.content, row.id),
       approval: row.approval,
+      terms: termsById.get(row.id) ?? [],
     })),
     edges,
     truncated,

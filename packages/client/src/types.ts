@@ -1445,6 +1445,7 @@ export interface components {
             type: string;
             title: string;
             approval: string;
+            terms: string[];
         };
         GraphEdge: {
             id: string;

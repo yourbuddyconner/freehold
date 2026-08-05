@@ -59,8 +59,8 @@ const STATUS_NAMESPACES = new Set(["workspace", "sensitivity"]);
  * outside the status namespaces, without its version suffix. Undefined when
  * the entry has no filing term — it sits directly in its type folder.
  */
-export function folderTermOf(entry: MemoryIndexEntry): string | undefined {
-  const qualifying = entry.terms
+export function folderTermFromTerms(terms: string[]): string | undefined {
+  const qualifying = terms
     .map((t) => t.split("@")[0])
     .filter((t) => !STATUS_NAMESPACES.has(t.split("/")[0]));
   if (qualifying.length === 0) return undefined;
@@ -68,6 +68,10 @@ export function folderTermOf(entry: MemoryIndexEntry): string | undefined {
     (a, b) => b.split("/").length - a.split("/").length || b.length - a.length || a.localeCompare(b)
   );
   return qualifying[0];
+}
+
+export function folderTermOf(entry: MemoryIndexEntry): string | undefined {
+  return folderTermFromTerms(entry.terms);
 }
 
 function leafCompare(a: TreeLeaf, b: TreeLeaf): number {

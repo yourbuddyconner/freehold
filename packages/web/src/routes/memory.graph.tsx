@@ -49,6 +49,7 @@ interface MemoryNodeData {
   title: string;
   type: string;
   group: string;
+  path: string;
   approval: string;
   kind: "group" | "member";
   expanded: boolean;
@@ -149,8 +150,8 @@ function MemoryNode({ data }: { data: MemoryNodeData }) {
             <span className="font-mono text-[10px] uppercase tracking-[0.06em] text-(--fg-muted)">
               {isGroup
                 ? data.expanded
-                  ? "click to collapse"
-                  : "click to expand"
+                  ? `${data.path} — click to collapse`
+                  : `${data.path} — click to expand`
                 : data.type.split("@")[0]}
             </span>
             {!isGroup && (
@@ -190,9 +191,10 @@ export function MemoryGraphPage() {
           title: n.title,
           type: n.type,
           group: n.group,
+          path: n.path,
           approval: n.approval,
           kind: n.kind,
-          expanded: expanded.has(n.group),
+          expanded: n.expandedAnchor,
           count: n.count,
           size: n.size,
           footprint: n.footprint,
@@ -248,6 +250,7 @@ export function MemoryGraphPage() {
         data-testid="graph-canvas"
       >
         <ReactFlow
+          key={[...expanded].sort().join("|")}
           nodes={flowNodes}
           edges={flowEdges}
           nodeTypes={nodeTypes}
@@ -258,13 +261,16 @@ export function MemoryGraphPage() {
           proOptions={{ hideAttribution: true }}
           onNodeClick={(_e, node) => {
             if (node.id.startsWith("group:")) {
-              const group = node.id.slice("group:".length);
+              const path = node.id.slice("group:".length);
               setExpanded((prev) => {
                 const next = new Set(prev);
-                if (next.has(group)) {
-                  next.delete(group);
+                if (next.has(path)) {
+                  // Collapse this folder and everything expanded beneath it
+                  for (const p of [...next]) {
+                    if (p === path || p.startsWith(`${path}/`)) next.delete(p);
+                  }
                 } else {
-                  next.add(group);
+                  next.add(path);
                 }
                 return next;
               });

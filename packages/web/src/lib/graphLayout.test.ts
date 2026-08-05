@@ -1,12 +1,38 @@
 import { describe, expect, it } from "vitest";
-import { groupNodeId, layoutGraph } from "./graphLayout";
+import { groupNodeId, layoutGraph, pathOf } from "./graphLayout";
 
 const nodes = [
-  { id: "a", type: "memory/Note@1", title: "Note A", approval: "saved" },
-  { id: "b", type: "memory/Note@1", title: "Note B", approval: "saved" },
-  { id: "c", type: "claude-workspace/Colleague@1", title: "Sam", approval: "pending" },
+  {
+    id: "a",
+    type: "memory/Note@1",
+    title: "Valet plan",
+    approval: "saved",
+    terms: ["projects/valet@1", "workspace/scratch@1"],
+  },
+  {
+    id: "b",
+    type: "memory/Note@1",
+    title: "Journal entry",
+    approval: "saved",
+    terms: ["journal@1"],
+  },
+  {
+    id: "c",
+    type: "claude-workspace/Colleague@1",
+    title: "Sam",
+    approval: "pending",
+    terms: [],
+  },
 ];
-const edges = [{ id: "e1", type: "memory/relates_to@1", from: "c", to: "b" }];
+const edges = [{ id: "e1", type: "memory/relates_to@1", from: "c", to: "a" }];
+
+describe("pathOf", () => {
+  it("files nodes by type group then folder-term segments", () => {
+    expect(pathOf(nodes[0])).toEqual(["Notes", "projects", "valet"]);
+    expect(pathOf(nodes[1])).toEqual(["Notes", "journal"]);
+    expect(pathOf(nodes[2])).toEqual(["People"]);
+  });
+});
 
 describe("layoutGraph", () => {
   it("is deterministic — same input, same positions", () => {
@@ -15,35 +41,39 @@ describe("layoutGraph", () => {
     expect(one).toEqual(two);
   });
 
-  it("collapsed groups render as one folder node with a count", () => {
+  it("fully collapsed shows one folder per type group", () => {
     const { nodes: out } = layoutGraph(nodes, edges);
-    expect(out.length).toBe(2); // Notes folder + People folder
-    const notesFolder = out.find((n) => n.id === groupNodeId("Notes"));
-    expect(notesFolder?.kind).toBe("group");
-    expect(notesFolder?.count).toBe(2);
+    expect(out.map((n) => n.id).sort()).toEqual([groupNodeId("Notes"), groupNodeId("People")]);
+    expect(out.find((n) => n.id === groupNodeId("Notes"))?.count).toBe(2);
   });
 
-  it("cross-group edges attach to the collapsed folder", () => {
-    const { edges: out } = layoutGraph(nodes, edges);
-    const e = out.find((x) => x.type === "memory/relates_to@1");
-    expect(e?.from).toBe(groupNodeId("People"));
-    expect(e?.to).toBe(groupNodeId("Notes"));
+  it("expanding a type group reveals term subfolders, not members", () => {
+    const { nodes: out } = layoutGraph(nodes, edges, { expanded: new Set(["Notes"]) });
+    const ids = out.map((n) => n.id);
+    // Anchor for Notes plus its two subfolders; members stay hidden
+    expect(ids).toContain(groupNodeId("Notes"));
+    expect(ids).toContain(groupNodeId("Notes/projects"));
+    expect(ids).toContain(groupNodeId("Notes/journal"));
+    expect(ids).not.toContain("a");
+    expect(ids).not.toContain("b");
+    const projects = out.find((n) => n.id === groupNodeId("Notes/projects"));
+    expect(projects?.count).toBe(1);
+    expect(projects?.expandedAnchor).toBe(false);
+    expect(out.find((n) => n.id === groupNodeId("Notes"))?.expandedAnchor).toBe(true);
   });
 
-  it("expanding a group shows its members with containment edges to the anchor", () => {
+  it("walking the full path reveals the member", () => {
     const { nodes: out, edges: outEdges } = layoutGraph(nodes, edges, {
-      expanded: new Set(["Notes"]),
+      expanded: new Set(["Notes", "Notes/projects", "Notes/projects/valet"]),
     });
-    expect(out.some((n) => n.id === "a")).toBe(true);
-    expect(out.some((n) => n.id === "b")).toBe(true);
-    // People stays collapsed
-    expect(out.some((n) => n.id === "c")).toBe(false);
-    const containment = outEdges.filter((e) => e.type === "containment");
-    expect(containment.length).toBe(2);
-    // The real edge now lands on the expanded member
+    const ids = out.map((n) => n.id);
+    expect(ids).toContain("a");
+    // Containment chain: Notes → projects → valet → a
+    expect(outEdges.some((e) => e.type === "containment" && e.to === "a")).toBe(true);
+    // The real edge attaches from the collapsed People folder to the member
     const real = outEdges.find((e) => e.type === "memory/relates_to@1");
     expect(real?.from).toBe(groupNodeId("People"));
-    expect(real?.to).toBe("b");
+    expect(real?.to).toBe("a");
   });
 
   it("edges inside one collapsed folder disappear", () => {
@@ -52,8 +82,10 @@ describe("layoutGraph", () => {
     expect(out.some((e) => e.type === "memory/relates_to@1")).toBe(false);
   });
 
-  it("keeps approval on expanded members", () => {
-    const { nodes: out } = layoutGraph(nodes, edges, { expanded: new Set(["People"]) });
-    expect(out.find((n) => n.id === "c")?.approval).toBe("pending");
+  it("collapsed-folder edges aggregate across the hierarchy", () => {
+    const { edges: out } = layoutGraph(nodes, edges);
+    const real = out.find((e) => e.type === "memory/relates_to@1");
+    expect(real?.from).toBe(groupNodeId("People"));
+    expect(real?.to).toBe(groupNodeId("Notes"));
   });
 });

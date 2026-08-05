@@ -1,9 +1,14 @@
 /**
- * Deterministic force layout for the memory graph, with drill-down groups.
+ * Deterministic force layout for the memory graph, with drill-down that
+ * walks the taxonomy.
  *
- * Every type group renders as a folder node. Expanding a group replaces the
- * folder with an anchor plus its member nodes; edges re-attach to whichever
- * representative is visible (the member when expanded, the folder when not).
+ * Every node has a filing path: its type group, then its folder-term
+ * segments — a note classified `projects/valet` lives at
+ * Notes/projects/valet. Collapsed folders render as one node sized by
+ * member count; expanding a folder replaces it with an anchor plus its
+ * immediate children (subfolders or members). Edges re-attach to whichever
+ * representative is visible; edges entirely inside one collapsed folder
+ * disappear.
  *
  * Positions are computed synchronously with d3-force: seeded initial
  * positions derived from node ids (no randomness), a fixed tick count,
@@ -11,13 +16,14 @@
  */
 
 import { forceCollide, forceLink, forceManyBody, forceSimulation, forceX, forceY } from "d3-force";
-import { displayTypeName } from "./memoryTree";
+import { displayTypeName, folderTermFromTerms } from "./memoryTree";
 
 export interface GraphNodeInput {
   id: string;
   type: string;
   title: string;
   approval: string;
+  terms?: string[];
 }
 
 export interface GraphEdgeInput {
@@ -27,16 +33,24 @@ export interface GraphEdgeInput {
   to: string;
 }
 
-export interface PositionedNode extends GraphNodeInput {
+export interface PositionedNode {
+  id: string;
+  type: string;
+  title: string;
+  approval: string;
   x: number;
   y: number;
   /** Icon diameter in px */
   size: number;
   /** "group" folders toggle expansion; "member" nodes navigate */
   kind: "group" | "member";
-  /** Display group (the tree folder name), drives color */
+  /** Top path segment (the type group) — drives color */
   group: string;
-  /** Truncated title rendered under the icon; the full title lives in the hover card */
+  /** Full filing path for group nodes ("Notes/projects"); member path prefix */
+  path: string;
+  /** True for the anchor of an expanded folder */
+  expandedAnchor: boolean;
+  /** Truncated title rendered under the icon */
   label: string;
   /** Half-width in px of the icon + label footprint — what collision reserved */
   footprint: number;
@@ -77,14 +91,6 @@ export function nodeFootprint(label: string, iconSize: number): number {
   return Math.max(iconSize / 2, (label.length * LABEL_CHAR_W) / 2) + 10;
 }
 
-interface SimNode extends PositionedNode {
-  index?: number;
-  vx?: number;
-  vy?: number;
-  fx?: number | null;
-  fy?: number | null;
-}
-
 function seededPosition(id: string, width: number, height: number, spread: number) {
   const seed = hash(id);
   const angle = ((seed % 3600) / 3600) * 2 * Math.PI;
@@ -95,14 +101,31 @@ function seededPosition(id: string, width: number, height: number, spread: numbe
   };
 }
 
-export function groupNodeId(group: string): string {
-  return `group:${group}`;
+export function groupNodeId(path: string): string {
+  return `group:${path}`;
+}
+
+/** The filing path segments for a node: type group, then folder-term segments. */
+export function pathOf(node: GraphNodeInput): string[] {
+  const segments = [displayTypeName(node.type)];
+  const term = folderTermFromTerms(node.terms ?? []);
+  if (term) segments.push(...term.split("/"));
+  return segments;
+}
+
+interface SimNode extends PositionedNode {
+  index?: number;
+  vx?: number;
+  vy?: number;
+  fx?: number | null;
+  fy?: number | null;
 }
 
 /**
  * Compute the visible graph for the given expansion state and lay it out.
- * Collapsed groups appear as one folder node sized by member count; edges
- * into a collapsed group attach to the folder.
+ * `expanded` holds folder paths ("Notes", "Notes/projects"); a node is
+ * visible when every prefix of its path is expanded, otherwise its first
+ * collapsed prefix stands in for it.
  */
 export function layoutGraph(
   nodes: GraphNodeInput[],
@@ -111,80 +134,136 @@ export function layoutGraph(
 ): LayoutResult {
   const { expanded = new Set<string>(), width = 900, height = 620 } = opts;
 
-  const groups = new Map<string, GraphNodeInput[]>();
-  for (const n of nodes) {
-    const group = displayTypeName(n.type);
-    const list = groups.get(group) ?? [];
-    list.push(n);
-    groups.set(group, list);
-  }
-
   const inDegree = new Map<string, number>();
   for (const e of edges) {
     inDegree.set(e.to, (inDegree.get(e.to) ?? 0) + 1);
   }
 
-  const simNodes: SimNode[] = [];
-  const visibleEdges: GraphEdgeInput[] = [];
-  /** Node id → the id that represents it on screen. */
+  // Collapsed folder path → member count; member id → its full path
+  const collapsedCounts = new Map<string, number>();
+  const collapsedGroup = new Map<string, string>();
+  /** Node id → visible representative id */
   const rep = new Map<string, string>();
+  const visibleMembers: GraphNodeInput[] = [];
+  const memberPath = new Map<string, string>();
 
-  for (const [group, members] of [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
-    const gid = groupNodeId(group);
-    if (expanded.has(group)) {
-      // Anchor folder + members around it
-      const anchorSize = 26;
-      simNodes.push({
-        id: gid,
-        type: "group",
-        title: group,
-        approval: "saved",
-        group,
-        kind: "group",
-        count: members.length,
-        size: anchorSize,
-        label: group,
-        footprint: nodeFootprint(group, anchorSize),
-        ...seededPosition(gid, width, height, 180),
-      });
-      for (const m of members) {
-        rep.set(m.id, m.id);
-        const size = Math.min(40, Math.round(22 + 4 * Math.sqrt(inDegree.get(m.id) ?? 0)));
-        const label = nodeLabel(m.title);
-        simNodes.push({
-          ...m,
-          group,
-          kind: "member",
-          size,
-          label,
-          footprint: nodeFootprint(label, size),
-          ...seededPosition(m.id, width, height, 240),
-        });
-        visibleEdges.push({ id: `${gid}->${m.id}`, type: "containment", from: gid, to: m.id });
+  for (const n of nodes) {
+    const segments = pathOf(n);
+    let repPath: string | null = null;
+    for (let i = 1; i <= segments.length; i++) {
+      const prefix = segments.slice(0, i).join("/");
+      if (!expanded.has(prefix)) {
+        repPath = prefix;
+        break;
       }
+    }
+    if (repPath) {
+      rep.set(n.id, groupNodeId(repPath));
+      collapsedCounts.set(repPath, (collapsedCounts.get(repPath) ?? 0) + 1);
+      collapsedGroup.set(repPath, segments[0]);
     } else {
-      const size = Math.min(48, 30 + members.length * 2);
-      simNodes.push({
-        id: gid,
-        type: "group",
-        title: `${group} — ${members.length} item${members.length === 1 ? "" : "s"}`,
-        approval: "saved",
-        group,
-        kind: "group",
-        count: members.length,
-        size,
-        label: group,
-        footprint: nodeFootprint(group, size),
-        ...seededPosition(gid, width, height, 180),
-      });
-      for (const m of members) {
-        rep.set(m.id, gid);
-      }
+      rep.set(n.id, n.id);
+      visibleMembers.push(n);
+      memberPath.set(n.id, segments.join("/"));
     }
   }
 
-  // Real edges re-attached to visible representatives; edges collapsing into
-  // the same node disappear (they are inside a folder).
+  const simNodes: SimNode[] = [];
+  const visibleEdges: GraphEdgeInput[] = [];
+  const anchorPaths = new Set<string>();
+
+  function parentOf(path: string): string | null {
+    const idx = path.lastIndexOf("/");
+    return idx >= 0 ? path.slice(0, idx) : null;
+  }
+
+  // Collapsed folder nodes
+  for (const [path, count] of [...collapsedCounts.entries()].sort()) {
+    const label = path.split("/").pop() ?? path;
+    const size = Math.min(48, 30 + count * 2);
+    simNodes.push({
+      id: groupNodeId(path),
+      type: "group",
+      title: `${label} — ${count} item${count === 1 ? "" : "s"}`,
+      approval: "saved",
+      group: collapsedGroup.get(path) ?? label,
+      path,
+      kind: "group",
+      expandedAnchor: false,
+      count,
+      size,
+      label,
+      footprint: nodeFootprint(label, size),
+      ...seededPosition(path, width, height, 200),
+    });
+    const parent = parentOf(path);
+    if (parent) anchorPaths.add(parent);
+  }
+
+  // Visible member nodes
+  for (const m of visibleMembers) {
+    const size = Math.min(40, Math.round(22 + 4 * Math.sqrt(inDegree.get(m.id) ?? 0)));
+    const label = nodeLabel(m.title);
+    simNodes.push({
+      id: m.id,
+      type: m.type,
+      title: m.title,
+      approval: m.approval,
+      group: pathOf(m)[0],
+      path: memberPath.get(m.id) ?? "",
+      kind: "member",
+      expandedAnchor: false,
+      size,
+      label,
+      footprint: nodeFootprint(label, size),
+      ...seededPosition(m.id, width, height, 240),
+    });
+    anchorPaths.add(memberPath.get(m.id) ?? "");
+  }
+
+  // Anchors for expanded folders that have visible children; walk parents up
+  for (const p of [...anchorPaths]) {
+    let cur: string | null = p;
+    while (cur) {
+      anchorPaths.add(cur);
+      cur = parentOf(cur);
+    }
+  }
+  for (const path of [...anchorPaths].sort()) {
+    if (!expanded.has(path)) continue;
+    const label = path.split("/").pop() ?? path;
+    simNodes.push({
+      id: groupNodeId(path),
+      type: "group",
+      title: label,
+      approval: "saved",
+      group: path.split("/")[0],
+      path,
+      kind: "group",
+      expandedAnchor: true,
+      size: 26,
+      label,
+      footprint: nodeFootprint(label, 26),
+      ...seededPosition(path, width, height, 160),
+    });
+  }
+  const simIds = new Set(simNodes.map((n) => n.id));
+
+  // Containment: parent anchor → child folder/anchor/member
+  for (const n of simNodes) {
+    const parent = n.kind === "member" ? n.path : parentOf(n.path);
+    if (!parent) continue;
+    const parentId = groupNodeId(parent);
+    if (parentId === n.id || !simIds.has(parentId)) continue;
+    visibleEdges.push({
+      id: `${parentId}->${n.id}`,
+      type: "containment",
+      from: parentId,
+      to: n.id,
+    });
+  }
+
+  // Real edges re-attached to visible representatives
   const seen = new Set<string>();
   for (const e of edges) {
     const from = rep.get(e.from);
@@ -196,7 +275,9 @@ export function layoutGraph(
     visibleEdges.push({ id: e.id, type: e.type, from, to });
   }
 
-  const simEdges = visibleEdges.map((e) => ({ source: e.from, target: e.to }));
+  const simEdges = visibleEdges
+    .filter((e) => simIds.has(e.from) && simIds.has(e.to))
+    .map((e) => ({ source: e.from, target: e.to }));
 
   const sim = forceSimulation(simNodes)
     .force(
@@ -205,7 +286,6 @@ export function layoutGraph(
         .id((d) => (d as SimNode).id)
         .distance((l) => {
           const t = l as unknown as { source: SimNode; target: SimNode };
-          // Containment links stay tight; cross links stretch
           return t.source.kind === "group" || t.target.kind === "group" ? 90 : 130;
         })
         .strength(0.5)
@@ -233,7 +313,9 @@ export function layoutGraph(
       title: n.title,
       approval: n.approval,
       group: n.group,
+      path: n.path,
       kind: n.kind,
+      expandedAnchor: n.expandedAnchor,
       count: n.count,
       size: n.size,
       label: n.label,
@@ -241,6 +323,6 @@ export function layoutGraph(
       x: Math.round(n.x * 100) / 100,
       y: Math.round(n.y * 100) / 100,
     })),
-    edges: visibleEdges,
+    edges: visibleEdges.filter((e) => simIds.has(e.from) && simIds.has(e.to)),
   };
 }

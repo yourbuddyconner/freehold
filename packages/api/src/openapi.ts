@@ -178,6 +178,7 @@ const GraphNode = z
     type: z.string(),
     title: z.string(),
     approval: z.string(),
+    terms: z.array(z.string()),
   })
   .openapi("GraphNode");
 

@@ -472,9 +472,15 @@
           },
           "approval": {
             "type": "string"
+          },
+          "terms": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
-        "required": ["id", "type", "title", "approval"]
+        "required": ["id", "type", "title", "approval", "terms"]
       },
       "GraphEdge": {
         "type": "object",
