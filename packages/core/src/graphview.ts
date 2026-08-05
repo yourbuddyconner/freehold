@@ -8,7 +8,6 @@
  * (meta/*, core/*) are not memories and are excluded.
  */
 
-import { DEFAULT_GRAPH_ID } from "./db.js";
 import type { Freehold } from "./graphs.js";
 import { withGraph } from "./lock.js";
 
@@ -92,7 +91,8 @@ export function deriveTitle(content: unknown, fallback: string): string {
   return fallback;
 }
 
-async function indexRows(freehold: Freehold, cap: number, graphId = DEFAULT_GRAPH_ID): Promise<IndexRow[]> {
+async function indexRows(freehold: Freehold, cap: number): Promise<IndexRow[]> {
+  const graphId = freehold.graphId;
   const { pg } = freehold.db;
   const result = await pg.query<IndexRow>(
     `SELECT id, type, content, author, approval, updated_at FROM objects
@@ -112,10 +112,10 @@ async function indexRows(freehold: Freehold, cap: number, graphId = DEFAULT_GRAP
  */
 export async function memoryIndex(
   freehold: Freehold,
-  cap = 5000,
-  graphId: string = DEFAULT_GRAPH_ID
+  cap = 5000
 ): Promise<MemoryIndexEntry[]> {
-  const rows = await indexRows(freehold, cap, graphId);
+  const graphId = freehold.graphId;
+  const rows = await indexRows(freehold, cap);
   const knownIds = new Set(rows.map((r) => r.id));
 
   // Terms come from the mirrored node_terms table — one query, no wasm calls
@@ -188,10 +188,10 @@ export async function memoryIndex(
  */
 export async function memoryGraph(
   freehold: Freehold,
-  nodeCap = 2000,
-  graphId: string = DEFAULT_GRAPH_ID
+  nodeCap = 2000
 ): Promise<MemoryGraphView> {
-  const rows = await indexRows(freehold, nodeCap, graphId);
+  const graphId = freehold.graphId;
+  const rows = await indexRows(freehold, nodeCap);
   const truncated = rows.length >= nodeCap;
   const nodeIds = new Set(rows.map((r) => r.id));
 

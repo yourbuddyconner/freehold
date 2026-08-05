@@ -1,5 +1,4 @@
 import {
-  changesetDirFor,
   getEntity,
   memoryGraph,
   memoryIndex,
@@ -7,6 +6,7 @@ import {
   recentMemories,
   traverse,
 } from "@freehold/core";
+import { join } from "node:path";
 import { Hono } from "hono";
 import { ERROR_CODES, apiError } from "../errors.js";
 import type { AppEnv } from "../types.js";
@@ -29,7 +29,7 @@ retrievalRouter.get("/recall", async (c) => {
     // `status` query param maps to `approval` field in RecallFilters/RecallResult
     approval: status ?? undefined,
   };
-  const results = await recall(fh, q, embedder, filters, undefined, fh.graphId);
+  const results = await recall(fh, q, embedder, filters);
   return c.json({ results });
 });
 
@@ -38,7 +38,7 @@ retrievalRouter.get("/memories", async (c) => {
   if (c.req.query("scope") === "all") {
     // Pass fh.graphId so scoped mounts read from the correct graph's index
     // rather than falling back to the DEFAULT_GRAPH_ID ("main").
-    const results = await memoryIndex(fh, undefined, fh.graphId);
+    const results = await memoryIndex(fh);
     return c.json({ results });
   }
   const type = c.req.query("type");
@@ -46,22 +46,17 @@ retrievalRouter.get("/memories", async (c) => {
   const status = c.req.query("status");
   const limitRaw = c.req.query("limit");
   const limit = limitRaw ? Math.min(Number(limitRaw) || 50, 1000) : 50;
-  const results = await recentMemories(
-    fh,
-    {
-      type: type ?? undefined,
-      author: author ?? undefined,
-      approval: status ?? undefined,
-    },
-    limit,
-    fh.graphId
-  );
+  const results = await recentMemories(fh, {
+    type: type ?? undefined,
+    author: author ?? undefined,
+    approval: status ?? undefined,
+  }, limit);
   return c.json({ results });
 });
 
 retrievalRouter.get("/graph", async (c) => {
   const fh = c.get("freehold");
-  const view = await memoryGraph(fh, undefined, fh.graphId);
+  const view = await memoryGraph(fh);
   return c.json(view);
 });
 
@@ -69,7 +64,7 @@ retrievalRouter.get("/entities/:id", async (c) => {
   const id = c.req.param("id");
   const fh = c.get("freehold");
   const entity = await getEntity(fh.graph, id, {
-    changesetDir: changesetDirFor(fh.home, fh.graphName),
+    changesetDir: join(fh.graphDir, ".allod", "changesets"),
   });
   if (!entity) {
     return apiError(c, 404, ERROR_CODES.NOT_FOUND, `Entity '${id}' not found`);

@@ -1250,7 +1250,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List all registered graphs */
+        /** List registered graphs */
         get: {
             parameters: {
                 query?: never;
@@ -1260,7 +1260,7 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description Graph list */
+                /** @description All registered graphs */
                 200: {
                     headers: {
                         [name: string]: unknown;
@@ -1281,7 +1281,7 @@ export interface paths {
             };
         };
         put?: never;
-        /** Register a new graph */
+        /** Register a repo graph */
         post: {
             parameters: {
                 query?: never;
@@ -1289,14 +1289,14 @@ export interface paths {
                 path?: never;
                 cookie?: never;
             };
-            requestBody?: {
+            requestBody: {
                 content: {
                     "application/json": components["schemas"]["RegisterGraphBody"];
                 };
             };
             responses: {
-                /** @description Created graph */
-                200: {
+                /** @description Registered graph entry */
+                201: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -1304,7 +1304,7 @@ export interface paths {
                         "application/json": components["schemas"]["GraphInfo"];
                     };
                 };
-                /** @description Validation error */
+                /** @description Validation error or invalid repo path */
                 400: {
                     headers: {
                         [name: string]: unknown;
@@ -1336,7 +1336,7 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Delete a graph */
+        /** Remove a registered graph */
         delete: {
             parameters: {
                 query?: never;
@@ -1348,8 +1348,8 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description Deleted */
-                200: {
+                /** @description Graph removed */
+                204: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -1362,8 +1362,15 @@ export interface paths {
                     };
                     content?: never;
                 };
-                /** @description Not found */
+                /** @description Graph not found */
                 404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Cannot remove the default graph */
+                409: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -1373,7 +1380,7 @@ export interface paths {
         };
         options?: never;
         head?: never;
-        /** Update graph metadata */
+        /** Update graph settings */
         patch: {
             parameters: {
                 query?: never;
@@ -1383,13 +1390,13 @@ export interface paths {
                 };
                 cookie?: never;
             };
-            requestBody?: {
+            requestBody: {
                 content: {
                     "application/json": components["schemas"]["UpdateGraphBody"];
                 };
             };
             responses: {
-                /** @description Updated graph */
+                /** @description Updated graph entry */
                 200: {
                     headers: {
                         [name: string]: unknown;
@@ -1405,7 +1412,7 @@ export interface paths {
                     };
                     content?: never;
                 };
-                /** @description Not found */
+                /** @description Graph not found */
                 404: {
                     headers: {
                         [name: string]: unknown;
@@ -1601,10 +1608,32 @@ export interface components {
             port: number;
             /** @description The graph's owner principal; console edits sign as this name */
             owner: string;
-            /** @description All registered graphs */
-            graphs?: components["schemas"]["GraphInfo"][];
-            /** @description Id of the default graph */
-            defaultGraph?: string;
+        };
+        GraphInfo: {
+            id: string;
+            name: string;
+            path: string;
+            /** @enum {string} */
+            kind: "memory" | "repo";
+            autoPushNotes: boolean;
+            /** @enum {string} */
+            embedder: "hash" | "semantic";
+            allodGraphId: string;
+            originRemote: string | null;
+        };
+        RegisterGraphBody: {
+            /** @description Absolute path to the repo checkout */
+            path: string;
+            /** @description Registry slug id; defaults to basename of path */
+            id?: string;
+            /** @description Display name; defaults to id */
+            name?: string;
+        };
+        UpdateGraphBody: {
+            name?: string;
+            autoPushNotes?: boolean;
+            /** @enum {string} */
+            embedder?: "hash" | "semantic";
         };
         MemoryIndexEntry: {
             id: string;
@@ -1635,20 +1664,6 @@ export interface components {
             edges: components["schemas"]["GraphEdge"][];
             /** @description True when the node cap cut the listing short */
             truncated: boolean;
-        };
-        GraphInfo: {
-            id: string;
-            name: string;
-            /** @enum {string} */
-            kind: "memory" | "repo";
-        };
-        RegisterGraphBody: {
-            name: string;
-            /** @enum {string} */
-            kind: "memory" | "repo";
-        };
-        UpdateGraphBody: {
-            name?: string;
         };
     };
     responses: never;

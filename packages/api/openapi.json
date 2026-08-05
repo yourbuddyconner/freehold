@@ -32,7 +32,10 @@
             "description": "Free-text note content"
           }
         },
-        "required": ["agent", "content"]
+        "required": [
+          "agent",
+          "content"
+        ]
       },
       "CreateEntityBody": {
         "type": "object",
@@ -52,7 +55,11 @@
             "type": "string"
           }
         },
-        "required": ["agent", "type", "attributes"]
+        "required": [
+          "agent",
+          "type",
+          "attributes"
+        ]
       },
       "UpdateEntityBody": {
         "type": "object",
@@ -72,7 +79,11 @@
             "description": "Hash of the changeset being superseded"
           }
         },
-        "required": ["agent", "type", "attributes"]
+        "required": [
+          "agent",
+          "type",
+          "attributes"
+        ]
       },
       "RelateBody": {
         "type": "object",
@@ -97,7 +108,12 @@
             "type": "boolean"
           }
         },
-        "required": ["agent", "from", "to", "edgeType"]
+        "required": [
+          "agent",
+          "from",
+          "to",
+          "edgeType"
+        ]
       },
       "ClassifyBody": {
         "type": "object",
@@ -113,11 +129,18 @@
           },
           "basis": {
             "type": "string",
-            "enum": ["model-assisted", "manual"],
+            "enum": [
+              "model-assisted",
+              "manual"
+            ],
             "description": "How the classification was derived; manual assertions skip the envelope rule"
           }
         },
-        "required": ["agent", "nodeId", "term"]
+        "required": [
+          "agent",
+          "nodeId",
+          "term"
+        ]
       },
       "AttachDocumentBody": {
         "type": "object",
@@ -135,7 +158,11 @@
             "type": "string"
           }
         },
-        "required": ["agent", "entityId", "content"]
+        "required": [
+          "agent",
+          "entityId",
+          "content"
+        ]
       },
       "RegisterAgentBody": {
         "type": "object",
@@ -144,7 +171,9 @@
             "type": "string"
           }
         },
-        "required": ["name"]
+        "required": [
+          "name"
+        ]
       },
       "ProposeOntologyBody": {
         "type": "object",
@@ -159,7 +188,11 @@
             "type": "string"
           }
         },
-        "required": ["agent", "packageName", "ontologyYaml"]
+        "required": [
+          "agent",
+          "packageName",
+          "ontologyYaml"
+        ]
       },
       "InstallOntologyBody": {
         "type": "object",
@@ -168,7 +201,9 @@
             "type": "string"
           }
         },
-        "required": ["docsYaml"]
+        "required": [
+          "docsYaml"
+        ]
       },
       "PolicyBody": {
         "type": "object",
@@ -182,14 +217,19 @@
             "description": "Authoring agent principal; omitted means the owner proposes"
           }
         },
-        "required": ["policy_yaml"]
+        "required": [
+          "policy_yaml"
+        ]
       },
       "AdmissionResponse": {
         "type": "object",
         "properties": {
           "status": {
             "type": "string",
-            "enum": ["saved", "pending"]
+            "enum": [
+              "saved",
+              "pending"
+            ]
           },
           "hash": {
             "type": "string"
@@ -202,7 +242,10 @@
             }
           }
         },
-        "required": ["status", "hash"]
+        "required": [
+          "status",
+          "hash"
+        ]
       },
       "RememberResponse": {
         "allOf": [
@@ -254,14 +297,19 @@
                 "before": {},
                 "after": {}
               },
-              "required": ["key"]
+              "required": [
+                "key"
+              ]
             }
           },
           "isSchemaProposal": {
             "type": "boolean"
           },
           "subject": {
-            "type": ["object", "null"],
+            "type": [
+              "object",
+              "null"
+            ],
             "properties": {
               "id": {
                 "type": "string"
@@ -270,7 +318,10 @@
                 "type": "string"
               }
             },
-            "required": ["id", "title"],
+            "required": [
+              "id",
+              "title"
+            ],
             "description": "The existing node this proposal targets, with its resolved title; null for creates"
           }
         },
@@ -299,7 +350,10 @@
             "type": "string"
           },
           "method": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Provenance method (model-assisted, manual, etc.) or null for unrecorded"
           },
           "approval": {
@@ -313,7 +367,15 @@
             "type": "number"
           }
         },
-        "required": ["id", "type", "author", "method", "approval", "changeset", "score"]
+        "required": [
+          "id",
+          "type",
+          "author",
+          "method",
+          "approval",
+          "changeset",
+          "score"
+        ]
       },
       "VerifyReport": {
         "type": "object",
@@ -336,11 +398,16 @@
                   "type": "string"
                 }
               },
-              "required": ["id", "reason"]
+              "required": [
+                "id",
+                "reason"
+              ]
             }
           }
         },
-        "required": ["ok"]
+        "required": [
+          "ok"
+        ]
       },
       "SchemaDescription": {
         "type": "object",
@@ -364,7 +431,9 @@
                   "type": "string"
                 }
               },
-              "required": ["name"]
+              "required": [
+                "name"
+              ]
             }
           },
           "edgeTypes": {
@@ -382,7 +451,9 @@
                   "type": "string"
                 }
               },
-              "required": ["name"]
+              "required": [
+                "name"
+              ]
             }
           },
           "terms": {
@@ -397,22 +468,34 @@
                   "type": "string"
                 }
               },
-              "required": ["name"]
+              "required": [
+                "name"
+              ]
             }
           }
         },
-        "required": ["entityTypes", "edgeTypes", "terms"]
+        "required": [
+          "entityTypes",
+          "edgeTypes",
+          "terms"
+        ]
       },
       "SessionInfo": {
         "type": "object",
         "properties": {
           "defaultAgent": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Default MCP agent name, if set"
           },
           "embedder": {
             "type": "string",
-            "enum": ["transformers", "hash"],
+            "enum": [
+              "transformers",
+              "hash"
+            ],
             "description": "Active embedder backend"
           },
           "port": {
@@ -422,20 +505,102 @@
           "owner": {
             "type": "string",
             "description": "The graph's owner principal; console edits sign as this name"
-          },
-          "graphs": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/GraphInfo"
-            },
-            "description": "All registered graphs"
-          },
-          "defaultGraph": {
-            "type": "string",
-            "description": "Id of the default graph"
           }
         },
-        "required": ["defaultAgent", "embedder", "port", "owner"]
+        "required": [
+          "defaultAgent",
+          "embedder",
+          "port",
+          "owner"
+        ]
+      },
+      "GraphInfo": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "memory",
+              "repo"
+            ]
+          },
+          "autoPushNotes": {
+            "type": "boolean"
+          },
+          "embedder": {
+            "type": "string",
+            "enum": [
+              "hash",
+              "semantic"
+            ]
+          },
+          "allodGraphId": {
+            "type": "string"
+          },
+          "originRemote": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "path",
+          "kind",
+          "autoPushNotes",
+          "embedder",
+          "allodGraphId",
+          "originRemote"
+        ]
+      },
+      "RegisterGraphBody": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Absolute path to the repo checkout"
+          },
+          "id": {
+            "type": "string",
+            "description": "Registry slug id; defaults to basename of path"
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name; defaults to id"
+          }
+        },
+        "required": [
+          "path"
+        ]
+      },
+      "UpdateGraphBody": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "autoPushNotes": {
+            "type": "boolean"
+          },
+          "embedder": {
+            "type": "string",
+            "enum": [
+              "hash",
+              "semantic"
+            ]
+          }
+        }
       },
       "MemoryIndexEntry": {
         "type": "object",
@@ -467,7 +632,15 @@
             "description": "Taxonomy terms from fold state"
           }
         },
-        "required": ["id", "type", "title", "approval", "author", "updatedAt", "terms"]
+        "required": [
+          "id",
+          "type",
+          "title",
+          "approval",
+          "author",
+          "updatedAt",
+          "terms"
+        ]
       },
       "GraphNode": {
         "type": "object",
@@ -491,7 +664,13 @@
             }
           }
         },
-        "required": ["id", "type", "title", "approval", "terms"]
+        "required": [
+          "id",
+          "type",
+          "title",
+          "approval",
+          "terms"
+        ]
       },
       "GraphEdge": {
         "type": "object",
@@ -509,7 +688,12 @@
             "type": "string"
           }
         },
-        "required": ["id", "type", "from", "to"]
+        "required": [
+          "id",
+          "type",
+          "from",
+          "to"
+        ]
       },
       "MemoryGraphView": {
         "type": "object",
@@ -531,44 +715,11 @@
             "description": "True when the node cap cut the listing short"
           }
         },
-        "required": ["nodes", "edges", "truncated"]
-      },
-      "GraphInfo": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "kind": {
-            "type": "string",
-            "enum": ["memory", "repo"]
-          }
-        },
-        "required": ["id", "name", "kind"]
-      },
-      "RegisterGraphBody": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "kind": {
-            "type": "string",
-            "enum": ["memory", "repo"]
-          }
-        },
-        "required": ["name", "kind"]
-      },
-      "UpdateGraphBody": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string"
-          }
-        }
+        "required": [
+          "nodes",
+          "edges",
+          "truncated"
+        ]
       }
     },
     "parameters": {}
@@ -587,10 +738,14 @@
                   "properties": {
                     "status": {
                       "type": "string",
-                      "enum": ["ok"]
+                      "enum": [
+                        "ok"
+                      ]
                     }
                   },
-                  "required": ["status"]
+                  "required": [
+                    "status"
+                  ]
                 }
               }
             }
@@ -946,7 +1101,9 @@
                       ]
                     }
                   },
-                  "required": ["results"]
+                  "required": [
+                    "results"
+                  ]
                 }
               }
             }
@@ -1040,7 +1197,9 @@
                       }
                     }
                   },
-                  "required": ["results"]
+                  "required": [
+                    "results"
+                  ]
                 }
               }
             }
@@ -1082,7 +1241,11 @@
           {
             "schema": {
               "type": "string",
-              "enum": ["out", "in", "both"]
+              "enum": [
+                "out",
+                "in",
+                "both"
+              ]
             },
             "required": false,
             "name": "direction",
@@ -1130,7 +1293,9 @@
                       }
                     }
                   },
-                  "required": ["proposals"]
+                  "required": [
+                    "proposals"
+                  ]
                 }
               }
             }
@@ -1475,10 +1640,15 @@
     },
     "/api/v1/graphs": {
       "get": {
-        "summary": "List all registered graphs",
+        "summary": "List registered graphs",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
-            "description": "Graph list",
+            "description": "All registered graphs",
             "content": {
               "application/json": {
                 "schema": {
@@ -1491,7 +1661,9 @@
                       }
                     }
                   },
-                  "required": ["graphs"]
+                  "required": [
+                    "graphs"
+                  ]
                 }
               }
             }
@@ -1502,8 +1674,14 @@
         }
       },
       "post": {
-        "summary": "Register a new graph",
+        "summary": "Register a repo graph",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -1513,8 +1691,8 @@
           }
         },
         "responses": {
-          "200": {
-            "description": "Created graph",
+          "201": {
+            "description": "Registered graph entry",
             "content": {
               "application/json": {
                 "schema": {
@@ -1524,7 +1702,7 @@
             }
           },
           "400": {
-            "description": "Validation error"
+            "description": "Validation error or invalid repo path"
           },
           "401": {
             "description": "Unauthorized"
@@ -1534,18 +1712,24 @@
     },
     "/api/v1/graphs/{id}": {
       "patch": {
-        "summary": "Update graph metadata",
+        "summary": "Update graph settings",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "parameters": [
           {
-            "name": "id",
-            "in": "path",
-            "required": true,
             "schema": {
               "type": "string"
-            }
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
           }
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -1556,7 +1740,7 @@
         },
         "responses": {
           "200": {
-            "description": "Updated graph",
+            "description": "Updated graph entry",
             "content": {
               "application/json": {
                 "schema": {
@@ -1569,31 +1753,39 @@
             "description": "Unauthorized"
           },
           "404": {
-            "description": "Not found"
+            "description": "Graph not found"
           }
         }
       },
       "delete": {
-        "summary": "Delete a graph",
+        "summary": "Remove a registered graph",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "parameters": [
           {
-            "name": "id",
-            "in": "path",
-            "required": true,
             "schema": {
               "type": "string"
-            }
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
           }
         ],
         "responses": {
-          "200": {
-            "description": "Deleted"
+          "204": {
+            "description": "Graph removed"
           },
           "401": {
             "description": "Unauthorized"
           },
           "404": {
-            "description": "Not found"
+            "description": "Graph not found"
+          },
+          "409": {
+            "description": "Cannot remove the default graph"
           }
         }
       }

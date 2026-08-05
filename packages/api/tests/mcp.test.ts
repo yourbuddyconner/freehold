@@ -252,6 +252,20 @@ describe("recall", () => {
     const found = body.results.some((r) => JSON.stringify(r.content).includes(unique));
     expect(found).toBe(true);
   });
+
+  test("recall with graph: 'main' returns results array", async () => {
+    // Write a note first so there is something to recall
+    await client().callTool({ name: "remember", arguments: { content: "graph-param-test" } });
+    await new Promise((r) => setTimeout(r, 300));
+
+    const res = await client().callTool({
+      name: "recall",
+      arguments: { query: "test", graph: "main" },
+    });
+    const content = res.content as Array<{ type: string; text: string }>;
+    const body = JSON.parse(content[0].text) as { results: unknown[] };
+    expect(Array.isArray(body.results)).toBe(true);
+  });
 });
 
 // ---------------------------------------------------------------------------

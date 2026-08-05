@@ -432,12 +432,12 @@ describe("scoped recall isolation", () => {
     await syncIndex(mainFh, hashEmbedder);
 
     // Scoped recall must find the canary
-    const scopedResults = await recall(scopedFh, "uniquetoken42", hashEmbedder, undefined, 10, "scoped");
+    const scopedResults = await recall(scopedFh, "uniquetoken42", hashEmbedder, undefined, 10);
     const scopedIds = scopedResults.map((r) => r.id);
     expect(scopedIds).toContain(canary.noteId);
 
     // Main recall must NOT contain the canary
-    const mainResults = await recall(mainFh, "uniquetoken42", hashEmbedder, undefined, 10, "main");
+    const mainResults = await recall(mainFh, "uniquetoken42", hashEmbedder, undefined, 10);
     const mainIds = mainResults.map((r) => r.id);
     expect(mainIds).not.toContain(canary.noteId);
   });
@@ -502,7 +502,7 @@ describe("scoped reindex safety", () => {
     const mainIdsBefore = beforeMain.rows.map((r) => r.id);
 
     // Run scoped reindex — this is the operation being guarded
-    await reindex(scopedFh, hashEmbedder, "scoped");
+    await reindex(scopedFh, hashEmbedder);
 
     // Main graph rows must all survive
     const afterMain = await db.pg.query<{ id: string }>(

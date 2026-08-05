@@ -219,6 +219,11 @@ export class GraphManager {
     this.inFlight.set(id, promise);
     try {
       const fh = await promise;
+      // Re-verify: a concurrent remove() may have evicted this id while _open was awaited.
+      // If so, discard the handle and throw rather than caching a resurrected entry.
+      if (!this.inFlight.has(id)) {
+        throw new Error(`Graph not registered: ${id} (removed during open)`);
+      }
       this.cache.set(id, fh);
       return fh;
     } finally {
@@ -303,6 +308,15 @@ export class GraphManager {
     const name = opts.name ?? id;
     const embedder = opts.embedder ?? "hash";
 
+    // Check registry — reject duplicates BEFORE any side effects
+    const existing = await this.db.pg.query<{ id: string }>(
+      "SELECT id FROM graphs WHERE id = $1",
+      [id]
+    );
+    if (existing.rows.length > 0) {
+      throw new Error(`graph id already registered: ${id}`);
+    }
+
     // Open the graph
     const fh = await openFreehold({
       graphDir: repoPath,
@@ -333,17 +347,12 @@ export class GraphManager {
       // Not a git repo or no origin — that's fine
     }
 
-    // Persist registry entry — reject duplicates
-    const result = await this.db.pg.query(
+    // Persist registry entry (no ON CONFLICT needed — we already checked above)
+    await this.db.pg.query(
       `INSERT INTO graphs (id, name, path, kind, auto_push_notes, embedder, allod_graph_id, origin_remote)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-       ON CONFLICT (id) DO NOTHING`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
       [id, name, repoPath, "repo", false, embedder, allodGraphId, remote]
     );
-
-    if ((result.affectedRows ?? 0) === 0) {
-      throw new Error(`graph id already registered: ${id}`);
-    }
 
     // Cache the handle
     this.cache.set(id, fh);

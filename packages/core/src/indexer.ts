@@ -22,7 +22,6 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { load as yamlLoad } from "js-yaml";
 import {
-  DEFAULT_GRAPH_ID,
   deleteIndexedHead,
   fmtVec,
   getIndexedHead,
@@ -397,10 +396,10 @@ export async function syncIndex(freehold: Freehold, embedder: Embedder): Promise
  */
 export async function reindex(
   freehold: Freehold,
-  embedder: Embedder,
-  graphId: string = DEFAULT_GRAPH_ID
+  embedder: Embedder
 ): Promise<void> {
   const { pg } = freehold.db;
+  const graphId = freehold.graphId;
   // DELETE … WHERE graph_id = $1 is graph-scoped; other graphs are untouched.
   // The FK on embeddings.object_id has ON DELETE CASCADE, so embeddings rows
   // for deleted objects are removed automatically.

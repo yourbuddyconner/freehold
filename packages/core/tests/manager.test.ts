@@ -239,6 +239,35 @@ describe("GraphManager", () => {
     await expect(manager.registerRepo(repoDir2, { id: "dup-id" })).rejects.toThrow();
   });
 
+  test("registerRepo() duplicate-id check fires before side effects — review ontology not installed in new repo", async () => {
+    const home = makeTempDir("freehold-mgr-test-");
+    const repoDir1 = makeTempDir("freehold-mgr-repo-");
+    await makeRepoGraph(repoDir1);
+    const manager = await GraphManager.open(home);
+
+    // Register repo1 with a fixed id
+    await manager.registerRepo(repoDir1, { id: "collision-test" });
+
+    // Create a VALID allod graph at a fresh temp dir
+    const repoDir2 = makeTempDir("freehold-mgr-repo-");
+    await makeRepoGraph(repoDir2);
+
+    // Count changesets in repo2 BEFORE the failed registration attempt
+    const changesetsDir = join(repoDir2, ".allod", "changesets");
+    const { readdirSync } = await import("node:fs");
+    const countBefore = existsSync(changesetsDir) ? readdirSync(changesetsDir).length : 0;
+
+    // Attempt to register with the same id — must throw BEFORE installing review ontology
+    await expect(
+      manager.registerRepo(repoDir2, { id: "collision-test" })
+    ).rejects.toThrow("graph id already registered");
+
+    // The changeset count must not have increased: review ontology install
+    // would have added changesets. If the guard fires first, no new changesets appear.
+    const countAfter = existsSync(changesetsDir) ? readdirSync(changesetsDir).length : 0;
+    expect(countAfter).toBe(countBefore);
+  });
+
   test("registerRepo() throws for same path twice (deterministic id collision)", async () => {
     const home = makeTempDir("freehold-mgr-test-");
     const repoDir = makeTempDir("freehold-mgr-repo-");

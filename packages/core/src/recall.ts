@@ -5,7 +5,7 @@
  * full-text search, fused via Reciprocal Rank Fusion (RRF, k=60).
  */
 
-import { DEFAULT_GRAPH_ID, fmtVec } from "./db.js";
+import { fmtVec } from "./db.js";
 import type { Embedder } from "./embed.js";
 import type { Freehold } from "./graphs.js";
 
@@ -57,10 +57,10 @@ export async function recall(
   query: string,
   embedder: Embedder,
   filters?: RecallFilters,
-  limit = 10,
-  graphId: string = DEFAULT_GRAPH_ID
+  limit = 10
 ): Promise<RecallResult[]> {
   const { pg } = freehold.db;
+  const graphId = freehold.graphId;
 
   // Step 1: embed the query
   const [qvec] = await embedder.embed([query]);
@@ -167,10 +167,10 @@ export async function recall(
 export async function recentMemories(
   freehold: Freehold,
   filters?: RecallFilters,
-  limit = 50,
-  graphId: string = DEFAULT_GRAPH_ID
+  limit = 50
 ): Promise<RecallResult[]> {
   const { pg } = freehold.db;
+  const graphId = freehold.graphId;
   const rowsResult = await pg.query<ObjectRow>(
     `SELECT id, type, content, author, method, approval, changeset FROM objects
      WHERE kind = 'node' AND type NOT LIKE 'meta/%' AND graph_id = $2

@@ -109,6 +109,35 @@ const SessionInfo = z
   })
   .openapi("SessionInfo");
 
+const GraphInfo = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    path: z.string(),
+    kind: z.enum(["memory", "repo"]),
+    autoPushNotes: z.boolean(),
+    embedder: z.enum(["hash", "semantic"]),
+    allodGraphId: z.string(),
+    originRemote: z.string().nullable(),
+  })
+  .openapi("GraphInfo");
+
+const RegisterGraphBody = z
+  .object({
+    path: z.string().openapi({ description: "Absolute path to the repo checkout" }),
+    id: z.string().optional().openapi({ description: "Registry slug id; defaults to basename of path" }),
+    name: z.string().optional().openapi({ description: "Display name; defaults to id" }),
+  })
+  .openapi("RegisterGraphBody");
+
+const UpdateGraphBody = z
+  .object({
+    name: z.string().optional(),
+    autoPushNotes: z.boolean().optional(),
+    embedder: z.enum(["hash", "semantic"]).optional(),
+  })
+  .openapi("UpdateGraphBody");
+
 // ---- Response schemas ----
 
 const AdmissionResponse = z
@@ -263,6 +292,9 @@ function buildRegistry(): OpenAPIRegistry {
   registry.register("VerifyReport", VerifyReport);
   registry.register("SchemaDescription", SchemaDescription);
   registry.register("SessionInfo", SessionInfo);
+  registry.register("GraphInfo", GraphInfo);
+  registry.register("RegisterGraphBody", RegisterGraphBody);
+  registry.register("UpdateGraphBody", UpdateGraphBody);
 
   const auth = [{ bearerAuth: [] }];
 
@@ -704,6 +736,75 @@ function buildRegistry(): OpenAPIRegistry {
         content: { "application/json": { schema: SessionInfo } },
       },
       "401": { description: "Unauthorized" },
+    },
+  });
+
+  // Graphs — list
+  registry.registerPath({
+    method: "get",
+    path: "/api/v1/graphs",
+    summary: "List registered graphs",
+    security: auth,
+    responses: {
+      "200": {
+        description: "All registered graphs",
+        content: { "application/json": { schema: z.object({ graphs: z.array(GraphInfo) }) } },
+      },
+      "401": { description: "Unauthorized" },
+    },
+  });
+
+  // Graphs — register
+  registry.registerPath({
+    method: "post",
+    path: "/api/v1/graphs",
+    summary: "Register a repo graph",
+    security: auth,
+    request: {
+      body: { required: true, content: { "application/json": { schema: RegisterGraphBody } } },
+    },
+    responses: {
+      "201": {
+        description: "Registered graph entry",
+        content: { "application/json": { schema: GraphInfo } },
+      },
+      "400": { description: "Validation error or invalid repo path" },
+      "401": { description: "Unauthorized" },
+    },
+  });
+
+  // Graphs — update
+  registry.registerPath({
+    method: "patch",
+    path: "/api/v1/graphs/{id}",
+    summary: "Update graph settings",
+    security: auth,
+    request: {
+      params: z.object({ id: z.string() }),
+      body: { required: true, content: { "application/json": { schema: UpdateGraphBody } } },
+    },
+    responses: {
+      "200": {
+        description: "Updated graph entry",
+        content: { "application/json": { schema: GraphInfo } },
+      },
+      "401": { description: "Unauthorized" },
+      "404": { description: "Graph not found" },
+    },
+  });
+
+  // Graphs — remove
+  registry.registerPath({
+    method: "delete",
+    path: "/api/v1/graphs/{id}",
+    summary: "Remove a registered graph",
+    security: auth,
+    request: { params: z.object({ id: z.string() }) },
+    responses: {
+      "204": { description: "Graph removed" },
+      "401": { description: "Unauthorized" },
+      "404": { description: "Graph not found" },
+      "409": { description: "Cannot remove the default graph" },
     },
   });
 
