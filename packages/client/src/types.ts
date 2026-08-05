@@ -2546,6 +2546,8 @@ export interface components {
             events: number;
             /** @description Non-fatal errors encountered during poll */
             errors: string[];
+            /** @description Number of items unchanged */
+            unchanged: number;
         };
         GitProposalPath: {
             verb: string;

@@ -388,6 +388,7 @@ const PollResult = z
   .object({
     events: z.number().openapi({ description: "Number of events processed" }),
     errors: z.array(z.string()).openapi({ description: "Non-fatal errors encountered during poll" }),
+    unchanged: z.number().openapi({ description: "Number of items unchanged" }),
   })
   .openapi("PollResult");
 

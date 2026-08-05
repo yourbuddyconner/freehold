@@ -930,11 +930,16 @@
               "type": "string"
             },
             "description": "Non-fatal errors encountered during poll"
+          },
+          "unchanged": {
+            "type": "number",
+            "description": "Number of items unchanged"
           }
         },
         "required": [
           "events",
-          "errors"
+          "errors",
+          "unchanged"
         ]
       },
       "GitProposalPath": {
