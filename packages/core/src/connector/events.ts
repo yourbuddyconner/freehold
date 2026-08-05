@@ -59,8 +59,19 @@ async function ensureConnectorPrincipal(fh: Freehold): Promise<void> {
       exists = state.nodes.some(
         (n) => n.label === CONNECTOR_PRINCIPAL
       );
-    } catch {
-      // if state() fails assume we need to add
+    } catch (err) {
+      // Only swallow "not found" / empty-graph errors; rethrow unrelated failures
+      const msg = err instanceof Error ? err.message : String(err);
+      if (
+        !msg.includes("not found") &&
+        !msg.includes("empty") &&
+        !msg.includes("no state") &&
+        !msg.includes("NotFound") &&
+        !msg.includes("does not exist")
+      ) {
+        throw err;
+      }
+      // state() failed because graph has no state yet — assume principal absent
     }
 
     if (!exists) {
@@ -139,7 +150,21 @@ function _findCommentByExternalIdSync(
         try {
           nodeRev = (fh.graph as unknown as { node_rev(id: string): string | null }).node_rev(found.nodeId);
         } catch { /* ignore */ }
-        return { ...found, nodeRev };
+
+        // Fetch current attributes from fold state (admitted nodes are always in fold state).
+        // The changeset YAML only reflects the op that wrote the entry; fold state has the
+        // latest merged attributes (e.g. a subsequent tombstone update).
+        let currentAttrs: Record<string, unknown> | undefined;
+        try {
+          const currentObj = (fh.graph as unknown as {
+            object_get(kind: string, id: string): { content?: { attributes?: Record<string, unknown> } } | null
+          }).object_get("node", found.nodeId);
+          if (currentObj?.content?.attributes) {
+            currentAttrs = currentObj.content.attributes;
+          }
+        } catch { /* ignore — fall back to changeset attrs */ }
+
+        return { ...found, attributes: currentAttrs ?? found.attributes, nodeRev };
       }
     }
   }
@@ -216,18 +241,6 @@ async function upsertCheckStatus(
   status: string,
   conclusion?: string
 ): Promise<void> {
-  // Ensure table exists
-  await fh.db.pg.exec(`
-    CREATE TABLE IF NOT EXISTS check_status (
-      graph_id    text NOT NULL,
-      sha         text NOT NULL,
-      name        text NOT NULL,
-      status      text NOT NULL,
-      conclusion  text,
-      PRIMARY KEY (graph_id, sha, name)
-    )
-  `);
-
   await fh.db.pg.query(
     `INSERT INTO check_status (graph_id, sha, name, status, conclusion)
      VALUES ($1, $2, $3, $4, $5)
@@ -305,7 +318,17 @@ export async function handleConnectorEvent(
 
     await withGraph(fh.graph, async () => {
       const rev = (fh.graph as unknown as { node_rev(id: string): string | null }).node_rev(existing.nodeId);
-      if (!rev) return; // node not in fold state yet (pending) — skip
+      if (!rev) {
+        // Node is pending (not yet in fold state). We can't update it via WASM.
+        // Record a soft tombstone in PGlite so resurrection knows the node was deleted.
+        await fh.db.pg.query(
+          `INSERT INTO connector_soft_tombstone (graph_id, external_id, node_id)
+           VALUES ($1, $2, $3)
+           ON CONFLICT (graph_id, external_id) DO NOTHING`,
+          [fh.graphId, ev.id, existing.nodeId]
+        );
+        return;
+      }
 
       const updateOp = {
         update: {
@@ -319,6 +342,11 @@ export async function handleConnectorEvent(
       await (fh.graph as unknown as {
         commit(author: string, intent: string, ops: unknown[], envelopes: unknown[], sign: boolean): Promise<unknown>
       }).commit(CONNECTOR_PRINCIPAL, `Tombstone ReviewComment ${ev.id}`, [updateOp], [], true);
+      // Clear any soft tombstone — the WASM update supersedes it
+      await fh.db.pg.query(
+        `DELETE FROM connector_soft_tombstone WHERE graph_id = $1 AND external_id = $2`,
+        [fh.graphId, ev.id]
+      );
     });
 
     return { written: "tombstoned", nodeId: existing.nodeId };
@@ -326,11 +354,38 @@ export async function handleConnectorEvent(
 
   // created or edited
   if (existing) {
-    // Check if the body and status are unchanged (idempotent re-delivery)
-    const existingBody = existing.attributes.body as string | undefined;
-    const existingStatus = existing.attributes.status as string | undefined;
+    // Check whether the node has been soft-tombstoned (pending node that was deleted
+    // but whose WASM update was skipped because it wasn't in fold state yet).
+    let isSoftTombstoned = false;
+    try {
+      const tombRows = await fh.db.pg.query<{ node_id: string }>(
+        `SELECT node_id FROM connector_soft_tombstone WHERE graph_id = $1 AND external_id = $2`,
+        [fh.graphId, ev.id]
+      );
+      isSoftTombstoned = tombRows.rows.length > 0;
+    } catch { /* table may not exist in edge cases — treat as not tombstoned */ }
+
+    // Get current attributes from fold state if available; fall back to changeset attrs.
+    // For nodes in fold state, object_get returns the latest merged attributes (e.g. post-tombstone).
+    let liveAttrs = existing.attributes;
+    try {
+      const liveObj = await withGraph(fh.graph, () =>
+        (fh.graph as unknown as {
+          object_get(kind: string, id: string): { content?: { attributes?: Record<string, unknown> } } | null
+        }).object_get("node", existing.nodeId)
+      );
+      if (liveObj?.content?.attributes) {
+        liveAttrs = liveObj.content.attributes;
+      }
+    } catch { /* ignore — use changeset-derived attrs */ }
+
+    // Check if the body and status are unchanged (idempotent re-delivery).
+    // A soft-tombstoned node is never "unchanged" — it needs resurrection.
+    const existingBody = liveAttrs.body as string | undefined;
+    const existingStatus = liveAttrs.status as string | undefined;
 
     if (
+      !isSoftTombstoned &&
       existingBody === ev.body &&
       existingStatus === "active"
     ) {
@@ -341,8 +396,8 @@ export async function handleConnectorEvent(
     await withGraph(fh.graph, async () => {
       const rev = (fh.graph as unknown as { node_rev(id: string): string | null }).node_rev(existing.nodeId);
       if (!rev) {
-        // Node is pending and not in fold state — skip the update
-        // (the pending proposal has the old body; we can't update it)
+        // Node is pending and not in fold state — skip the WASM update.
+        // (The pending proposal has the old body; we can't update it via WASM.)
         return;
       }
 
@@ -359,6 +414,14 @@ export async function handleConnectorEvent(
         commit(author: string, intent: string, ops: unknown[], envelopes: unknown[], sign: boolean): Promise<unknown>
       }).commit(CONNECTOR_PRINCIPAL, `Update ReviewComment ${ev.id}`, [updateOp], [], true);
     });
+
+    // Clear any soft tombstone — the node has been resurrected/updated.
+    try {
+      await fh.db.pg.query(
+        `DELETE FROM connector_soft_tombstone WHERE graph_id = $1 AND external_id = $2`,
+        [fh.graphId, ev.id]
+      );
+    } catch { /* ignore */ }
 
     return { written: "updated", nodeId: existing.nodeId };
   }

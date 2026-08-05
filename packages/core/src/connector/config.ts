@@ -22,7 +22,6 @@ const SCRYPT_R = 8;
 const SCRYPT_P = 1;
 const KEY_LEN = 32;
 const IV_LEN = 12;  // GCM standard
-const TAG_LEN = 16; // GCM auth tag
 
 // ── Public types ──────────────────────────────────────────────────────────────
 
@@ -84,6 +83,13 @@ async function ensureTables(db: DbHandle): Promise<void> {
       graph_id      text PRIMARY KEY,
       last_poll_at  timestamptz,
       state         jsonb NOT NULL DEFAULT '{}'
+    );
+
+    CREATE TABLE IF NOT EXISTS connector_soft_tombstone (
+      graph_id    text NOT NULL,
+      external_id text NOT NULL,
+      node_id     text NOT NULL,
+      PRIMARY KEY (graph_id, external_id)
     );
   `);
 }

@@ -333,6 +333,18 @@ export async function openDb(pgDir: string): Promise<DbHandle> {
   } catch {
     // Ignore
   }
+  try {
+    await pg.exec(`
+      CREATE TABLE IF NOT EXISTS connector_soft_tombstone (
+        graph_id    text NOT NULL,
+        external_id text NOT NULL,
+        node_id     text NOT NULL,
+        PRIMARY KEY (graph_id, external_id)
+      )
+    `);
+  } catch {
+    // Ignore
+  }
 
   // Migrate: recreate PKs for node_terms and meta to be (graph_id, …) composite.
   // For node_terms: old PK was (subject_id, term); new PK is (graph_id, subject_id, term).

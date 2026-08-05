@@ -4,7 +4,7 @@
  * No live GitHub calls — all GitHub access uses injected fetch.
  */
 
-import { mkdtempSync, writeFileSync, mkdirSync } from "node:fs";
+import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test, beforeAll } from "vitest";
@@ -57,6 +57,11 @@ describe("parseOriginRemote", () => {
     expect(parseOriginRemote("")).toBeNull();
     expect(parseOriginRemote("https://example.com/only-one-segment")).toBeNull();
   });
+
+  test("returns null for non-GitHub https URL with two path segments", () => {
+    expect(parseOriginRemote("https://example.com/owner/repo")).toBeNull();
+    expect(parseOriginRemote("https://gitlab.com/owner/repo")).toBeNull();
+  });
 });
 
 // ── makeTokenClient tests ─────────────────────────────────────────────────────
@@ -89,7 +94,15 @@ describe("makeTokenClient", () => {
       });
 
     const client = makeTokenClient("bad-token", mockFetch as typeof fetch);
-    await expect(client.rest("/user")).rejects.toThrow(/401/);
+    let caught: Error | null = null;
+    try {
+      await client.rest("/user");
+    } catch (e) {
+      caught = e as Error;
+    }
+    expect(caught).not.toBeNull();
+    expect(caught!.message).toMatch(/401/);
+    expect(caught!.message).not.toContain("bad-token"); // token must not be leaked in error message
   });
 
   test("uses GITHUB_API_BASE env override when set", async () => {
@@ -261,6 +274,15 @@ describe("handleConnectorEvent", () => {
       conclusion: "success",
     });
     expect(result).toBeNull();
+
+    // Verify row stored in PGlite
+    const rows = await fh.db.pg.query<{ sha: string; name: string; status: string; conclusion: string | null }>(
+      "SELECT sha, name, status, conclusion FROM check_status WHERE graph_id = $1 AND sha = $2 AND name = $3",
+      ["main", "abc123", "CI / lint"]
+    );
+    expect(rows.rows.length).toBe(1);
+    expect(rows.rows[0].status).toBe("completed");
+    expect(rows.rows[0].conclusion).toBe("success");
   });
 
   test("check event upsert is idempotent", async () => {
@@ -271,6 +293,15 @@ describe("handleConnectorEvent", () => {
     // Should not throw; result is null
     const r = await handleConnectorEvent(fh, { ...ev, status: "completed", conclusion: "success" });
     expect(r).toBeNull();
+
+    // Verify final stored state reflects last update
+    const rows = await fh.db.pg.query<{ status: string; conclusion: string | null }>(
+      "SELECT status, conclusion FROM check_status WHERE graph_id = $1 AND sha = $2 AND name = $3",
+      ["main", "sha999", "tests"]
+    );
+    expect(rows.rows.length).toBe(1);
+    expect(rows.rows[0].status).toBe("completed");
+    expect(rows.rows[0].conclusion).toBe("success");
   });
 
   test("comment created returns created result with nodeId", async () => {
@@ -291,7 +322,7 @@ describe("handleConnectorEvent", () => {
 
   test("comment edited returns updated result", async () => {
     // First create
-    await handleConnectorEvent(fh, {
+    const createResult = await handleConnectorEvent(fh, {
       kind: "comment",
       action: "created",
       id: "gh-comment-2",
@@ -300,14 +331,15 @@ describe("handleConnectorEvent", () => {
     });
 
     // Then edit
-    const result = await handleConnectorEvent(fh, {
+    const editResult = await handleConnectorEvent(fh, {
       kind: "comment",
       action: "edited",
       id: "gh-comment-2",
       body: "Edited comment",
       author: "bob",
     });
-    expect(result!.written).toBe("updated");
+    expect(editResult!.written).toBe("updated");
+    expect(editResult!.nodeId).toBe(createResult!.nodeId); // same node, not a new one
   });
 
   test("comment redelivered (same body) returns unchanged and does NOT append a new changeset", async () => {
@@ -366,6 +398,41 @@ describe("handleConnectorEvent", () => {
       author: "dave",
     });
     expect(result!.written).toBe("tombstoned");
+  });
+
+  test("tombstone then re-ingest same id+body resurrects as updated", async () => {
+    // Step 1: create comment
+    const createResult = await handleConnectorEvent(fh, {
+      kind: "comment",
+      action: "created",
+      id: "gh-comment-resurrect",
+      body: "Original body",
+      author: "frank",
+    });
+    expect(createResult!.written).toBe("created");
+    const originalNodeId = createResult!.nodeId;
+
+    // Step 2: tombstone it
+    const tombResult = await handleConnectorEvent(fh, {
+      kind: "comment",
+      action: "deleted",
+      id: "gh-comment-resurrect",
+      body: "",
+      author: "frank",
+    });
+    expect(tombResult!.written).toBe("tombstoned");
+
+    // Step 3: re-ingest with same id and same body — resurrection
+    const resurrectResult = await handleConnectorEvent(fh, {
+      kind: "comment",
+      action: "created",
+      id: "gh-comment-resurrect",
+      body: "Original body",
+      author: "frank",
+    });
+    // Node is tombstoned so it needs to be reactivated — must be "updated", not "unchanged"
+    expect(resurrectResult!.written).toBe("updated");
+    expect(resurrectResult!.nodeId).toBe(originalNodeId);
   });
 
   test("dedup across two ingests of the same comment id", async () => {
