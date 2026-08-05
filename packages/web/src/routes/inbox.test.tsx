@@ -426,6 +426,9 @@ describe("Inbox", () => {
         expect(screen.getByTestId("key-missing-notice")).toBeInTheDocument();
       });
       expect(screen.getByRole("button", { name: /reject/i })).toBeDisabled();
+      expect(
+        screen.getAllByRole("button", { name: /approve/i }).find(b => !b.closest("[role=dialog]"))
+      ).toBeDisabled();
     });
 
     it("shows saved-locally notice and retry button when pushed:false", async () => {
@@ -470,6 +473,14 @@ describe("Inbox", () => {
         expect(screen.getByTestId("saved-locally-notice")).toBeInTheDocument();
       });
       expect(screen.getByTestId("retry-push")).toBeInTheDocument();
+      // Verify the request body includes verdict and by fields
+      expect(vi.mocked(apiClient.decideGitProposal)).toHaveBeenCalledWith(
+        "deadbeef1234",
+        expect.objectContaining({
+          verdict: "reject",
+          by: "alice",
+        })
+      );
     });
 
     it("composer posts correct body shape on submit", async () => {
@@ -531,6 +542,171 @@ describe("Inbox", () => {
           })
         );
       });
+    });
+
+    it("renders incomplete outcome with unmet requirements when decision outcome is incomplete", async () => {
+      setupHooks([]);
+      setupRepoGraph();
+      vi.mocked(hooks.useGitProposals).mockReturnValue({
+        data: { proposals: [gitProposal] },
+        isLoading: false,
+        isError: false,
+        error: null,
+      } as unknown as ReturnType<typeof hooks.useGitProposals>);
+      vi.mocked(hooks.useSession).mockReturnValue({
+        data: { owner: "alice", defaultAgent: "claude", port: 8710, graphs: [], defaultGraph: "main" },
+        isLoading: false,
+        isError: false,
+        error: null,
+      } as unknown as ReturnType<typeof hooks.useSession>);
+      vi.mocked(apiClient.decideGitProposal).mockResolvedValue({
+        outcome: "incomplete",
+        unmet: ["reviewer quorum", "security review"],
+      });
+
+      const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      const router = createRouter({
+        routeTree,
+        history: createMemoryHistory({ initialEntries: ["/inbox"] }),
+      });
+      await act(async () => {
+        render(
+          <QueryClientProvider client={qc}>
+            <RouterProvider router={router} />
+          </QueryClientProvider>
+        );
+      });
+
+      const approveBtn = screen.getByRole("button", { name: /approve/i });
+      await act(async () => {
+        fireEvent.click(approveBtn);
+      });
+
+      const confirmBtn = screen
+        .getAllByRole("button", { name: /approve/i })
+        .find((b) => b.closest("[role=dialog]"));
+      expect(confirmBtn).toBeDefined();
+
+      await act(async () => {
+        fireEvent.click(confirmBtn!);
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId("incomplete-unmet")).toBeInTheDocument();
+      });
+      expect(screen.getByText("reviewer quorum")).toBeInTheDocument();
+      expect(screen.getByText("security review")).toBeInTheDocument();
+    });
+
+    it("clicking Retry calls pushGitNotes and does not call decideGitProposal again", async () => {
+      setupHooks([]);
+      setupRepoGraph();
+      vi.mocked(hooks.useGitProposals).mockReturnValue({
+        data: { proposals: [gitProposal] },
+        isLoading: false,
+        isError: false,
+        error: null,
+      } as unknown as ReturnType<typeof hooks.useGitProposals>);
+      vi.mocked(hooks.useSession).mockReturnValue({
+        data: { owner: "alice", defaultAgent: "claude", port: 8710, graphs: [], defaultGraph: "main" },
+        isLoading: false,
+        isError: false,
+        error: null,
+      } as unknown as ReturnType<typeof hooks.useSession>);
+      vi.mocked(apiClient.decideGitProposal).mockResolvedValue({
+        outcome: "approved",
+        pushed: false,
+        pushError: "Connection timeout",
+      });
+      vi.mocked(apiClient.pushGitNotes).mockResolvedValue({ pushed: true });
+
+      const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      const router = createRouter({
+        routeTree,
+        history: createMemoryHistory({ initialEntries: ["/inbox"] }),
+      });
+      await act(async () => {
+        render(
+          <QueryClientProvider client={qc}>
+            <RouterProvider router={router} />
+          </QueryClientProvider>
+        );
+      });
+
+      const rejectBtn = screen.getByRole("button", { name: /reject/i });
+      await act(async () => {
+        fireEvent.click(rejectBtn);
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId("saved-locally-notice")).toBeInTheDocument();
+      });
+
+      const retryBtn = screen.getByTestId("retry-push");
+      await act(async () => {
+        fireEvent.click(retryBtn);
+      });
+
+      await waitFor(() => {
+        expect(vi.mocked(apiClient.pushGitNotes)).toHaveBeenCalledWith("deadbeef1234");
+      });
+      // Verify decideGitProposal was only called once (for the initial reject)
+      expect(vi.mocked(apiClient.decideGitProposal)).toHaveBeenCalledTimes(1);
+    });
+
+    it("disables both Approve and Reject when key-missing 409", async () => {
+      setupHooks([]);
+      setupRepoGraph();
+      vi.mocked(hooks.useGitProposals).mockReturnValue({
+        data: { proposals: [gitProposal] },
+        isLoading: false,
+        isError: false,
+        error: null,
+      } as unknown as ReturnType<typeof hooks.useGitProposals>);
+      vi.mocked(hooks.useSession).mockReturnValue({
+        data: { owner: "alice", defaultAgent: "claude", port: 8710, graphs: [], defaultGraph: "main" },
+        isLoading: false,
+        isError: false,
+        error: null,
+      } as unknown as ReturnType<typeof hooks.useSession>);
+
+      const { ApiError } = await import("~/lib/api");
+      vi.mocked(apiClient.decideGitProposal).mockRejectedValue(
+        new ApiError("key-missing", "no signing key for alice", 409)
+      );
+
+      const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      const router = createRouter({
+        routeTree,
+        history: createMemoryHistory({ initialEntries: ["/inbox"] }),
+      });
+      await act(async () => {
+        render(
+          <QueryClientProvider client={qc}>
+            <RouterProvider router={router} />
+          </QueryClientProvider>
+        );
+      });
+
+      const approveBtn = screen.getByRole("button", { name: /approve/i });
+      const rejectBtn = screen.getByRole("button", { name: /reject/i });
+
+      // Initially both should be enabled
+      expect(approveBtn).not.toBeDisabled();
+      expect(rejectBtn).not.toBeDisabled();
+
+      // Click reject to trigger the error
+      await act(async () => {
+        fireEvent.click(rejectBtn);
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId("key-missing-notice")).toBeInTheDocument();
+      });
+
+      // Now both should be disabled
+      expect(screen.getByRole("button", { name: /approve/i })).toBeDisabled();
+      expect(screen.getByRole("button", { name: /reject/i })).toBeDisabled();
     });
   });
 

@@ -31,7 +31,8 @@ type GraphKind = "memory" | "repo";
 async function renderWithRouter(
   pendingCount: number,
   graphs: { id: string; name: string; kind: GraphKind }[] = [],
-  activeGraphId = "main"
+  activeGraphId = "main",
+  gitProposals: { sha: string; decided: "approved" | "rejected" | "undecided" }[] = []
 ) {
   const mockUsePending = vi.mocked(hooks.usePending);
   mockUsePending.mockReturnValue({
@@ -48,6 +49,12 @@ async function renderWithRouter(
     activeGraphId,
     setActiveGraphId: vi.fn(),
   });
+  vi.mocked(hooks.useGitProposals).mockReturnValue({
+    data: { proposals: gitProposals },
+    isLoading: false,
+    isError: false,
+    error: null,
+  } as ReturnType<typeof hooks.useGitProposals>);
 
   const router = createRouter({
     routeTree,
@@ -126,5 +133,20 @@ describe("AppShell", () => {
     ];
     await renderWithRouter(0, graphs);
     expect(screen.getByRole("combobox", { name: /active graph/i })).toBeInTheDocument();
+  });
+
+  it("includes undecided git proposals in badge count when repo graph is active", async () => {
+    const graphs = [
+      { id: "main", name: "main", kind: "memory" as GraphKind },
+      { id: "g-repo", name: "my-repo", kind: "repo" as GraphKind },
+    ];
+    const gitProposals = [
+      { sha: "abc123", decided: "undecided" as const },
+      { sha: "def456", decided: "undecided" as const },
+      { sha: "ghi789", decided: "approved" as const },
+    ];
+    await renderWithRouter(1, graphs, "g-repo", gitProposals);
+    // Badge should count 1 native + 2 undecided git proposals = 3
+    expect(screen.getByLabelText("3 pending")).toBeInTheDocument();
   });
 });
