@@ -385,16 +385,26 @@ export async function syncIndex(freehold: Freehold, embedder: Embedder): Promise
 }
 
 /**
- * Wipe the PGlite index and rebuild it from scratch.
+ * Wipe the PGlite index for a single graph and rebuild it from scratch.
  *
- * Equivalent to: truncate → delete indexed_head → syncIndex.
+ * Equivalent to: delete graph rows → delete indexed_head → syncIndex.
+ *
+ * Uses graph-scoped DELETEs rather than TRUNCATE so that only the target
+ * graph's rows are removed; other graphs' data is unaffected.
+ * Deleting from objects cascades to embeddings via the FK ON DELETE CASCADE.
  */
-export async function reindex(freehold: Freehold, embedder: Embedder): Promise<void> {
+export async function reindex(
+  freehold: Freehold,
+  embedder: Embedder,
+  graphId: string = DEFAULT_GRAPH_ID
+): Promise<void> {
   const { pg } = freehold.db;
-  // Truncate objects (CASCADE removes embeddings via FK)
-  await pg.exec("TRUNCATE TABLE objects CASCADE");
-  await pg.exec("TRUNCATE TABLE graph_edges");
-  await pg.exec("TRUNCATE TABLE node_terms");
-  await deleteIndexedHead(DEFAULT_GRAPH_ID, pg);
+  // DELETE … WHERE graph_id = $1 is graph-scoped; other graphs are untouched.
+  // The FK on embeddings.object_id has ON DELETE CASCADE, so embeddings rows
+  // for deleted objects are removed automatically.
+  await pg.query("DELETE FROM objects WHERE graph_id = $1", [graphId]);
+  await pg.query("DELETE FROM graph_edges WHERE graph_id = $1", [graphId]);
+  await pg.query("DELETE FROM node_terms WHERE graph_id = $1", [graphId]);
+  await deleteIndexedHead(graphId, pg);
   await syncIndex(freehold, embedder);
 }

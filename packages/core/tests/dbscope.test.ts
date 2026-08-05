@@ -6,10 +6,10 @@
  * per-graph.
  */
 
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   DEFAULT_GRAPH_ID,
   type DbHandle,
@@ -22,10 +22,20 @@ import {
 
 describe("index tables are graph-scoped", () => {
   let db: DbHandle;
+  let tmpDir: string;
 
   beforeEach(async () => {
-    const dir = mkdtempSync(join(tmpdir(), "freehold-dbscope-test-"));
-    db = await openDb(join(dir, "pg"));
+    tmpDir = mkdtempSync(join(tmpdir(), "freehold-dbscope-test-"));
+    db = await openDb(join(tmpDir, "pg"));
+  });
+
+  afterEach(() => {
+    // Remove the temp PGlite dir created for each test
+    try {
+      rmSync(tmpDir, { recursive: true, force: true });
+    } catch {
+      // Best-effort cleanup
+    }
   });
 
   it("DEFAULT_GRAPH_ID is 'main'", () => {
@@ -94,5 +104,43 @@ describe("index tables are graph-scoped", () => {
   it("getIndexedHead returns 0 when no head is set for a graph", async () => {
     const head = await getIndexedHead("never-set", db.pg);
     expect(head).toBe(0);
+  });
+
+  it("graph-scoped delete (reindex path) leaves graph B rows intact", async () => {
+    // Populate graph "a" and graph "b" with distinct rows
+    await upsertObject("a", db.pg, {
+      id: "cccccccc-0000-0000-0000-000000000001",
+      kind: "node",
+      type: "memory/Note@1",
+      content: {},
+      author: "agent",
+      method: null,
+      approval: "saved",
+      changeset: "sha256:aaa",
+      searchText: "node in graph a",
+    });
+    await upsertObject("b", db.pg, {
+      id: "dddddddd-0000-0000-0000-000000000002",
+      kind: "node",
+      type: "memory/Note@1",
+      content: {},
+      author: "agent",
+      method: null,
+      approval: "saved",
+      changeset: "sha256:bbb",
+      searchText: "node in graph b",
+    });
+
+    // Simulate the reindex DELETE for graph "a" only
+    await db.pg.query("DELETE FROM objects WHERE graph_id = $1", ["a"]);
+
+    // Graph "a" should now be empty
+    const rowsA = await listObjects("a", db.pg);
+    expect(rowsA).toHaveLength(0);
+
+    // Graph "b" row must survive
+    const rowsB = await listObjects("b", db.pg);
+    expect(rowsB).toHaveLength(1);
+    expect(rowsB[0].id).toBe("dddddddd-0000-0000-0000-000000000002");
   });
 });

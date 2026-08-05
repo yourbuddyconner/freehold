@@ -337,6 +337,12 @@ export async function upsertObject(
        approval = EXCLUDED.approval,
        changeset = EXCLUDED.changeset,
        search_text = EXCLUDED.search_text,
+       -- NOTE: graph_id is included in the update clause so that an object
+       -- whose UUID collides across graphs is reassigned to the inserting graph.
+       -- This is intentional: within a single PGlite instance object ids are
+       -- expected to be globally unique, so a collision means the same object
+       -- is being re-indexed under a different graph (e.g. after a graph rename).
+       -- If you ever need cross-graph UUID stability, drop graph_id from here.
        graph_id = EXCLUDED.graph_id,
        updated_at = now()`,
     [

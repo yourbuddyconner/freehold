@@ -110,14 +110,18 @@ async function indexRows(freehold: Freehold, cap: number, graphId = DEFAULT_GRAP
  * derived title, approval, author, updated time, and taxonomy terms —
  * all from the index.
  */
-export async function memoryIndex(freehold: Freehold, cap = 5000): Promise<MemoryIndexEntry[]> {
-  const rows = await indexRows(freehold, cap);
+export async function memoryIndex(
+  freehold: Freehold,
+  cap = 5000,
+  graphId: string = DEFAULT_GRAPH_ID
+): Promise<MemoryIndexEntry[]> {
+  const rows = await indexRows(freehold, cap, graphId);
   const knownIds = new Set(rows.map((r) => r.id));
 
   // Terms come from the mirrored node_terms table — one query, no wasm calls
   const termsResult = await freehold.db.pg.query<{ subject_id: string; term: string }>(
     "SELECT subject_id, term FROM node_terms WHERE graph_id = $1",
-    [DEFAULT_GRAPH_ID]
+    [graphId]
   );
   const termsById = new Map<string, string[]>();
   for (const row of termsResult.rows) {
@@ -182,14 +186,18 @@ export async function memoryIndex(freehold: Freehold, cap = 5000): Promise<Memor
  * endpoints fall outside the (capped) node set are dropped. `truncated`
  * reports whether the node cap cut the listing short.
  */
-export async function memoryGraph(freehold: Freehold, nodeCap = 2000): Promise<MemoryGraphView> {
-  const rows = await indexRows(freehold, nodeCap);
+export async function memoryGraph(
+  freehold: Freehold,
+  nodeCap = 2000,
+  graphId: string = DEFAULT_GRAPH_ID
+): Promise<MemoryGraphView> {
+  const rows = await indexRows(freehold, nodeCap, graphId);
   const truncated = rows.length >= nodeCap;
   const nodeIds = new Set(rows.map((r) => r.id));
 
   const termsResult = await freehold.db.pg.query<{ subject_id: string; term: string }>(
     "SELECT subject_id, term FROM node_terms WHERE graph_id = $1",
-    [DEFAULT_GRAPH_ID]
+    [graphId]
   );
   const termsById = new Map<string, string[]>();
   for (const row of termsResult.rows) {
@@ -204,7 +212,7 @@ export async function memoryGraph(freehold: Freehold, nodeCap = 2000): Promise<M
     type: string;
     from_id: string;
     to_id: string;
-  }>("SELECT id, type, from_id, to_id FROM graph_edges WHERE graph_id = $1", [DEFAULT_GRAPH_ID]);
+  }>("SELECT id, type, from_id, to_id FROM graph_edges WHERE graph_id = $1", [graphId]);
   const edges: GraphEdge[] = edgeResult.rows
     .filter((e) => nodeIds.has(e.from_id) && nodeIds.has(e.to_id))
     .map((e) => ({ id: e.id, type: e.type, from: e.from_id, to: e.to_id }));
