@@ -1195,6 +1195,28 @@
           }
         },
         "required": ["path", "content", "truncated", "binary", "size"]
+      },
+      "FileDiffEntry": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string" },
+          "oldPath": { "type": "string" },
+          "verb": { "type": "string" },
+          "patch": { "type": "string" },
+          "binary": { "type": "boolean" }
+        },
+        "required": ["path", "verb", "patch", "binary"]
+      },
+      "DiffResponse": {
+        "type": "object",
+        "properties": {
+          "files": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/FileDiffEntry" }
+          },
+          "truncated": { "type": "boolean" }
+        },
+        "required": ["files", "truncated"]
       }
     },
     "parameters": {}
@@ -2910,6 +2932,33 @@
           "409": {
             "description": "Connector not configured"
           }
+        }
+      }
+    },
+    "/api/v1/git/proposals/{sha}/diff": {
+      "get": {
+        "summary": "Get per-file unified diff for a git proposal",
+        "description": "Returns per-file unified diff entries. Only available for repo graphs. Total patch is capped at 1 MB; check truncated flag.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "schema": { "type": "string" },
+            "required": true,
+            "name": "sha",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Diff response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/DiffResponse" }
+              }
+            }
+          },
+          "400": { "description": "Invalid sha or not a repo graph" },
+          "404": { "description": "Proposal not found" }
         }
       }
     }

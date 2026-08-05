@@ -10,6 +10,7 @@
 import { basename } from "node:path";
 import {
   KeyMissingError,
+  commitDiff,
   decideGit,
   gitProposal,
   listGitProposals,
@@ -272,6 +273,35 @@ gitreviewRouter.get("/git/proposals/:sha/reviews", async (c) => {
   }
   const reviews = await listReviewsForSha(fh, sha);
   return c.json({ reviews });
+});
+
+// ── GET /git/proposals/:sha/diff ─────────────────────────────────────────────
+
+const DIFF_SIZE_LIMIT = 1_000_000; // 1 MB — matches core cap
+
+gitreviewRouter.get("/git/proposals/:sha/diff", async (c) => {
+  const fh = c.get("freehold");
+  if (!repoOnly(fh)) {
+    return c.json({ error: REPO_ONLY_ERROR }, 400);
+  }
+
+  const sha = c.req.param("sha");
+  if (!validateSha(sha)) {
+    return c.json({ error: "invalid commit sha" }, 400);
+  }
+
+  const proposal = await gitProposal(fh, sha);
+  if (!proposal) {
+    return c.json({ error: "proposal not found" }, 404);
+  }
+
+  const files = await commitDiff(fh.graphDir, sha);
+
+  // Compute truncated flag: total patch bytes >= limit
+  const totalBytes = files.reduce((sum, f) => sum + f.patch.length, 0);
+  const truncated = totalBytes >= DIFF_SIZE_LIMIT;
+
+  return c.json({ files, truncated });
 });
 
 // ── POST /git/proposals/:sha/push-notes ──────────────────────────────────────

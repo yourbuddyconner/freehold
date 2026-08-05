@@ -2340,6 +2340,61 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/git/proposals/{sha}/diff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get per-file unified diff for a git proposal
+         * @description Returns per-file unified diff entries. Only available for repo graphs. Total patch is capped at 1 MB; check truncated flag.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    sha: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Diff response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DiffResponse"];
+                    };
+                };
+                /** @description Invalid sha or not a repo graph */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Proposal not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2740,6 +2795,17 @@ export interface components {
             binary: boolean;
             /** @description File size in bytes (full file, not truncated) */
             size: number;
+        };
+        FileDiffEntry: {
+            path: string;
+            oldPath?: string;
+            verb: string;
+            patch: string;
+            binary: boolean;
+        };
+        DiffResponse: {
+            files: components["schemas"]["FileDiffEntry"][];
+            truncated: boolean;
         };
     };
     responses: never;
