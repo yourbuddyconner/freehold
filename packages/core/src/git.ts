@@ -230,15 +230,7 @@ export async function commitDiff(repoDir: string, sha: string): Promise<FileDiff
   if (meta.parents.length === 0) {
     args = ["diff-tree", "--root", "--no-renames", "-p", "-r", "--end-of-options", sha];
   } else {
-    args = [
-      "diff-tree",
-      "--no-renames",
-      "-p",
-      "-r",
-      "--end-of-options",
-      meta.parents[0],
-      sha,
-    ];
+    args = ["diff-tree", "--no-renames", "-p", "-r", "--end-of-options", meta.parents[0], sha];
   }
 
   const out = await git(repoDir, args);

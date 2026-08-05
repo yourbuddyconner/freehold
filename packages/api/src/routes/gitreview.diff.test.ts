@@ -24,13 +24,14 @@ vi.mock("@freehold/core", async (importOriginal) => {
 });
 
 import { commitDiff, gitProposal } from "@freehold/core";
+import type { AppEnv } from "../types.js";
 import { gitreviewRouter } from "./gitreview.js";
 
 const mockCommitDiff = vi.mocked(commitDiff);
 const mockGitProposal = vi.mocked(gitProposal);
 
 function buildApp(kind = "repo") {
-  const app = new Hono();
+  const app = new Hono<AppEnv>();
   const fakeFreehold = {
     kind,
     graphDir: "/tmp/fake-repo",
@@ -38,8 +39,12 @@ function buildApp(kind = "repo") {
     graph: {},
   };
   app.use("*", async (c, next) => {
-    c.set("freehold", fakeFreehold);
-    c.set("manager", { getEntry: vi.fn().mockResolvedValue({ allodGraphId: "g1", autoPushNotes: false, originRemote: null }) });
+    c.set("freehold", fakeFreehold as unknown as AppEnv["Variables"]["freehold"]);
+    c.set("manager", {
+      getEntry: vi
+        .fn()
+        .mockResolvedValue({ allodGraphId: "g1", autoPushNotes: false, originRemote: null }),
+    } as unknown as AppEnv["Variables"]["manager"]);
     await next();
   });
   app.route("/", gitreviewRouter);
@@ -76,7 +81,10 @@ describe("GET /git/proposals/:sha/diff", () => {
 
   test("200 with files array and truncated:false for normal diff", async () => {
     const app = buildApp();
-    const fakeProposal = { sha: "abc1234abc1234abc1234abc1234abc1234abc1234", decided: "undecided" } as never;
+    const fakeProposal = {
+      sha: "abc1234abc1234abc1234abc1234abc1234abc1234",
+      decided: "undecided",
+    } as never;
     mockGitProposal.mockResolvedValue(fakeProposal);
     mockCommitDiff.mockResolvedValue([
       { path: "src/main.rs", verb: "M", patch: "@@ -1 +1 @@\n-old\n+new\n", binary: false },
@@ -84,7 +92,7 @@ describe("GET /git/proposals/:sha/diff", () => {
 
     const res = await app.request("/git/proposals/abc1234abc1234/diff");
     expect(res.status).toBe(200);
-    const body = await res.json() as { files: unknown[]; truncated: boolean };
+    const body = (await res.json()) as { files: unknown[]; truncated: boolean };
     expect(body.truncated).toBe(false);
     expect(body.files).toHaveLength(1);
     expect((body.files[0] as { path: string }).path).toBe("src/main.rs");
@@ -92,7 +100,10 @@ describe("GET /git/proposals/:sha/diff", () => {
 
   test("truncated:true when commitDiff returns >= 1MB total patch", async () => {
     const app = buildApp();
-    const fakeProposal = { sha: "abc1234abc1234abc1234abc1234abc1234abc1234", decided: "undecided" } as never;
+    const fakeProposal = {
+      sha: "abc1234abc1234abc1234abc1234abc1234abc1234",
+      decided: "undecided",
+    } as never;
     mockGitProposal.mockResolvedValue(fakeProposal);
 
     const bigPatch = "x".repeat(600_000);
@@ -103,21 +114,25 @@ describe("GET /git/proposals/:sha/diff", () => {
 
     const res = await app.request("/git/proposals/abc1234abc1234/diff");
     expect(res.status).toBe(200);
-    const body = await res.json() as { files: unknown[]; truncated: boolean };
+    const body = (await res.json()) as { files: unknown[]; truncated: boolean };
     expect(body.truncated).toBe(true);
   });
 
   test("binary file has binary:true and empty patch", async () => {
     const app = buildApp();
-    const fakeProposal = { sha: "abc1234abc1234abc1234abc1234abc1234abc1234", decided: "undecided" } as never;
+    const fakeProposal = {
+      sha: "abc1234abc1234abc1234abc1234abc1234abc1234",
+      decided: "undecided",
+    } as never;
     mockGitProposal.mockResolvedValue(fakeProposal);
-    mockCommitDiff.mockResolvedValue([
-      { path: "image.png", verb: "A", patch: "", binary: true },
-    ]);
+    mockCommitDiff.mockResolvedValue([{ path: "image.png", verb: "A", patch: "", binary: true }]);
 
     const res = await app.request("/git/proposals/abc1234abc1234/diff");
     expect(res.status).toBe(200);
-    const body = await res.json() as { files: { binary: boolean; patch: string }[]; truncated: boolean };
+    const body = (await res.json()) as {
+      files: { binary: boolean; patch: string }[];
+      truncated: boolean;
+    };
     expect(body.files[0].binary).toBe(true);
     expect(body.files[0].patch).toBe("");
   });
