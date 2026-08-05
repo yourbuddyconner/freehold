@@ -17,7 +17,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@allod/core": "https://github.com/yourbuddyconner/allod/releases/download/core-v0.1.2/allod-core-0.1.2.tgz",
+    "@allod/core": "link:/Users/conner/code/allod/crates/allod-wasm",
     "@electric-sql/pglite": "^0.5.4",
     "@electric-sql/pglite-pgvector": "^0.0.5",
     "@huggingface/transformers": "^4.2.0",
