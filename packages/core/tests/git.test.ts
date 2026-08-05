@@ -25,7 +25,7 @@ describe("git helpers", () => {
   beforeEach(() => {
     repoDir = mkdtempSync(join(tmpdir(), "freehold-git-test-"));
 
-    execFileSync("git", ["init"], { cwd: repoDir });
+    execFileSync("git", ["init", "-b", "main"], { cwd: repoDir });
     execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: repoDir });
     execFileSync("git", ["config", "user.name", "Test User"], { cwd: repoDir });
 

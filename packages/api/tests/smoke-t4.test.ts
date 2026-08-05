@@ -141,7 +141,7 @@ beforeAll(async () => {
 
   // Repo graph with proper git repo + remote
   repoDir = makeTempDir("fh-smoke-repo-");
-  execFileSync("git", ["init"], { cwd: repoDir });
+  execFileSync("git", ["init", "-b", "main"], { cwd: repoDir });
   execFileSync("git", ["config", "user.email", "smoke@test.com"], { cwd: repoDir });
   execFileSync("git", ["config", "user.name", "Smoke Test"], { cwd: repoDir });
   execFileSync("git", ["remote", "add", "origin", `https://github.com/${OWNER}/${REPO}.git`], {

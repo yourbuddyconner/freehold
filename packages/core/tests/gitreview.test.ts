@@ -112,7 +112,7 @@ beforeAll(async () => {
   process.env.ALLOD_KEYS_DIR = keysDir;
 
   // ── Build git repo ─────────────────────────────────────────────────────
-  execFileSync("git", ["init"], { cwd: repoDir });
+  execFileSync("git", ["init", "-b", "main"], { cwd: repoDir });
   execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: repoDir });
   execFileSync("git", ["config", "user.name", "Test User"], { cwd: repoDir });
 

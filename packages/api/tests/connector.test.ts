@@ -196,7 +196,7 @@ beforeAll(async () => {
 
   // Init git repo with a remote
   const { execFileSync } = await import("node:child_process");
-  execFileSync("git", ["init"], { cwd: repoDir });
+  execFileSync("git", ["init", "-b", "main"], { cwd: repoDir });
   execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: repoDir });
   execFileSync("git", ["config", "user.name", "Test User"], { cwd: repoDir });
   execFileSync("git", ["remote", "add", "origin", "https://github.com/test-owner/test-repo.git"], {
@@ -737,7 +737,7 @@ describe("app-mode poll", () => {
     // Create a repo directory with git + remote
     appModeRepoDir = makeTempDir("freehold-connector-appmode-repo-");
     const { execFileSync } = await import("node:child_process");
-    execFileSync("git", ["init"], { cwd: appModeRepoDir });
+    execFileSync("git", ["init", "-b", "main"], { cwd: appModeRepoDir });
     execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: appModeRepoDir });
     execFileSync("git", ["config", "user.name", "Test User"], { cwd: appModeRepoDir });
     execFileSync("git", ["remote", "add", "origin", "https://github.com/testowner/testrepo.git"], {

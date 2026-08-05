@@ -129,7 +129,7 @@ beforeAll(async () => {
   repoDir = makeTempDir("freehold-gitreview-api-repo-");
   repoBasename = basename(repoDir);
 
-  execFileSync("git", ["init"], { cwd: repoDir });
+  execFileSync("git", ["init", "-b", "main"], { cwd: repoDir });
   execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: repoDir });
   execFileSync("git", ["config", "user.name", "Test User"], { cwd: repoDir });
 
@@ -648,7 +648,7 @@ describe("Task 4 e2e: region-rule — classified path → proposal card → deci
 
     // Build git repo
     regionRepoDir = makeTempDir("freehold-gitreview-region-repo-");
-    execFileSync("git", ["init"], { cwd: regionRepoDir });
+    execFileSync("git", ["init", "-b", "main"], { cwd: regionRepoDir });
     execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: regionRepoDir });
     execFileSync("git", ["config", "user.name", "Test User"], { cwd: regionRepoDir });
 
