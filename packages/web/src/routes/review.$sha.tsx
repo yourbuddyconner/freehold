@@ -293,7 +293,7 @@ export function ReviewPage({ sha }: { sha: string }) {
                 <div className="px-3 py-2 text-xs text-(--fg-muted) font-mono italic">binary</div>
               ) : (
                 <pre className="text-xs overflow-x-auto p-3 bg-(--bg) text-(--fg) font-mono leading-relaxed whitespace-pre">
-                  {file.patch}
+                  {file.newContent}
                 </pre>
               )}
             </div>

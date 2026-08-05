@@ -1246,6 +1246,25 @@ function buildRegistry(): OpenAPIRegistry {
     })
     .openapi("ReviewEntry");
 
+  const DiffFile = z
+    .object({
+      path: z.string(),
+      oldPath: z.string().optional(),
+      verb: z.enum(["A", "M", "D", "R"]),
+      binary: z.boolean(),
+      oldContent: z.string(),
+      newContent: z.string(),
+      truncated: z.boolean(),
+    })
+    .openapi("DiffFile");
+
+  const DiffResponse = z
+    .object({
+      files: z.array(DiffFile),
+      truncated: z.boolean(),
+    })
+    .openapi("DiffResponse");
+
   registry.register("GitProposalPath", GitProposalPath);
   registry.register("GitProposalCheck", GitProposalCheck);
   registry.register("GitProposal", GitProposal);
@@ -1256,6 +1275,8 @@ function buildRegistry(): OpenAPIRegistry {
   registry.register("PostReviewResult", PostReviewResult);
   registry.register("ReviewComment", ReviewComment);
   registry.register("ReviewEntry", ReviewEntry);
+  registry.register("DiffFile", DiffFile);
+  registry.register("DiffResponse", DiffResponse);
 
   // Git proposals — list
   registry.registerPath({
@@ -1340,6 +1361,26 @@ function buildRegistry(): OpenAPIRegistry {
       },
       "400": { description: "Not a repo graph or validation error" },
       "401": { description: "Unauthorized" },
+    },
+  });
+
+  // Git proposals — diff
+  registry.registerPath({
+    method: "get",
+    path: "/api/v1/git/proposals/{sha}/diff",
+    summary: "Get per-file full contents for a git proposal",
+    description:
+      "Returns per-file old and new content for each file changed in the commit. Binary files have empty content strings. Files over 512 KB are individually truncated. Only available for repo graphs.",
+    security: auth,
+    request: { params: z.object({ sha: z.string() }) },
+    responses: {
+      "200": {
+        description: "Diff with full file contents",
+        content: { "application/json": { schema: DiffResponse } },
+      },
+      "400": { description: "Not a repo graph or invalid sha" },
+      "401": { description: "Unauthorized" },
+      "404": { description: "Proposal not found" },
     },
   });
 

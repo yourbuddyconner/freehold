@@ -1075,6 +1075,49 @@
         },
         "required": ["reviewId", "verdict", "commit", "author", "status", "comments"]
       },
+      "DiffFile": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "oldPath": {
+            "type": "string"
+          },
+          "verb": {
+            "type": "string",
+            "enum": ["A", "M", "D", "R"]
+          },
+          "binary": {
+            "type": "boolean"
+          },
+          "oldContent": {
+            "type": "string"
+          },
+          "newContent": {
+            "type": "string"
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        },
+        "required": ["path", "verb", "binary", "oldContent", "newContent", "truncated"]
+      },
+      "DiffResponse": {
+        "type": "object",
+        "properties": {
+          "files": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DiffFile"
+            }
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        },
+        "required": ["files", "truncated"]
+      },
       "MemoryIndexEntry": {
         "type": "object",
         "properties": {
@@ -1195,28 +1238,6 @@
           }
         },
         "required": ["path", "content", "truncated", "binary", "size"]
-      },
-      "FileDiffEntry": {
-        "type": "object",
-        "properties": {
-          "path": { "type": "string" },
-          "oldPath": { "type": "string" },
-          "verb": { "type": "string" },
-          "patch": { "type": "string" },
-          "binary": { "type": "boolean" }
-        },
-        "required": ["path", "verb", "patch", "binary"]
-      },
-      "DiffResponse": {
-        "type": "object",
-        "properties": {
-          "files": {
-            "type": "array",
-            "items": { "$ref": "#/components/schemas/FileDiffEntry" }
-          },
-          "truncated": { "type": "boolean" }
-        },
-        "required": ["files", "truncated"]
       }
     },
     "parameters": {}
@@ -2751,6 +2772,48 @@
         }
       }
     },
+    "/api/v1/git/proposals/{sha}/diff": {
+      "get": {
+        "summary": "Get per-file full contents for a git proposal",
+        "description": "Returns per-file old and new content for each file changed in the commit. Binary files have empty content strings. Files over 512 KB are individually truncated. Only available for repo graphs.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "sha",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Diff with full file contents",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiffResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a repo graph or invalid sha"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Proposal not found"
+          }
+        }
+      }
+    },
     "/api/v1/git/proposals/{sha}/push-notes": {
       "post": {
         "summary": "Push decision notes to remote",
@@ -2932,33 +2995,6 @@
           "409": {
             "description": "Connector not configured"
           }
-        }
-      }
-    },
-    "/api/v1/git/proposals/{sha}/diff": {
-      "get": {
-        "summary": "Get per-file unified diff for a git proposal",
-        "description": "Returns per-file unified diff entries. Only available for repo graphs. Total patch is capped at 1 MB; check truncated flag.",
-        "security": [{ "bearerAuth": [] }],
-        "parameters": [
-          {
-            "schema": { "type": "string" },
-            "required": true,
-            "name": "sha",
-            "in": "path"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Diff response",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/DiffResponse" }
-              }
-            }
-          },
-          "400": { "description": "Invalid sha or not a repo graph" },
-          "404": { "description": "Proposal not found" }
         }
       }
     }

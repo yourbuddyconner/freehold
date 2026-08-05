@@ -59,7 +59,7 @@ export type PostReviewResult = Schemas["PostReviewResult"];
 export type ReviewEntry = Schemas["ReviewEntry"];
 export type ReviewComment = Schemas["ReviewComment"];
 export type ReviewCommentInput = Schemas["ReviewCommentInput"];
-export type FileDiffEntry = Schemas["FileDiffEntry"];
+export type DiffFile = Schemas["DiffFile"];
 export type DiffResponse = Schemas["DiffResponse"];
 
 // ---------------------------------------------------------------------------

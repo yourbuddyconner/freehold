@@ -2092,6 +2092,68 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/git/proposals/{sha}/diff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get per-file full contents for a git proposal
+         * @description Returns per-file old and new content for each file changed in the commit. Binary files have empty content strings. Files over 512 KB are individually truncated. Only available for repo graphs.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    sha: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Diff with full file contents */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DiffResponse"];
+                    };
+                };
+                /** @description Not a repo graph or invalid sha */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Proposal not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/git/proposals/{sha}/push-notes": {
         parameters: {
             query?: never;
@@ -2334,61 +2396,6 @@ export interface paths {
                 };
             };
         };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/git/proposals/{sha}/diff": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get per-file unified diff for a git proposal
-         * @description Returns per-file unified diff entries. Only available for repo graphs. Total patch is capped at 1 MB; check truncated flag.
-         */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    sha: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Diff response */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["DiffResponse"];
-                    };
-                };
-                /** @description Invalid sha or not a repo graph */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-                /** @description Proposal not found */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-            };
-        };
-        put?: never;
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2755,6 +2762,20 @@ export interface components {
             status: "saved" | "pending";
             comments: components["schemas"]["ReviewComment"][];
         };
+        DiffFile: {
+            path: string;
+            oldPath?: string;
+            /** @enum {string} */
+            verb: "A" | "M" | "D" | "R";
+            binary: boolean;
+            oldContent: string;
+            newContent: string;
+            truncated: boolean;
+        };
+        DiffResponse: {
+            files: components["schemas"]["DiffFile"][];
+            truncated: boolean;
+        };
         MemoryIndexEntry: {
             id: string;
             type: string;
@@ -2795,17 +2816,6 @@ export interface components {
             binary: boolean;
             /** @description File size in bytes (full file, not truncated) */
             size: number;
-        };
-        FileDiffEntry: {
-            path: string;
-            oldPath?: string;
-            verb: string;
-            patch: string;
-            binary: boolean;
-        };
-        DiffResponse: {
-            files: components["schemas"]["FileDiffEntry"][];
-            truncated: boolean;
         };
     };
     responses: never;
