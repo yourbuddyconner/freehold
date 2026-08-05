@@ -126,4 +126,40 @@ describe("FreeholdClient — graph-scoped path prefixing", () => {
     expect(url).toBe("/api/v1/graphs/g1");
     expect(init.method).toBe("PATCH");
   });
+
+  // Registry routes are graph-agnostic — even a scoped client must not prefix them
+  it("with graphId, listGraphs still calls GET /api/v1/graphs (not /api/v1/graphs/<id>/graphs)", async () => {
+    const mock = makeMockFetch(200, { graphs: [] });
+    globalThis.fetch = mock;
+
+    const client = new FreeholdClient({ baseUrl: "", token: "tok", graphId: "g1" });
+    await client.listGraphs();
+
+    const [url] = mock.mock.calls[0] as [string, ...unknown[]];
+    expect(url).toBe("/api/v1/graphs");
+  });
+
+  it("with graphId, registerGraph still calls POST /api/v1/graphs (not /api/v1/graphs/<id>/graphs)", async () => {
+    const mock = makeMockFetch(200, { id: "g2", name: "repo", kind: "repo" });
+    globalThis.fetch = mock;
+
+    const client = new FreeholdClient({ baseUrl: "", token: "tok", graphId: "g1" });
+    await client.registerGraph({ name: "repo", kind: "repo" });
+
+    const [url, init] = mock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/graphs");
+    expect(init.method).toBe("POST");
+  });
+
+  it("with graphId, updateGraph still calls PATCH /api/v1/graphs/:id (not /api/v1/graphs/<id>/graphs/g2)", async () => {
+    const mock = makeMockFetch(200, { id: "g2", name: "updated", kind: "memory" });
+    globalThis.fetch = mock;
+
+    const client = new FreeholdClient({ baseUrl: "", token: "tok", graphId: "g1" });
+    await client.updateGraph("g2", { name: "updated" });
+
+    const [url, init] = mock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/graphs/g2");
+    expect(init.method).toBe("PATCH");
+  });
 });

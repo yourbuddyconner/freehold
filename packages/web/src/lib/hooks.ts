@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { GraphInfo } from "@freehold/client";
 import { GRAPH_STORAGE_KEY, apiClient, setActiveGraph } from "./api";
 
@@ -148,21 +148,42 @@ export function useGraphs(): { graphs: GraphInfo[]; defaultGraph: string } {
 /**
  * Returns the id of the currently active graph (from localStorage) and a
  * setter that persists the choice and invalidates all queries.
+ *
+ * Stale-id recovery: the initializer reads localStorage before the session
+ * resolves, so defaultGraph is still "main". A useEffect fires once graphs
+ * load; if the persisted id is no longer in the graphs list, it resets to
+ * defaultGraph. This also handles the case where the canonical default is not
+ * "main" — the effect self-corrects on first render after session resolves.
  */
 export function useActiveGraph(): {
   activeGraphId: string;
   setActiveGraphId: (id: string) => void;
 } {
-  const { defaultGraph } = useGraphs();
+  const { graphs, defaultGraph } = useGraphs();
   const queryClient = useQueryClient();
 
   const [activeGraphId, setLocalActiveGraphId] = useState<string>(() => {
     try {
+      // localStorage may hold an id that no longer exists in this session.
+      // The effect below self-corrects once graphs load.
       return localStorage.getItem(GRAPH_STORAGE_KEY) ?? defaultGraph;
     } catch {
       return defaultGraph;
     }
   });
+
+  // When the graphs list becomes available, verify that the persisted id is
+  // still valid. If it has been removed (or was never registered), fall back
+  // to the server-supplied default without requiring a manual page reload.
+  useEffect(() => {
+    if (graphs.length === 0) return; // session not yet resolved
+    const known = graphs.some((g) => g.id === activeGraphId);
+    if (!known) {
+      setLocalActiveGraphId(defaultGraph);
+      setActiveGraph(defaultGraph);
+      queryClient.invalidateQueries();
+    }
+  }, [activeGraphId, graphs, defaultGraph, queryClient]);
 
   function setActiveGraphId(id: string) {
     setLocalActiveGraphId(id);

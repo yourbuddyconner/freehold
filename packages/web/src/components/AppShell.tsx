@@ -62,7 +62,9 @@ export function AppShell() {
                 "bg-(--bg-subtle) text-(--fg) focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
               )}
             >
-              <option value={defaultGraph}>{defaultGraph}</option>
+              <option value={defaultGraph}>
+                {graphs.find((g) => g.id === defaultGraph)?.name ?? defaultGraph}
+              </option>
               {graphs
                 .filter((g) => g.id !== defaultGraph)
                 .map((g) => (
