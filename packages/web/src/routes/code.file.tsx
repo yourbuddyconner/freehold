@@ -103,7 +103,7 @@ function SourcePanel({ isLoading, binary, truncated, content }: SourcePanelProps
   const lineCount = lines.length;
   const gutterWidth = String(lineCount).length;
   return (
-    <div className="space-y-1">
+    <div className="space-y-1" data-testid="source-panel">
       <pre className="overflow-x-auto border border-(--border) bg-(--bg-subtle) p-3 font-mono text-xs leading-5 text-(--fg)">
         {lines.map((line, i) => (
           // biome-ignore lint/suspicious/noArrayIndexKey: line numbers are positional

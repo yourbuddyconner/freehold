@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider, createMemoryHistory, createRouter } from "@tanstack/react-router";
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as hooks from "~/lib/hooks";
 import { routeTree } from "~/routes/../routeTree.gen";
@@ -353,8 +353,10 @@ describe("Code workspace", () => {
       expect(screen.getByText("Source")).toBeInTheDocument();
       // Line number 1
       expect(screen.getByText("1")).toBeInTheDocument();
-      // Some code content
-      expect(screen.getByText(/function main/)).toBeInTheDocument();
+      // Some code content — scoped to source panel to avoid matching item signature
+      const sourcePanel = screen.getByTestId("source-panel");
+      const { getByText } = within(sourcePanel);
+      expect(getByText(/function main/)).toBeInTheDocument();
     });
 
     it("shows binary caption when source is a binary file", async () => {
