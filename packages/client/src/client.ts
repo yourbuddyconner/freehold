@@ -49,6 +49,16 @@ export type CodeItemView = Schemas["CodeItemView"];
 export type RegionRule = Schemas["RegionRule"];
 export type CodeNeighborhood = Schemas["CodeNeighborhood"];
 
+export type GitProposal = Schemas["GitProposal"];
+export type GitProposalPath = Schemas["GitProposalPath"];
+export type DecideBody = Schemas["DecideBody"];
+export type DecideResult = Schemas["DecideResult"];
+export type PostReviewBody = Schemas["PostReviewBody"];
+export type PostReviewResult = Schemas["PostReviewResult"];
+export type ReviewEntry = Schemas["ReviewEntry"];
+export type ReviewComment = Schemas["ReviewComment"];
+export type ReviewCommentInput = Schemas["ReviewCommentInput"];
+
 // ---------------------------------------------------------------------------
 // Health response (inline in openapi)
 // ---------------------------------------------------------------------------
@@ -405,5 +415,30 @@ export class FreeholdClient {
   /** GET /api/v1/code/neighborhood?path= — nodes and edges one hop from the file */
   async codeNeighborhood(path: string): Promise<CodeNeighborhood> {
     return this.fetch<CodeNeighborhood>("GET", "/api/v1/code/neighborhood", { query: { path } });
+  }
+
+  /** GET /api/v1/git/proposals — list all branch-head git proposals */
+  async listGitProposals(): Promise<{ proposals: GitProposal[] }> {
+    return this.fetch<{ proposals: GitProposal[] }>("GET", "/api/v1/git/proposals");
+  }
+
+  /** GET /api/v1/git/proposals/:sha — get a single git proposal by sha */
+  async getGitProposal(sha: string): Promise<GitProposal> {
+    return this.fetch<GitProposal>("GET", `/api/v1/git/proposals/${sha}`);
+  }
+
+  /** POST /api/v1/git/proposals/:sha/decide — sign a decision for a git proposal */
+  async decideGitProposal(sha: string, body: DecideBody): Promise<DecideResult> {
+    return this.fetch<DecideResult>("POST", `/api/v1/git/proposals/${sha}/decide`, { body });
+  }
+
+  /** POST /api/v1/git/proposals/:sha/reviews — post a code review */
+  async postGitReview(sha: string, body: PostReviewBody): Promise<PostReviewResult> {
+    return this.fetch<PostReviewResult>("POST", `/api/v1/git/proposals/${sha}/reviews`, { body });
+  }
+
+  /** GET /api/v1/git/proposals/:sha/reviews — list reviews for a git proposal */
+  async listGitReviews(sha: string): Promise<{ reviews: ReviewEntry[] }> {
+    return this.fetch<{ reviews: ReviewEntry[] }>("GET", `/api/v1/git/proposals/${sha}/reviews`);
   }
 }

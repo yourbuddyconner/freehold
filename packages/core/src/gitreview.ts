@@ -10,7 +10,9 @@
  * All wasm calls go through withGraph.
  */
 
-import { basename } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import { basename, join } from "node:path";
+import { load as yamlLoad } from "js-yaml";
 import type { Freehold } from "./graphs.js";
 import { withGraph } from "./lock.js";
 import { branchHeads, diffTreeOps, readDecisions, appendDecision, pushNotes, headSha, commitMeta } from "./git.js";
@@ -450,4 +452,168 @@ export async function decideGit(
   }
 
   return { outcome, pushed: false };
+}
+
+// ── ReviewEntry + listReviewsForSha ──────────────────────────────────────────
+
+export interface ReviewCommentEntry {
+  commentId: string;
+  body?: string;
+  anchor?: string;
+  span?: string;
+  status: string;
+}
+
+export interface ReviewEntry {
+  reviewId: string;
+  verdict: string;
+  body?: string;
+  /** commit attribute value — contains the sha the review was posted against */
+  commit: string;
+  author: string;
+  /** saved = admitted; pending = held in governance queue */
+  status: "saved" | "pending";
+  comments: ReviewCommentEntry[];
+}
+
+interface RawLogEntry {
+  hash: string;
+  author: string;
+  op_count: number;
+  intent: string;
+}
+
+/**
+ * List all review/Review@1 and their review/ReviewComment@1 nodes for a
+ * given git commit sha.
+ *
+ * Scans admitted changesets (via freehold.graph.log() + changeset YAML files)
+ * so results are available without syncIndex having been called.
+ */
+export async function listReviewsForSha(
+  fh: Freehold,
+  sha: string
+): Promise<ReviewEntry[]> {
+  // Read the admitted log from the wasm graph
+  const log = await withGraph(fh.graph, () => {
+    return (fh.graph as unknown as { log(): RawLogEntry[] }).log();
+  });
+  if (!Array.isArray(log)) return [];
+
+  const csDir = join(fh.graphDir, ".allod", "changesets");
+
+  // Maps: nodeId → { attrs, author, status }
+  const reviews = new Map<
+    string,
+    { attrs: Record<string, unknown>; author: string; status: "saved" | "pending" }
+  >();
+  const comments = new Map<string, { attrs: Record<string, unknown>; author: string }>();
+  // part_of edge: commentId → reviewId
+  const commentToReview = new Map<string, string>();
+
+  for (const entry of log) {
+    const bareHash = entry.hash.replace("sha256:", "");
+    const yamlPath = join(csDir, `${bareHash}.yaml`);
+    if (!existsSync(yamlPath)) continue;
+
+    let yaml: string;
+    try {
+      yaml = readFileSync(yamlPath, "utf-8");
+    } catch {
+      continue;
+    }
+
+    let doc: unknown;
+    try {
+      doc = yamlLoad(yaml);
+    } catch {
+      continue;
+    }
+    if (!doc || typeof doc !== "object" || Array.isArray(doc)) continue;
+
+    const cs = doc as Record<string, unknown>;
+    const operations = cs.operations;
+    if (!Array.isArray(operations)) continue;
+
+    const authorRef = entry.author ?? "";
+    const author = authorRef.startsWith("principal:")
+      ? authorRef.slice("principal:".length)
+      : authorRef;
+
+    // All admitted log entries are saved (log only includes admitted changesets)
+    const status: "saved" | "pending" = "saved";
+
+    for (const op of operations) {
+      if (!op || typeof op !== "object" || Array.isArray(op)) continue;
+      const o = op as Record<string, unknown>;
+      const inner = o.create as Record<string, unknown> | undefined;
+      if (!inner || typeof inner !== "object") continue;
+
+      // Review node
+      if (
+        inner.kind === "node" &&
+        typeof inner.type === "string" &&
+        inner.type.startsWith("review/Review")
+      ) {
+        const attrs = (inner.attributes as Record<string, unknown> | undefined) ?? {};
+        const commit = attrs.commit as string | undefined;
+        if (commit && commit.includes(sha)) {
+          reviews.set(inner.id as string, { attrs, author, status });
+        }
+      }
+
+      // ReviewComment node
+      if (
+        inner.kind === "node" &&
+        typeof inner.type === "string" &&
+        inner.type.startsWith("review/ReviewComment")
+      ) {
+        const attrs = (inner.attributes as Record<string, unknown> | undefined) ?? {};
+        comments.set(inner.id as string, { attrs, author });
+      }
+
+      // part_of edge (from=comment node:..., to=review node:...)
+      if (
+        inner.kind === "edge" &&
+        typeof inner.type === "string" &&
+        inner.type.startsWith("review/part_of")
+      ) {
+        const from =
+          typeof inner.from === "string" ? inner.from.replace(/^node:/, "") : null;
+        const to =
+          typeof inner.to === "string" ? inner.to.replace(/^node:/, "") : null;
+        if (from && to) {
+          commentToReview.set(from, to);
+        }
+      }
+    }
+  }
+
+  // Group comments by review
+  const reviewComments = new Map<string, ReviewCommentEntry[]>();
+  for (const [commentId, reviewId] of commentToReview) {
+    if (reviews.has(reviewId)) {
+      if (!reviewComments.has(reviewId)) reviewComments.set(reviewId, []);
+      const c = comments.get(commentId);
+      if (c) {
+        reviewComments.get(reviewId)!.push({
+          commentId,
+          body: c.attrs.body as string | undefined,
+          anchor: c.attrs.anchor as string | undefined,
+          span: c.attrs.span as string | undefined,
+          status: (c.attrs.status as string | undefined) ?? "open",
+        });
+      }
+    }
+  }
+
+  return Array.from(reviews.entries()).map(([reviewId, { attrs, author, status }]) => ({
+    reviewId,
+    verdict: attrs.verdict as string,
+    body: attrs.body as string | undefined,
+    commit: attrs.commit as string,
+    author,
+    status,
+    comments: reviewComments.get(reviewId) ?? [],
+  }));
 }

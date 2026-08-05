@@ -1688,7 +1688,7 @@ export interface paths {
                         "application/json": components["schemas"]["CodeNeighborhood"];
                     };
                 };
-                /** @description Not a repo graph, or missing path param */
+                /** @description Not a repo graph or missing path param */
                 400: {
                     headers: {
                         [name: string]: unknown;
@@ -1740,6 +1740,290 @@ export interface paths {
         };
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/git/proposals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List git proposals
+         * @description Lists all branch-head commits as proposals with checklist and decided state. Only available for repo graphs.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Git proposals */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            proposals: components["schemas"]["GitProposal"][];
+                        };
+                    };
+                };
+                /** @description Not a repo graph */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/git/proposals/{sha}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a git proposal by sha */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    sha: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Git proposal */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["GitProposal"];
+                    };
+                };
+                /** @description Not a repo graph */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Proposal not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/git/proposals/{sha}/decide": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Decide a git proposal
+         * @description Signs a decision record (approve/reject) via the key backend and appends it to refs/notes/allod-decisions.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    sha: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["DecideBody"];
+                };
+            };
+            responses: {
+                /** @description Decision result */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DecideResult"];
+                    };
+                };
+                /** @description Not a repo graph or validation error */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Proposal not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No signing key for the given principal (code: key-missing) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/git/proposals/{sha}/reviews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List reviews for a git proposal */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    sha: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Reviews and their comments */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            reviews: components["schemas"]["ReviewEntry"][];
+                        };
+                    };
+                };
+                /** @description Not a repo graph */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        /**
+         * Post a code review for a git proposal
+         * @description Creates a review/Review@1 node and optional review/ReviewComment@1 nodes with part_of edges.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    sha: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["PostReviewBody"];
+                };
+            };
+            responses: {
+                /** @description Created review artifacts */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PostReviewResult"];
+                    };
+                };
+                /** @description Not a repo graph or validation error */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;
@@ -1974,6 +2258,78 @@ export interface components {
                 to: string;
                 type: string;
             }[];
+        };
+        GitProposalPath: {
+            verb: string;
+            path: string;
+            regions: string[];
+            indexed: boolean;
+        };
+        GitProposal: {
+            sha: string;
+            ref: string;
+            author: string;
+            timestamp: string;
+            message: string;
+            target: string;
+            matched: string[];
+            checklist: unknown[];
+            unmet: string[];
+            /** @enum {string} */
+            decided: "undecided" | "approved" | "rejected";
+            paths: components["schemas"]["GitProposalPath"][];
+        };
+        DecideBody: {
+            /** @enum {string} */
+            verdict: "approve" | "reject";
+            /** @description Principal name performing the decision */
+            by: string;
+        };
+        DecideResult: {
+            /** @enum {string} */
+            outcome: "approved" | "rejected";
+            pushed: boolean;
+            pushError?: string;
+        } | {
+            /** @enum {string} */
+            outcome: "incomplete";
+            unmet: string[];
+        };
+        ReviewCommentInput: {
+            body: string;
+            anchor?: string;
+            span?: string;
+        };
+        PostReviewBody: {
+            /** @enum {string} */
+            verdict: "approve" | "approve-with-comments" | "request-changes";
+            body?: string;
+            /** @description Author principal */
+            by: string;
+            comments?: components["schemas"]["ReviewCommentInput"][];
+        };
+        PostReviewResult: {
+            reviewId: string;
+            commentIds: string[];
+            /** @enum {string} */
+            status: "saved" | "pending";
+        };
+        ReviewComment: {
+            commentId: string;
+            body?: string;
+            anchor?: string;
+            span?: string;
+            status: string;
+        };
+        ReviewEntry: {
+            reviewId: string;
+            verdict: string;
+            body?: string;
+            commit: string;
+            author: string;
+            /** @enum {string} */
+            status: "saved" | "pending";
+            comments: components["schemas"]["ReviewComment"][];
         };
         MemoryIndexEntry: {
             id: string;

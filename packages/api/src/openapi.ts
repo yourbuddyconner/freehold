@@ -202,6 +202,27 @@ const RegionRule = z
   })
   .openapi("RegionRule");
 
+const CodeNeighborhoodNode = z.object({
+  id: z.string(),
+  label: z.string(),
+  type: z.string(),
+  terms: z.array(z.string()),
+});
+
+const CodeNeighborhoodEdge = z.object({
+  id: z.string(),
+  from: z.string(),
+  to: z.string(),
+  type: z.string(),
+});
+
+const CodeNeighborhood = z
+  .object({
+    nodes: z.array(CodeNeighborhoodNode),
+    edges: z.array(CodeNeighborhoodEdge),
+  })
+  .openapi("CodeNeighborhood");
+
 // ---- Response schemas ----
 
 const AdmissionResponse = z
@@ -364,6 +385,7 @@ function buildRegistry(): OpenAPIRegistry {
   registry.register("CodeFileView", CodeFileView);
   registry.register("CodeItemView", CodeItemView);
   registry.register("RegionRule", RegionRule);
+  registry.register("CodeNeighborhood", CodeNeighborhood);
 
   const auth = [{ bearerAuth: [] }];
 
@@ -961,6 +983,32 @@ function buildRegistry(): OpenAPIRegistry {
     },
   });
 
+  // Code view — neighborhood
+  registry.registerPath({
+    method: "get",
+    path: "/api/v1/code/neighborhood",
+    summary: "Code neighborhood graph",
+    description: "Nodes and edges one hop from the given file path.",
+    security: auth,
+    request: {
+      query: z.object({
+        path: z.string().openapi({ description: "Repo-relative file path" }),
+      }),
+    },
+    responses: {
+      "200": {
+        description: "Neighborhood graph",
+        content: {
+          "application/json": {
+            schema: CodeNeighborhood,
+          },
+        },
+      },
+      "400": { description: "Not a repo graph or missing path param" },
+      "401": { description: "Unauthorized" },
+    },
+  });
+
   // OpenAPI spec itself
   registry.registerPath({
     method: "get",
@@ -968,6 +1016,215 @@ function buildRegistry(): OpenAPIRegistry {
     summary: "OpenAPI specification",
     responses: {
       "200": { description: "This document" },
+    },
+  });
+
+  // ---- Git proposal schemas ----
+
+  const GitProposalPath = z
+    .object({
+      verb: z.string(),
+      path: z.string(),
+      regions: z.array(z.string()),
+      indexed: z.boolean(),
+    })
+    .openapi("GitProposalPath");
+
+  const GitProposal = z
+    .object({
+      sha: z.string(),
+      ref: z.string(),
+      author: z.string(),
+      timestamp: z.string(),
+      message: z.string(),
+      target: z.string(),
+      matched: z.array(z.string()),
+      checklist: z.array(z.unknown()),
+      unmet: z.array(z.string()),
+      decided: z.enum(["undecided", "approved", "rejected"]),
+      paths: z.array(GitProposalPath),
+    })
+    .openapi("GitProposal");
+
+  const DecideBody = z
+    .object({
+      verdict: z.enum(["approve", "reject"]),
+      by: z.string().openapi({ description: "Principal name performing the decision" }),
+    })
+    .openapi("DecideBody");
+
+  const DecideResult = z
+    .union([
+      z.object({
+        outcome: z.enum(["approved", "rejected"]),
+        pushed: z.boolean(),
+        pushError: z.string().optional(),
+      }),
+      z.object({
+        outcome: z.literal("incomplete"),
+        unmet: z.array(z.string()),
+      }),
+    ])
+    .openapi("DecideResult");
+
+  const ReviewCommentInput = z
+    .object({
+      body: z.string(),
+      anchor: z.string().optional(),
+      span: z.string().optional(),
+    })
+    .openapi("ReviewCommentInput");
+
+  const PostReviewBody = z
+    .object({
+      verdict: z.enum(["approve", "approve-with-comments", "request-changes"]),
+      body: z.string().optional(),
+      by: z.string().openapi({ description: "Author principal" }),
+      comments: z.array(ReviewCommentInput).optional(),
+    })
+    .openapi("PostReviewBody");
+
+  const PostReviewResult = z
+    .object({
+      reviewId: z.string(),
+      commentIds: z.array(z.string()),
+      status: z.enum(["saved", "pending"]),
+    })
+    .openapi("PostReviewResult");
+
+  const ReviewComment = z
+    .object({
+      commentId: z.string(),
+      body: z.string().optional(),
+      anchor: z.string().optional(),
+      span: z.string().optional(),
+      status: z.string(),
+    })
+    .openapi("ReviewComment");
+
+  const ReviewEntry = z
+    .object({
+      reviewId: z.string(),
+      verdict: z.string(),
+      body: z.string().optional(),
+      commit: z.string(),
+      author: z.string(),
+      status: z.enum(["saved", "pending"]),
+      comments: z.array(ReviewComment),
+    })
+    .openapi("ReviewEntry");
+
+  registry.register("GitProposalPath", GitProposalPath);
+  registry.register("GitProposal", GitProposal);
+  registry.register("DecideBody", DecideBody);
+  registry.register("DecideResult", DecideResult);
+  registry.register("ReviewCommentInput", ReviewCommentInput);
+  registry.register("PostReviewBody", PostReviewBody);
+  registry.register("PostReviewResult", PostReviewResult);
+  registry.register("ReviewComment", ReviewComment);
+  registry.register("ReviewEntry", ReviewEntry);
+
+  // Git proposals — list
+  registry.registerPath({
+    method: "get",
+    path: "/api/v1/git/proposals",
+    summary: "List git proposals",
+    description: "Lists all branch-head commits as proposals with checklist and decided state. Only available for repo graphs.",
+    security: auth,
+    responses: {
+      "200": {
+        description: "Git proposals",
+        content: {
+          "application/json": {
+            schema: z.object({ proposals: z.array(GitProposal) }),
+          },
+        },
+      },
+      "400": { description: "Not a repo graph" },
+      "401": { description: "Unauthorized" },
+    },
+  });
+
+  // Git proposals — detail
+  registry.registerPath({
+    method: "get",
+    path: "/api/v1/git/proposals/{sha}",
+    summary: "Get a git proposal by sha",
+    security: auth,
+    request: { params: z.object({ sha: z.string() }) },
+    responses: {
+      "200": {
+        description: "Git proposal",
+        content: { "application/json": { schema: GitProposal } },
+      },
+      "400": { description: "Not a repo graph" },
+      "401": { description: "Unauthorized" },
+      "404": { description: "Proposal not found" },
+    },
+  });
+
+  // Git proposals — decide
+  registry.registerPath({
+    method: "post",
+    path: "/api/v1/git/proposals/{sha}/decide",
+    summary: "Decide a git proposal",
+    description: "Signs a decision record (approve/reject) via the key backend and appends it to refs/notes/allod-decisions.",
+    security: auth,
+    request: {
+      params: z.object({ sha: z.string() }),
+      body: { required: true, content: { "application/json": { schema: DecideBody } } },
+    },
+    responses: {
+      "200": {
+        description: "Decision result",
+        content: { "application/json": { schema: DecideResult } },
+      },
+      "400": { description: "Not a repo graph or validation error" },
+      "401": { description: "Unauthorized" },
+      "404": { description: "Proposal not found" },
+      "409": { description: "No signing key for the given principal (code: key-missing)" },
+    },
+  });
+
+  // Git proposals — post review
+  registry.registerPath({
+    method: "post",
+    path: "/api/v1/git/proposals/{sha}/reviews",
+    summary: "Post a code review for a git proposal",
+    description: "Creates a review/Review@1 node and optional review/ReviewComment@1 nodes with part_of edges.",
+    security: auth,
+    request: {
+      params: z.object({ sha: z.string() }),
+      body: { required: true, content: { "application/json": { schema: PostReviewBody } } },
+    },
+    responses: {
+      "200": {
+        description: "Created review artifacts",
+        content: { "application/json": { schema: PostReviewResult } },
+      },
+      "400": { description: "Not a repo graph or validation error" },
+      "401": { description: "Unauthorized" },
+    },
+  });
+
+  // Git proposals — get reviews
+  registry.registerPath({
+    method: "get",
+    path: "/api/v1/git/proposals/{sha}/reviews",
+    summary: "List reviews for a git proposal",
+    security: auth,
+    request: { params: z.object({ sha: z.string() }) },
+    responses: {
+      "200": {
+        description: "Reviews and their comments",
+        content: {
+          "application/json": {
+            schema: z.object({ reviews: z.array(ReviewEntry) }),
+          },
+        },
+      },
+      "400": { description: "Not a repo graph" },
+      "401": { description: "Unauthorized" },
     },
   });
 

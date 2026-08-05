@@ -766,12 +766,28 @@
             "items": {
               "type": "object",
               "properties": {
-                "id": { "type": "string" },
-                "label": { "type": "string" },
-                "type": { "type": "string" },
-                "terms": { "type": "array", "items": { "type": "string" } }
+                "id": {
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": "string"
+                },
+                "terms": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
               },
-              "required": ["id", "label", "type", "terms"]
+              "required": [
+                "id",
+                "label",
+                "type",
+                "terms"
+              ]
             }
           },
           "edges": {
@@ -779,16 +795,329 @@
             "items": {
               "type": "object",
               "properties": {
-                "id": { "type": "string" },
-                "from": { "type": "string" },
-                "to": { "type": "string" },
-                "type": { "type": "string" }
+                "id": {
+                  "type": "string"
+                },
+                "from": {
+                  "type": "string"
+                },
+                "to": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": "string"
+                }
               },
-              "required": ["id", "from", "to", "type"]
+              "required": [
+                "id",
+                "from",
+                "to",
+                "type"
+              ]
             }
           }
         },
-        "required": ["nodes", "edges"]
+        "required": [
+          "nodes",
+          "edges"
+        ]
+      },
+      "GitProposalPath": {
+        "type": "object",
+        "properties": {
+          "verb": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "regions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "indexed": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "verb",
+          "path",
+          "regions",
+          "indexed"
+        ]
+      },
+      "GitProposal": {
+        "type": "object",
+        "properties": {
+          "sha": {
+            "type": "string"
+          },
+          "ref": {
+            "type": "string"
+          },
+          "author": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "target": {
+            "type": "string"
+          },
+          "matched": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "checklist": {
+            "type": "array",
+            "items": {}
+          },
+          "unmet": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "decided": {
+            "type": "string",
+            "enum": [
+              "undecided",
+              "approved",
+              "rejected"
+            ]
+          },
+          "paths": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GitProposalPath"
+            }
+          }
+        },
+        "required": [
+          "sha",
+          "ref",
+          "author",
+          "timestamp",
+          "message",
+          "target",
+          "matched",
+          "checklist",
+          "unmet",
+          "decided",
+          "paths"
+        ]
+      },
+      "DecideBody": {
+        "type": "object",
+        "properties": {
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "approve",
+              "reject"
+            ]
+          },
+          "by": {
+            "type": "string",
+            "description": "Principal name performing the decision"
+          }
+        },
+        "required": [
+          "verdict",
+          "by"
+        ]
+      },
+      "DecideResult": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "outcome": {
+                "type": "string",
+                "enum": [
+                  "approved",
+                  "rejected"
+                ]
+              },
+              "pushed": {
+                "type": "boolean"
+              },
+              "pushError": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "outcome",
+              "pushed"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "outcome": {
+                "type": "string",
+                "enum": [
+                  "incomplete"
+                ]
+              },
+              "unmet": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "outcome",
+              "unmet"
+            ]
+          }
+        ]
+      },
+      "ReviewCommentInput": {
+        "type": "object",
+        "properties": {
+          "body": {
+            "type": "string"
+          },
+          "anchor": {
+            "type": "string"
+          },
+          "span": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "body"
+        ]
+      },
+      "PostReviewBody": {
+        "type": "object",
+        "properties": {
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "approve",
+              "approve-with-comments",
+              "request-changes"
+            ]
+          },
+          "body": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string",
+            "description": "Author principal"
+          },
+          "comments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReviewCommentInput"
+            }
+          }
+        },
+        "required": [
+          "verdict",
+          "by"
+        ]
+      },
+      "PostReviewResult": {
+        "type": "object",
+        "properties": {
+          "reviewId": {
+            "type": "string"
+          },
+          "commentIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "saved",
+              "pending"
+            ]
+          }
+        },
+        "required": [
+          "reviewId",
+          "commentIds",
+          "status"
+        ]
+      },
+      "ReviewComment": {
+        "type": "object",
+        "properties": {
+          "commentId": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string"
+          },
+          "anchor": {
+            "type": "string"
+          },
+          "span": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "commentId",
+          "status"
+        ]
+      },
+      "ReviewEntry": {
+        "type": "object",
+        "properties": {
+          "reviewId": {
+            "type": "string"
+          },
+          "verdict": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string"
+          },
+          "commit": {
+            "type": "string"
+          },
+          "author": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "saved",
+              "pending"
+            ]
+          },
+          "comments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReviewComment"
+            }
+          }
+        },
+        "required": [
+          "reviewId",
+          "verdict",
+          "commit",
+          "author",
+          "status",
+          "comments"
+        ]
       },
       "MemoryIndexEntry": {
         "type": "object",
@@ -2145,10 +2474,17 @@
       "get": {
         "summary": "Code neighborhood graph",
         "description": "Nodes and edges one hop from the given file path.",
-        "security": [{ "bearerAuth": [] }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "parameters": [
           {
-            "schema": { "type": "string", "description": "Repo-relative file path" },
+            "schema": {
+              "type": "string",
+              "description": "Repo-relative file path"
+            },
             "required": true,
             "name": "path",
             "in": "query"
@@ -2159,12 +2495,18 @@
             "description": "Neighborhood graph",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/CodeNeighborhood" }
+                "schema": {
+                  "$ref": "#/components/schemas/CodeNeighborhood"
+                }
               }
             }
           },
-          "400": { "description": "Not a repo graph, or missing path param" },
-          "401": { "description": "Unauthorized" }
+          "400": {
+            "description": "Not a repo graph or missing path param"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
         }
       }
     },
@@ -2174,6 +2516,238 @@
         "responses": {
           "200": {
             "description": "This document"
+          }
+        }
+      }
+    },
+    "/api/v1/git/proposals": {
+      "get": {
+        "summary": "List git proposals",
+        "description": "Lists all branch-head commits as proposals with checklist and decided state. Only available for repo graphs.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Git proposals",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "proposals": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/GitProposal"
+                      }
+                    }
+                  },
+                  "required": [
+                    "proposals"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a repo graph"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/git/proposals/{sha}": {
+      "get": {
+        "summary": "Get a git proposal by sha",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "sha",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Git proposal",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GitProposal"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a repo graph"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Proposal not found"
+          }
+        }
+      }
+    },
+    "/api/v1/git/proposals/{sha}/decide": {
+      "post": {
+        "summary": "Decide a git proposal",
+        "description": "Signs a decision record (approve/reject) via the key backend and appends it to refs/notes/allod-decisions.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "sha",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecideBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Decision result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DecideResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a repo graph or validation error"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Proposal not found"
+          },
+          "409": {
+            "description": "No signing key for the given principal (code: key-missing)"
+          }
+        }
+      }
+    },
+    "/api/v1/git/proposals/{sha}/reviews": {
+      "post": {
+        "summary": "Post a code review for a git proposal",
+        "description": "Creates a review/Review@1 node and optional review/ReviewComment@1 nodes with part_of edges.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "sha",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PostReviewBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Created review artifacts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostReviewResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a repo graph or validation error"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      },
+      "get": {
+        "summary": "List reviews for a git proposal",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "sha",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Reviews and their comments",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "reviews": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ReviewEntry"
+                      }
+                    }
+                  },
+                  "required": [
+                    "reviews"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a repo graph"
+          },
+          "401": {
+            "description": "Unauthorized"
           }
         }
       }
