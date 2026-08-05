@@ -12,9 +12,40 @@ import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { GitProposalCard } from "./GitProposalCard";
 
+// Stub Link so the card can render outside of a RouterProvider
+vi.mock("@tanstack/react-router", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@tanstack/react-router")>();
+  return {
+    ...actual,
+    Link: ({
+      children,
+      className,
+      ...rest
+    }: React.HTMLAttributes<HTMLAnchorElement> & { to?: string; params?: unknown }) => (
+      <a
+        className={className as string}
+        {...(rest as React.AnchorHTMLAttributes<HTMLAnchorElement>)}
+      >
+        {children}
+      </a>
+    ),
+  };
+});
+
+import type React from "react";
+
 // Mock hooks used by GitProposalCard
 vi.mock("~/lib/hooks", () => ({
   useSession: vi.fn().mockReturnValue({ data: null }),
+  useDecideProposal: vi.fn().mockReturnValue({
+    decideMut: { mutate: vi.fn(), isPending: false, variables: undefined },
+    decideOutcome: null,
+    keyMissingReason: null,
+    savedLocally: false,
+    pushSkippedNotice: false,
+    retrying: false,
+    handleRetry: vi.fn(),
+  }),
 }));
 
 // Mock api client to avoid module-level side effects
