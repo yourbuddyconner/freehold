@@ -191,7 +191,7 @@ export function buildConnectorManifest(opts: {
   const manifest: AppManifest = {
     name: `freehold-${graphId.slice(0, 20).replace(/[^a-z0-9-]/gi, "-").toLowerCase()}`,
     url: callbackBase,
-    redirect_url: `${origin}/api/v1/graphs/${graphId}/connector/app/callback`,
+    redirect_url: `${origin}/connector/app/callback`,
     default_permissions: {
       contents: "read",
       pull_requests: "read",

@@ -229,6 +229,29 @@ async function webhookReq(
   return { status: res.status, body: responseBody };
 }
 
+/** GET /connector/app/callback without bearer auth (open route — HMAC state authenticates). */
+async function callbackReq(
+  queryStr: string,
+  appInstance: ReturnType<typeof createApp> = app
+): Promise<{ status: number; body: unknown }> {
+  const res = await appInstance.request(`http://localhost/connector/app/callback?${queryStr}`, {
+    method: "GET",
+    // No Authorization header — this is an open route
+  });
+  let responseBody: unknown;
+  const ct = res.headers.get("content-type");
+  if (ct?.includes("application/json")) {
+    try {
+      responseBody = await res.json();
+    } catch {
+      responseBody = null;
+    }
+  } else {
+    responseBody = null;
+  }
+  return { status: res.status, body: responseBody };
+}
+
 // ---------------------------------------------------------------------------
 // Setup / teardown
 // ---------------------------------------------------------------------------
@@ -292,41 +315,39 @@ describe("manifest state", () => {
     // State must have the format: base64url.base64url (2 parts)
     const parts = (body.state as string).split(".");
     expect(parts).toHaveLength(2);
+    // redirect_url must be the open path (no /api/v1/ prefix — no bearer required)
+    const redirectUrl = (manifest as { redirect_url?: string }).redirect_url ?? "";
+    expect(redirectUrl).toMatch(/\/connector\/app\/callback$/);
+    expect(redirectUrl).not.toContain("/api/v1/");
   });
 
-  test("GET /connector/app/callback with tampered state returns 400", async () => {
-    const r = await req("GET", `/api/v1/graphs/${repoGraphId}/connector/app/callback?code=abc&state=tampered.invalidsig`);
+  test("GET /connector/app/callback with tampered state returns 400 (no bearer required)", async () => {
+    const r = await callbackReq("code=abc&state=tampered.invalidsig");
     expect(r.status).toBe(400);
   });
 
-  test("GET /connector/app/callback with missing code returns 400", async () => {
-    const r = await req("GET", `/api/v1/graphs/${repoGraphId}/connector/app/callback?state=something`);
+  test("GET /connector/app/callback with missing code returns 400 (no bearer required)", async () => {
+    const r = await callbackReq("state=something");
     expect(r.status).toBe(400);
   });
 
-  test("GET /connector/app/callback with missing state returns 400", async () => {
-    const r = await req("GET", `/api/v1/graphs/${repoGraphId}/connector/app/callback?code=abc`);
+  test("GET /connector/app/callback with missing state returns 400 (no bearer required)", async () => {
+    const r = await callbackReq("code=abc");
     expect(r.status).toBe(400);
   });
 
-  test("nonce replay: same state token twice → second call returns 400", async () => {
-    // Get a fresh state token
+  test("nonce replay: same state token twice → second call returns 400 (no bearer required)", async () => {
+    // Get a fresh state token (manifest still requires auth)
     const manifestR = await req("POST", `/api/v1/graphs/${repoGraphId}/connector/app/manifest`, {});
     expect(manifestR.status).toBe(200);
     const { state } = manifestR.body as { state: string };
 
     // First call — state is valid; it will fail at GitHub exchange (502/409) but not at state validation (not 400)
-    const r1 = await req(
-      "GET",
-      `/api/v1/graphs/${repoGraphId}/connector/app/callback?code=noncetest&state=${encodeURIComponent(state)}`,
-    );
+    const r1 = await callbackReq(`code=noncetest&state=${encodeURIComponent(state)}`);
     expect(r1.status).not.toBe(400);
 
     // Second call with the same state — nonce already consumed → 400
-    const r2 = await req(
-      "GET",
-      `/api/v1/graphs/${repoGraphId}/connector/app/callback?code=noncetest&state=${encodeURIComponent(state)}`,
-    );
+    const r2 = await callbackReq(`code=noncetest&state=${encodeURIComponent(state)}`);
     expect(r2.status).toBe(400);
     const body2 = r2.body as Record<string, unknown>;
     expect(typeof body2.error).toBe("string");
@@ -462,10 +483,10 @@ describe("manifest conversion exchange", () => {
     expect(manifestR.status).toBe(200);
     const { state } = manifestR.body as { state: string };
 
-    // Step 2: callback with valid state + injected mock fetch
-    const callbackR = await injectReq(
-      "GET",
-      `/api/v1/graphs/inject-repo/connector/app/callback?code=injected-code&state=${encodeURIComponent(state)}`,
+    // Step 2: callback via the open route (no bearer header) with valid state + injected mock fetch
+    const callbackR = await callbackReq(
+      `code=injected-code&state=${encodeURIComponent(state)}`,
+      injectApp,
     );
     expect(callbackR.status).toBe(200);
     const cbBody = callbackR.body as Record<string, unknown>;

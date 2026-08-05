@@ -418,14 +418,17 @@ connectorRouter.post("/connector/app/manifest", async (c) => {
   return c.json({ manifestUrl, manifest, state });
 });
 
-// ── GET /connector/app/callback ───────────────────────────────────────────────
+// ── GET /connector/app/callback (open — no bearer; HMAC state is the authenticator) ──
+//
+// Mounted on the pre-auth app alongside /webhooks/github.
+// GitHub redirects the user's browser here with ?code=:code&state=:state after app creation.
+// The HMAC-signed state (graph-bound, 15-min TTL, nonce-consumed) authenticates the request.
+//
+// graphId is embedded in the verified state payload — no Bearer header required.
 
-connectorRouter.get("/connector/app/callback", async (c) => {
-  const fh = c.get("freehold");
-  if (!repoOnly(fh)) {
-    return c.json({ error: REPO_ONLY_ERROR }, 400);
-  }
+export const connectorCallbackRouter = new Hono<AppEnv>();
 
+connectorCallbackRouter.get("/connector/app/callback", async (c) => {
   const code = c.req.query("code");
   const state = c.req.query("state");
 
@@ -442,13 +445,18 @@ connectorRouter.get("/connector/app/callback", async (c) => {
     return c.json({ error: "invalid or expired state" }, 400);
   }
 
-  if (verified.graphId !== fh.graphId) {
-    return c.json({ error: "state graph mismatch" }, 400);
-  }
-
   // Reject replayed nonces within the TTL window
   if (!_consumeNonce(verified.nonce, verified.exp, nowMs)) {
     return c.json({ error: "state already used" }, 400);
+  }
+
+  // Resolve the graph for the graphId embedded in the verified state
+  const manager = c.get("manager");
+  let fh: Awaited<ReturnType<typeof manager.get>>;
+  try {
+    fh = await manager.get(verified.graphId);
+  } catch {
+    return c.json({ error: "unknown graph" }, 404);
   }
 
   // Exchange code for app credentials via GitHub API
@@ -487,14 +495,13 @@ connectorRouter.get("/connector/app/callback", async (c) => {
   }
 
   // Persist config + encrypted secrets
-  const manager = c.get("manager");
-  const entry = await manager.getEntry(fh.graphId);
+  const entry = await manager.getEntry(verified.graphId);
   const parsedRemote = entry?.originRemote ? parseOriginRemote(entry.originRemote) : null;
 
   await setConnector(
     fh.db,
     {
-      graphId: fh.graphId,
+      graphId: verified.graphId,
       mode: "app",
       owner: parsedRemote?.owner ?? "",
       repo: parsedRemote?.repo ?? "",
