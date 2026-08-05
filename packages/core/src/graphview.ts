@@ -8,6 +8,7 @@
  * (meta/*, core/*) are not memories and are excluded.
  */
 
+import { DEFAULT_GRAPH_ID } from "./db.js";
 import type { Freehold } from "./graphs.js";
 import { withGraph } from "./lock.js";
 
@@ -91,14 +92,15 @@ export function deriveTitle(content: unknown, fallback: string): string {
   return fallback;
 }
 
-async function indexRows(freehold: Freehold, cap: number): Promise<IndexRow[]> {
+async function indexRows(freehold: Freehold, cap: number, graphId = DEFAULT_GRAPH_ID): Promise<IndexRow[]> {
   const { pg } = freehold.db;
   const result = await pg.query<IndexRow>(
     `SELECT id, type, content, author, approval, updated_at FROM objects
      WHERE kind = 'node' AND type NOT LIKE 'meta/%' AND type NOT LIKE 'core/%'
+       AND graph_id = $2
      ORDER BY updated_at DESC
      LIMIT $1`,
-    [cap]
+    [cap, graphId]
   );
   return result.rows;
 }
@@ -114,7 +116,8 @@ export async function memoryIndex(freehold: Freehold, cap = 5000): Promise<Memor
 
   // Terms come from the mirrored node_terms table — one query, no wasm calls
   const termsResult = await freehold.db.pg.query<{ subject_id: string; term: string }>(
-    "SELECT subject_id, term FROM node_terms"
+    "SELECT subject_id, term FROM node_terms WHERE graph_id = $1",
+    [DEFAULT_GRAPH_ID]
   );
   const termsById = new Map<string, string[]>();
   for (const row of termsResult.rows) {
@@ -185,7 +188,8 @@ export async function memoryGraph(freehold: Freehold, nodeCap = 2000): Promise<M
   const nodeIds = new Set(rows.map((r) => r.id));
 
   const termsResult = await freehold.db.pg.query<{ subject_id: string; term: string }>(
-    "SELECT subject_id, term FROM node_terms"
+    "SELECT subject_id, term FROM node_terms WHERE graph_id = $1",
+    [DEFAULT_GRAPH_ID]
   );
   const termsById = new Map<string, string[]>();
   for (const row of termsResult.rows) {
@@ -200,7 +204,7 @@ export async function memoryGraph(freehold: Freehold, nodeCap = 2000): Promise<M
     type: string;
     from_id: string;
     to_id: string;
-  }>("SELECT id, type, from_id, to_id FROM graph_edges");
+  }>("SELECT id, type, from_id, to_id FROM graph_edges WHERE graph_id = $1", [DEFAULT_GRAPH_ID]);
   const edges: GraphEdge[] = edgeResult.rows
     .filter((e) => nodeIds.has(e.from_id) && nodeIds.has(e.to_id))
     .map((e) => ({ id: e.id, type: e.type, from: e.from_id, to: e.to_id }));

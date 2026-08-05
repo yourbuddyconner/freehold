@@ -25,6 +25,9 @@ import { vector as _vectorExt } from "@electric-sql/pglite-pgvector";
 
 export type DbHandle = { pg: PGlite };
 
+/** The default graph id used by all existing call sites. */
+export const DEFAULT_GRAPH_ID = "main";
+
 const SCHEMA_SQL = `
 CREATE EXTENSION IF NOT EXISTS vector;
 
@@ -53,7 +56,7 @@ CREATE TABLE IF NOT EXISTS embeddings (
 );
 
 CREATE TABLE IF NOT EXISTS meta (
-  key text PRIMARY KEY,
+  key text NOT NULL,
   value text NOT NULL
 );
 
@@ -70,8 +73,7 @@ CREATE INDEX IF NOT EXISTS graph_edges_to ON graph_edges(to_id);
 
 CREATE TABLE IF NOT EXISTS node_terms (
   subject_id text NOT NULL,
-  term text NOT NULL,
-  PRIMARY KEY (subject_id, term)
+  term text NOT NULL
 );
 `;
 
@@ -207,5 +209,218 @@ export async function openDb(pgDir: string): Promise<DbHandle> {
     // No-op if the table doesn't exist yet (handled by the schema DDL above)
   }
 
+  // Migrate: add graph_id columns to existing tables (additive, defaults to 'main').
+  // All ALTER TABLE … ADD COLUMN IF NOT EXISTS are idempotent.
+  try {
+    await pg.exec(
+      "ALTER TABLE objects     ADD COLUMN IF NOT EXISTS graph_id text NOT NULL DEFAULT 'main'"
+    );
+  } catch {
+    // Column may already exist
+  }
+  try {
+    await pg.exec(
+      "ALTER TABLE graph_edges ADD COLUMN IF NOT EXISTS graph_id text NOT NULL DEFAULT 'main'"
+    );
+  } catch {
+    // Column may already exist
+  }
+  try {
+    await pg.exec(
+      "ALTER TABLE node_terms  ADD COLUMN IF NOT EXISTS graph_id text NOT NULL DEFAULT 'main'"
+    );
+  } catch {
+    // Column may already exist
+  }
+  try {
+    await pg.exec(
+      "ALTER TABLE meta        ADD COLUMN IF NOT EXISTS graph_id text NOT NULL DEFAULT 'main'"
+    );
+  } catch {
+    // Column may already exist
+  }
+
+  // Migrate: create graph-scoped indexes (IF NOT EXISTS = idempotent).
+  try {
+    await pg.exec(
+      "CREATE INDEX IF NOT EXISTS objects_graph_idx     ON objects (graph_id)"
+    );
+  } catch {
+    // Ignore
+  }
+  try {
+    await pg.exec(
+      "CREATE INDEX IF NOT EXISTS graph_edges_graph_idx ON graph_edges (graph_id)"
+    );
+  } catch {
+    // Ignore
+  }
+
+  // Migrate: recreate PKs for node_terms and meta to be (graph_id, …) composite.
+  // For node_terms: old PK was (subject_id, term); new PK is (graph_id, subject_id, term).
+  // For meta: old PK was (key); new PK is (graph_id, key).
+  // We use a DO $$ block so failures (already migrated) are caught per-statement.
+  try {
+    await pg.exec(`
+      DO $$ BEGIN
+        ALTER TABLE node_terms DROP CONSTRAINT IF EXISTS node_terms_pkey;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$
+    `);
+    await pg.exec(
+      "ALTER TABLE node_terms ADD PRIMARY KEY (graph_id, subject_id, term)"
+    );
+  } catch {
+    // Already has the composite PK (fresh DB or previously migrated)
+  }
+  try {
+    await pg.exec(`
+      DO $$ BEGIN
+        ALTER TABLE meta DROP CONSTRAINT IF EXISTS meta_pkey;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$
+    `);
+    await pg.exec("ALTER TABLE meta ADD PRIMARY KEY (graph_id, key)");
+  } catch {
+    // Already has the composite PK
+  }
+
   return { pg };
+}
+
+// ---- Graph-scoped query helpers ----
+//
+// Every helper that reads/writes a graph-scoped table takes `graphId: string`
+// as its first argument. Pass DEFAULT_GRAPH_ID at existing call sites.
+
+export interface ObjectRow {
+  id: string;
+  kind: string;
+  type: string;
+  content: unknown;
+  author: string;
+  method: string | null;
+  approval: string;
+  changeset: string;
+  search_text: string;
+}
+
+export interface UpsertObjectParams {
+  id: string;
+  kind: string;
+  type: string;
+  content: Record<string, unknown>;
+  author: string;
+  method: string | null;
+  approval: string;
+  changeset: string;
+  searchText: string;
+}
+
+/**
+ * Upsert a row into the objects table for the given graph.
+ */
+export async function upsertObject(
+  graphId: string,
+  pg: PGlite,
+  params: UpsertObjectParams
+): Promise<void> {
+  await pg.query(
+    `INSERT INTO objects (id, kind, type, content, author, method, approval, changeset, search_text, graph_id, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now())
+     ON CONFLICT (id) DO UPDATE SET
+       kind = EXCLUDED.kind,
+       type = EXCLUDED.type,
+       content = EXCLUDED.content,
+       author = EXCLUDED.author,
+       method = EXCLUDED.method,
+       approval = EXCLUDED.approval,
+       changeset = EXCLUDED.changeset,
+       search_text = EXCLUDED.search_text,
+       graph_id = EXCLUDED.graph_id,
+       updated_at = now()`,
+    [
+      params.id,
+      params.kind,
+      params.type,
+      JSON.stringify(params.content),
+      params.author,
+      params.method,
+      params.approval,
+      params.changeset,
+      params.searchText,
+      graphId,
+    ]
+  );
+}
+
+/**
+ * List all object rows for a given graph, ordered by created_at DESC.
+ */
+export async function listObjects(graphId: string, pg: PGlite): Promise<ObjectRow[]> {
+  const result = await pg.query<ObjectRow>(
+    `SELECT id, kind, type, content, author, method, approval, changeset, search_text
+     FROM objects WHERE graph_id = $1 ORDER BY created_at DESC`,
+    [graphId]
+  );
+  return result.rows;
+}
+
+/**
+ * Get the indexed_head cursor for a graph. Returns 0 if not set.
+ */
+export async function getIndexedHead(graphId: string, pg: PGlite): Promise<number> {
+  const result = await pg.query<{ value: string }>(
+    "SELECT value FROM meta WHERE graph_id = $1 AND key = 'indexed_head'",
+    [graphId]
+  );
+  return result.rows.length > 0 ? Number.parseInt(result.rows[0].value, 10) : 0;
+}
+
+/**
+ * Set (upsert) the indexed_head cursor for a graph.
+ */
+export async function setIndexedHead(graphId: string, pg: PGlite, head: number): Promise<void> {
+  await pg.query(
+    `INSERT INTO meta (graph_id, key, value) VALUES ($1, 'indexed_head', $2)
+     ON CONFLICT (graph_id, key) DO UPDATE SET value = EXCLUDED.value`,
+    [graphId, head.toString()]
+  );
+}
+
+/**
+ * Delete the indexed_head cursor for a graph (used during reindex).
+ */
+export async function deleteIndexedHead(graphId: string, pg: PGlite): Promise<void> {
+  await pg.query("DELETE FROM meta WHERE graph_id = $1 AND key = 'indexed_head'", [graphId]);
+}
+
+/**
+ * Upsert an edge row for a given graph.
+ */
+export async function upsertEdge(
+  graphId: string,
+  pg: PGlite,
+  params: { id: string; type: string; from: string; to: string }
+): Promise<void> {
+  await pg.query(
+    `INSERT INTO graph_edges (id, type, from_id, to_id, graph_id) VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (id) DO NOTHING`,
+    [params.id, params.type, params.from, params.to, graphId]
+  );
+}
+
+/**
+ * Upsert a node classification term for a given graph.
+ */
+export async function upsertNodeTerm(
+  graphId: string,
+  pg: PGlite,
+  params: { subjectId: string; term: string }
+): Promise<void> {
+  await pg.query(
+    `INSERT INTO node_terms (graph_id, subject_id, term) VALUES ($1, $2, $3)
+     ON CONFLICT (graph_id, subject_id, term) DO NOTHING`,
+    [graphId, params.subjectId, params.term]
+  );
 }

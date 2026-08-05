@@ -5,7 +5,7 @@
  * full-text search, fused via Reciprocal Rank Fusion (RRF, k=60).
  */
 
-import { fmtVec } from "./db.js";
+import { DEFAULT_GRAPH_ID, fmtVec } from "./db.js";
 import type { Embedder } from "./embed.js";
 import type { Freehold } from "./graphs.js";
 
@@ -57,28 +57,34 @@ export async function recall(
   query: string,
   embedder: Embedder,
   filters?: RecallFilters,
-  limit = 10
+  limit = 10,
+  graphId: string = DEFAULT_GRAPH_ID
 ): Promise<RecallResult[]> {
   const { pg } = freehold.db;
 
   // Step 1: embed the query
   const [qvec] = await embedder.embed([query]);
 
-  // Step 2a: vector search — returns object_ids ordered by cosine distance
+  // Step 2a: vector search — returns object_ids ordered by cosine distance,
+  // scoped to the graph via a join on objects.
   const vecResult = await pg.query<{ object_id: string }>(
-    "SELECT object_id FROM embeddings ORDER BY vec <=> $1::vector LIMIT 60",
-    [fmtVec(qvec)]
+    `SELECT e.object_id FROM embeddings e
+     JOIN objects o ON o.id = e.object_id
+     WHERE o.graph_id = $2
+     ORDER BY e.vec <=> $1::vector LIMIT 60`,
+    [fmtVec(qvec), graphId]
   );
   const vecRanks = new Map<string, number>(); // id → 0-based rank
   vecResult.rows.forEach((row, i) => vecRanks.set(row.object_id, i));
 
-  // Step 2b: FTS search
+  // Step 2b: FTS search, scoped to the graph
   const ftsResult = await pg.query<{ id: string }>(
     `SELECT id FROM objects
-     WHERE to_tsvector('english', search_text) @@ plainto_tsquery('english', $1)
+     WHERE graph_id = $2
+       AND to_tsvector('english', search_text) @@ plainto_tsquery('english', $1)
      ORDER BY ts_rank(to_tsvector('english', search_text), plainto_tsquery('english', $1)) DESC
      LIMIT 60`,
-    [query]
+    [query, graphId]
   );
   const ftsRanks = new Map<string, number>(); // id → 0-based rank
   ftsResult.rows.forEach((row, i) => ftsRanks.set(row.id, i));
@@ -112,11 +118,12 @@ export async function recall(
 
   if (idList.length === 0) return [];
 
-  // Build parameterized IN query
+  // Build parameterized IN query (graph_id constraint is redundant here since
+  // candidates already came from graph-scoped searches, but kept for correctness)
   const placeholders = idList.map((_, i) => `$${i + 1}`).join(",");
   const rowsResult = await pg.query<ObjectRow>(
-    `SELECT id, type, content, author, method, approval, changeset FROM objects WHERE id IN (${placeholders})`,
-    idList
+    `SELECT id, type, content, author, method, approval, changeset FROM objects WHERE id IN (${placeholders}) AND graph_id = $${idList.length + 1}`,
+    [...idList, graphId]
   );
 
   const rowMap = new Map<string, ObjectRow>();
@@ -160,15 +167,16 @@ export async function recall(
 export async function recentMemories(
   freehold: Freehold,
   filters?: RecallFilters,
-  limit = 50
+  limit = 50,
+  graphId: string = DEFAULT_GRAPH_ID
 ): Promise<RecallResult[]> {
   const { pg } = freehold.db;
   const rowsResult = await pg.query<ObjectRow>(
     `SELECT id, type, content, author, method, approval, changeset FROM objects
-     WHERE kind = 'node' AND type NOT LIKE 'meta/%'
+     WHERE kind = 'node' AND type NOT LIKE 'meta/%' AND graph_id = $2
      ORDER BY created_at DESC
      LIMIT $1`,
-    [limit * 3]
+    [limit * 3, graphId]
   );
 
   const results: RecallResult[] = [];

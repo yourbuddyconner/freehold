@@ -21,7 +21,16 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { load as yamlLoad } from "js-yaml";
-import { fmtVec } from "./db.js";
+import {
+  DEFAULT_GRAPH_ID,
+  deleteIndexedHead,
+  fmtVec,
+  getIndexedHead,
+  setIndexedHead,
+  upsertEdge,
+  upsertNodeTerm,
+  upsertObject,
+} from "./db.js";
 import type { Embedder } from "./embed.js";
 import type { Freehold } from "./graphs.js";
 import { withGraph } from "./lock.js";
@@ -264,6 +273,7 @@ function collectNodeOps(
  */
 export async function syncIndex(freehold: Freehold, embedder: Embedder): Promise<void> {
   const { pg } = freehold.db;
+  const graphId = DEFAULT_GRAPH_ID;
 
   // Step 1: get the admitted log — serialized through the graph lock
   const log = await withGraph(freehold.graph, () => {
@@ -272,11 +282,7 @@ export async function syncIndex(freehold: Freehold, embedder: Embedder): Promise
   if (!Array.isArray(log)) return;
 
   // Step 2: check indexed_head (PGlite — no graph lock needed)
-  const metaResult = await pg.query<{ value: string }>(
-    "SELECT value FROM meta WHERE key = 'indexed_head'"
-  );
-  const indexedHead =
-    metaResult.rows.length > 0 ? Number.parseInt(metaResult.rows[0].value, 10) : 0;
+  const indexedHead = await getIndexedHead(graphId, pg);
 
   // Step 3: if up-to-date, nothing to do
   if (indexedHead >= log.length) return;
@@ -337,31 +343,17 @@ export async function syncIndex(freehold: Freehold, embedder: Embedder): Promise
     const method = (provenance?.method as string) ?? null;
 
     // Upsert into objects table (PGlite — no graph lock needed)
-    await pg.query(
-      `INSERT INTO objects (id, kind, type, content, author, method, approval, changeset, search_text, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now())
-       ON CONFLICT (id) DO UPDATE SET
-         kind = EXCLUDED.kind,
-         type = EXCLUDED.type,
-         content = EXCLUDED.content,
-         author = EXCLUDED.author,
-         method = EXCLUDED.method,
-         approval = EXCLUDED.approval,
-         changeset = EXCLUDED.changeset,
-         search_text = EXCLUDED.search_text,
-         updated_at = now()`,
-      [
-        nodeId,
-        "node",
-        typeRef,
-        JSON.stringify(objContent),
-        author,
-        method,
-        "saved",
-        changesetHash,
-        searchText,
-      ]
-    );
+    await upsertObject(graphId, pg, {
+      id: nodeId,
+      kind: "node",
+      type: typeRef,
+      content: objContent,
+      author,
+      method,
+      approval: "saved",
+      changeset: changesetHash,
+      searchText,
+    });
 
     // Step 7: embed non-meta nodes that have search text
     if (!isMeta && searchText.length > 0) {
@@ -377,18 +369,10 @@ export async function syncIndex(freehold: Freehold, embedder: Embedder): Promise
 
   // Step 7.5: mirror edges and node classifications
   for (const e of edgeOps) {
-    await pg.query(
-      `INSERT INTO graph_edges (id, type, from_id, to_id) VALUES ($1, $2, $3, $4)
-       ON CONFLICT (id) DO NOTHING`,
-      [e.id, e.type, e.from, e.to]
-    );
+    await upsertEdge(graphId, pg, { id: e.id, type: e.type, from: e.from, to: e.to });
   }
   for (const t of termOps) {
-    await pg.query(
-      `INSERT INTO node_terms (subject_id, term) VALUES ($1, $2)
-       ON CONFLICT (subject_id, term) DO NOTHING`,
-      [t.subjectId, t.term]
-    );
+    await upsertNodeTerm(graphId, pg, { subjectId: t.subjectId, term: t.term });
   }
 
   // Step 8: update indexed_head.
@@ -397,10 +381,7 @@ export async function syncIndex(freehold: Freehold, embedder: Embedder): Promise
   // re-written (not possible in the current allod version), a stale length could
   // cause syncIndex to skip entries. For a future hardening pass, also persist
   // the hash of the last processed entry and validate on resume.
-  await pg.query(
-    "INSERT INTO meta (key, value) VALUES ('indexed_head', $1) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value",
-    [log.length.toString()]
-  );
+  await setIndexedHead(graphId, pg, log.length);
 }
 
 /**
@@ -414,6 +395,6 @@ export async function reindex(freehold: Freehold, embedder: Embedder): Promise<v
   await pg.exec("TRUNCATE TABLE objects CASCADE");
   await pg.exec("TRUNCATE TABLE graph_edges");
   await pg.exec("TRUNCATE TABLE node_terms");
-  await pg.query("DELETE FROM meta WHERE key = 'indexed_head'");
+  await deleteIndexedHead(DEFAULT_GRAPH_ID, pg);
   await syncIndex(freehold, embedder);
 }

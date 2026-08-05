@@ -80,8 +80,19 @@ export type { OntologyProposalResult } from "./schema.js";
 export { hashEmbedder, transformersEmbedder, makeEmbedder } from "./embed.js";
 export type { Embedder } from "./embed.js";
 
-// Database handle
-export type { DbHandle } from "./db.js";
+// Database handle + graph-scoped helpers
+export type { DbHandle, ObjectRow, UpsertObjectParams } from "./db.js";
+export {
+  DEFAULT_GRAPH_ID,
+  fmtVec,
+  getIndexedHead,
+  setIndexedHead,
+  deleteIndexedHead,
+  upsertObject,
+  listObjects,
+  upsertEdge,
+  upsertNodeTerm,
+} from "./db.js";
 
 // Index sync
 export { syncIndex, reindex } from "./indexer.js";
