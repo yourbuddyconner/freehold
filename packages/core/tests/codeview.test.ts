@@ -477,10 +477,9 @@ describe("codeRegions", () => {
   test("region-critical-rule does not match the unclassified file", async () => {
     const regions = await codeRegions(fh, "test-repo");
     const regionRule = regions.find((r) => r.rule === "region-critical-rule");
-    if (regionRule) {
-      // src/util/helper.rs has no classified items
-      expect(regionRule.paths).not.toContain("src/util/helper.rs");
-    }
+    expect(regionRule, "region rule not found").toBeDefined();
+    // src/util/helper.rs has no classified items
+    expect(regionRule!.paths).not.toContain("src/util/helper.rs");
   });
 
   test("caches result for same graph state", async () => {

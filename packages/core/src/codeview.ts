@@ -436,13 +436,10 @@ export async function codeRegions(
   repoName = "repo"
 ): Promise<RegionRule[]> {
   // Determine the log head for cache key
+  // log() exists on the wasm instance but is absent from the re-exported TS type
   const logLength = await withGraph(fh.graph, () => {
-    try {
-      const log = (fh.graph as unknown as { log(): unknown[] }).log();
-      return Array.isArray(log) ? log.length : 0;
-    } catch {
-      return 0;
-    }
+    const log = (fh.graph as unknown as { log(): unknown[] }).log();
+    return Array.isArray(log) ? log.length : 0;
   });
 
   const cacheKey = `${fh.graphId}:${logLength}`;
@@ -471,6 +468,7 @@ export async function codeRegions(
     let checklistResult: unknown;
     try {
       checklistResult = await withGraph(fh.graph, () => {
+        // git_checklist exists on the wasm instance but is missing from the re-exported TS type
         return (
           fh.graph as unknown as {
             git_checklist(
