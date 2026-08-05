@@ -347,6 +347,50 @@ const SchemaDescription = z
   })
   .openapi("SchemaDescription");
 
+// ---- Connector schemas ----
+
+const ConnectorStatus = z
+  .object({
+    lastPollAt: z.string().optional().openapi({ description: "ISO timestamp of last successful poll" }),
+    lastErrors: z.array(z.string()).optional().openapi({ description: "Errors from last poll cycle" }),
+  })
+  .openapi("ConnectorStatus");
+
+const ConnectorConfigView = z
+  .object({
+    mode: z.enum(["credential", "app"]).openapi({ description: "Authentication mode" }),
+    owner: z.string(),
+    repo: z.string(),
+    pollIntervalSec: z.number(),
+    webhooksEnabled: z.boolean(),
+    appId: z.string().optional(),
+    appSlug: z.string().optional(),
+    installationId: z.string().optional(),
+  })
+  .openapi("ConnectorConfigView");
+
+const ConnectorResponse = z
+  .object({
+    configured: z.boolean(),
+    config: ConnectorConfigView.optional(),
+    status: ConnectorStatus,
+  })
+  .openapi("ConnectorResponse");
+
+const PutConnectorBody = z
+  .object({
+    mode: z.literal("credential").openapi({ description: "Credential mode uses gh CLI token discovery" }),
+    pollIntervalSec: z.number().int().positive().optional().openapi({ description: "Poll interval in seconds (default 300)" }),
+  })
+  .openapi("PutConnectorBody");
+
+const PollResult = z
+  .object({
+    events: z.number().openapi({ description: "Number of events processed" }),
+    errors: z.array(z.string()).openapi({ description: "Non-fatal errors encountered during poll" }),
+  })
+  .openapi("PollResult");
+
 // ---- Registry setup ----
 
 function buildRegistry(): OpenAPIRegistry {
@@ -386,6 +430,11 @@ function buildRegistry(): OpenAPIRegistry {
   registry.register("CodeItemView", CodeItemView);
   registry.register("RegionRule", RegionRule);
   registry.register("CodeNeighborhood", CodeNeighborhood);
+  registry.register("ConnectorStatus", ConnectorStatus);
+  registry.register("ConnectorConfigView", ConnectorConfigView);
+  registry.register("ConnectorResponse", ConnectorResponse);
+  registry.register("PutConnectorBody", PutConnectorBody);
+  registry.register("PollResult", PollResult);
 
   const auth = [{ bearerAuth: [] }];
 
@@ -1248,6 +1297,75 @@ function buildRegistry(): OpenAPIRegistry {
             schema: z.object({ reviews: z.array(ReviewEntry) }),
           },
         },
+      },
+      "400": { description: "Not a repo graph" },
+      "401": { description: "Unauthorized" },
+    },
+  });
+
+  // Connector — GET
+  registry.registerPath({
+    method: "get",
+    path: "/api/v1/connector",
+    summary: "Get connector status and config",
+    security: auth,
+    responses: {
+      "200": {
+        description: "Connector status",
+        content: { "application/json": { schema: ConnectorResponse } },
+      },
+      "400": { description: "Not a repo graph" },
+      "401": { description: "Unauthorized" },
+    },
+  });
+
+  // Connector — PUT (credential mode)
+  registry.registerPath({
+    method: "put",
+    path: "/api/v1/connector",
+    summary: "Configure the connector in credential mode",
+    security: auth,
+    request: {
+      body: { required: true, content: { "application/json": { schema: PutConnectorBody } } },
+    },
+    responses: {
+      "200": {
+        description: "Connector configured",
+        content: { "application/json": { schema: z.object({ config: ConnectorConfigView }) } },
+      },
+      "400": { description: "Not a repo graph or invalid body" },
+      "401": { description: "Unauthorized" },
+      "409": { description: "No credential found or missing origin remote" },
+    },
+  });
+
+  // Connector — POST /connector/poll
+  registry.registerPath({
+    method: "post",
+    path: "/api/v1/connector/poll",
+    summary: "Run a connector poll immediately",
+    security: auth,
+    responses: {
+      "200": {
+        description: "Poll result",
+        content: { "application/json": { schema: PollResult } },
+      },
+      "400": { description: "Not a repo graph" },
+      "401": { description: "Unauthorized" },
+      "409": { description: "Connector not configured" },
+    },
+  });
+
+  // Connector — DELETE
+  registry.registerPath({
+    method: "delete",
+    path: "/api/v1/connector",
+    summary: "Remove connector config",
+    security: auth,
+    responses: {
+      "200": {
+        description: "Connector config removed",
+        content: { "application/json": { schema: z.object({ ok: z.boolean() }) } },
       },
       "400": { description: "Not a repo graph" },
       "401": { description: "Unauthorized" },

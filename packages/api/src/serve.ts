@@ -1,4 +1,15 @@
-import { GraphManager, hashEmbedder, loadConfig, makeEmbedder, syncIndex } from "@freehold/core";
+import {
+  GraphManager,
+  hashEmbedder,
+  loadConfig,
+  makeEmbedder,
+  syncIndex,
+  getConnector,
+  makeTokenClient,
+  deriveEncKey,
+  getSecret,
+  startPoller,
+} from "@freehold/core";
 import { serve } from "@hono/node-server";
 import { createApp } from "./app.js";
 
@@ -31,6 +42,37 @@ async function main() {
     .catch((err) => console.warn(`[freehold] default graph open failed: ${err}`));
 
   const app = createApp(manager, embedder, config);
+
+  // Start pollers for all registered repo graphs with credential-mode connector configs.
+  // Each poller runs in the background; the daemon lifetime is the stop condition.
+  const pollerHandles: Array<{ stop(): void }> = [];
+  manager.list().then(async (entries) => {
+    for (const entry of entries) {
+      if (entry.kind !== "repo") continue;
+      try {
+        const fh = await manager.get(entry.id);
+        const cfg = await getConnector(fh.db, entry.id);
+        if (!cfg || cfg.mode !== "credential") continue;
+
+        const encKey = deriveEncKey(config.token);
+        const handle = startPoller(
+          fh,
+          async () => getConnector(fh.db, entry.id),
+          async () => {
+            const token = await getSecret(fh.db, entry.id, "webhookSecret", encKey);
+            if (!token) throw new Error("no stored token for graph " + entry.id);
+            return makeTokenClient(token);
+          }
+        );
+        pollerHandles.push(handle);
+        console.log(`[freehold] connector poller started for graph ${entry.id}`);
+      } catch (err) {
+        console.warn(`[freehold] connector poller start failed for ${entry.id}: ${err}`);
+      }
+    }
+  }).catch((err) => {
+    console.warn(`[freehold] connector poller boot failed: ${err}`);
+  });
 
   serve(
     {

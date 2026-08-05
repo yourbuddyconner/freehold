@@ -2088,6 +2088,196 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/connector": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get connector status and config */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Connector status */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ConnectorResponse"];
+                    };
+                };
+                /** @description Not a repo graph */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        /** Configure the connector in credential mode */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["PutConnectorBody"];
+                };
+            };
+            responses: {
+                /** @description Connector configured */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            config: components["schemas"]["ConnectorConfigView"];
+                        };
+                    };
+                };
+                /** @description Not a repo graph or invalid body */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No credential found or missing origin remote */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        post?: never;
+        /** Remove connector config */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Connector config removed */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ok: boolean;
+                        };
+                    };
+                };
+                /** @description Not a repo graph */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/connector/poll": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Run a connector poll immediately */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Poll result */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PollResult"];
+                    };
+                };
+                /** @description Not a repo graph */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Connector not configured */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2316,6 +2506,46 @@ export interface components {
                 to: string;
                 type: string;
             }[];
+        };
+        ConnectorStatus: {
+            /** @description ISO timestamp of last successful poll */
+            lastPollAt?: string;
+            /** @description Errors from last poll cycle */
+            lastErrors?: string[];
+        };
+        ConnectorConfigView: {
+            /**
+             * @description Authentication mode
+             * @enum {string}
+             */
+            mode: "credential" | "app";
+            owner: string;
+            repo: string;
+            pollIntervalSec: number;
+            webhooksEnabled: boolean;
+            appId?: string;
+            appSlug?: string;
+            installationId?: string;
+        };
+        ConnectorResponse: {
+            configured: boolean;
+            config?: components["schemas"]["ConnectorConfigView"];
+            status: components["schemas"]["ConnectorStatus"];
+        };
+        PutConnectorBody: {
+            /**
+             * @description Credential mode uses gh CLI token discovery
+             * @enum {string}
+             */
+            mode: "credential";
+            /** @description Poll interval in seconds (default 300) */
+            pollIntervalSec?: number;
+        };
+        PollResult: {
+            /** @description Number of events processed */
+            events: number;
+            /** @description Non-fatal errors encountered during poll */
+            errors: string[];
         };
         GitProposalPath: {
             verb: string;

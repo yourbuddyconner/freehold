@@ -822,6 +822,121 @@
           "edges"
         ]
       },
+      "ConnectorStatus": {
+        "type": "object",
+        "properties": {
+          "lastPollAt": {
+            "type": "string",
+            "description": "ISO timestamp of last successful poll"
+          },
+          "lastErrors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Errors from last poll cycle"
+          }
+        }
+      },
+      "ConnectorConfigView": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "credential",
+              "app"
+            ],
+            "description": "Authentication mode"
+          },
+          "owner": {
+            "type": "string"
+          },
+          "repo": {
+            "type": "string"
+          },
+          "pollIntervalSec": {
+            "type": "number"
+          },
+          "webhooksEnabled": {
+            "type": "boolean"
+          },
+          "appId": {
+            "type": "string"
+          },
+          "appSlug": {
+            "type": "string"
+          },
+          "installationId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "mode",
+          "owner",
+          "repo",
+          "pollIntervalSec",
+          "webhooksEnabled"
+        ]
+      },
+      "ConnectorResponse": {
+        "type": "object",
+        "properties": {
+          "configured": {
+            "type": "boolean"
+          },
+          "config": {
+            "$ref": "#/components/schemas/ConnectorConfigView"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ConnectorStatus"
+          }
+        },
+        "required": [
+          "configured",
+          "status"
+        ]
+      },
+      "PutConnectorBody": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "credential"
+            ],
+            "description": "Credential mode uses gh CLI token discovery"
+          },
+          "pollIntervalSec": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "description": "Poll interval in seconds (default 300)"
+          }
+        },
+        "required": [
+          "mode"
+        ]
+      },
+      "PollResult": {
+        "type": "object",
+        "properties": {
+          "events": {
+            "type": "number",
+            "description": "Number of events processed"
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Non-fatal errors encountered during poll"
+          }
+        },
+        "required": [
+          "events",
+          "errors"
+        ]
+      },
       "GitProposalPath": {
         "type": "object",
         "properties": {
@@ -2802,6 +2917,146 @@
           },
           "401": {
             "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/connector": {
+      "get": {
+        "summary": "Get connector status and config",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Connector status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectorResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a repo graph"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      },
+      "put": {
+        "summary": "Configure the connector in credential mode",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PutConnectorBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Connector configured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "config": {
+                      "$ref": "#/components/schemas/ConnectorConfigView"
+                    }
+                  },
+                  "required": [
+                    "config"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a repo graph or invalid body"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "409": {
+            "description": "No credential found or missing origin remote"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Remove connector config",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Connector config removed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a repo graph"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/connector/poll": {
+      "post": {
+        "summary": "Run a connector poll immediately",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Poll result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PollResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a repo graph"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "409": {
+            "description": "Connector not configured"
           }
         }
       }

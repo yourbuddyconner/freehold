@@ -6,7 +6,7 @@
  * Never logs tokens or secrets.
  */
 
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
@@ -72,9 +72,17 @@ export async function discoverCredential(): Promise<string | null> {
 
   // 2. git credential fill
   try {
-    const input = "protocol=https\nhost=github.com\n\n";
-    const { stdout } = await execFileAsync("git", ["credential", "fill"], {
-      input,
+    const stdout = await new Promise<string>((resolve, reject) => {
+      const child = spawn("git", ["credential", "fill"], { stdio: ["pipe", "pipe", "pipe"] });
+      const chunks: Buffer[] = [];
+      child.stdout.on("data", (d: Buffer) => chunks.push(d));
+      child.on("error", reject);
+      child.on("close", (code) => {
+        if (code !== 0) reject(new Error(`git credential fill exited with ${code}`));
+        else resolve(Buffer.concat(chunks).toString("utf8"));
+      });
+      child.stdin.write("protocol=https\nhost=github.com\n\n");
+      child.stdin.end();
     });
     const lines = stdout.split("\n");
     for (const line of lines) {

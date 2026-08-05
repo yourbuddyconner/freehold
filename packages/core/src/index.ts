@@ -148,3 +148,7 @@ export {
 export type { ConnectorConfig, ConnectorMode } from "./connector/config.js";
 export { handleConnectorEvent } from "./connector/events.js";
 export type { ConnectorEvent, IngestResult } from "./connector/events.js";
+
+// Connector polling transport
+export { pollOnce, startPoller } from "./connector/poll.js";
+export type { PollResult } from "./connector/poll.js";
