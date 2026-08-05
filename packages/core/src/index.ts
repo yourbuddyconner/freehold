@@ -135,3 +135,16 @@ export type { RecallResult, RecallFilters } from "./recall.js";
 export { listGitProposals, gitProposal, decideGit, KeyMissingError, listReviewsForSha } from "./gitreview.js";
 export { branchHeads, pushNotes } from "./git.js";
 export type { GitProposal, DecideResult, ReviewEntry, ReviewCommentEntry } from "./gitreview.js";
+
+// Connector core
+export { makeTokenClient, parseOriginRemote, discoverCredential } from "./connector/github.js";
+export type { GithubClient } from "./connector/github.js";
+export {
+  getConnector,
+  setConnector,
+  getSecret,
+  deriveEncKey,
+} from "./connector/config.js";
+export type { ConnectorConfig, ConnectorMode } from "./connector/config.js";
+export { handleConnectorEvent } from "./connector/events.js";
+export type { ConnectorEvent, IngestResult } from "./connector/events.js";

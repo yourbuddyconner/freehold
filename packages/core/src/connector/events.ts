@@ -1,0 +1,384 @@
+/**
+ * @freehold/core/connector — Event handler core.
+ *
+ * Single handler for all connector events. All graph writes go through the
+ * github-connector service principal (created-or-reused at first ingest).
+ *
+ * Dedup strategy: scan admitted log + pending proposals for matching external_id
+ * without relying on syncIndex (robust against index lag).
+ *
+ * Never logs secrets or tokens.
+ */
+
+import { basename } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { load as yamlLoad } from "js-yaml";
+import { withGraph } from "../lock.js";
+import type { Freehold } from "../graphs.js";
+
+// ── Public types ──────────────────────────────────────────────────────────────
+
+export type ConnectorEvent =
+  | { kind: "push"; ref: string; headSha: string }
+  | { kind: "pr"; action: string; number: number; headSha: string }
+  | { kind: "comment"; action: "created" | "edited" | "deleted"; id: string; body: string;
+      author: string; path?: string; commitSha?: string; prNumber?: number; inReplyTo?: string }
+  | { kind: "check"; sha: string; name: string; status: string; conclusion?: string };
+
+export interface IngestResult {
+  written: "created" | "updated" | "tombstoned" | "unchanged";
+  nodeId?: string;
+}
+
+// ── Internal types ────────────────────────────────────────────────────────────
+
+const CONNECTOR_PRINCIPAL = "github-connector";
+
+interface ParsedNode {
+  nodeId: string;
+  type: string;
+  attributes: Record<string, unknown>;
+  changeset: string; // the admitted hash or proposal hash
+  status: "saved" | "pending";
+  nodeRev: string | null;
+}
+
+// ── Ensure github-connector principal ────────────────────────────────────────
+
+/**
+ * Create the github-connector service principal if it doesn't exist.
+ * Uses graph.state() to check for existing principals.
+ * Must be called inside a withGraph critical section.
+ */
+async function ensureConnectorPrincipal(fh: Freehold): Promise<void> {
+  return withGraph(fh.graph, async () => {
+    let exists = false;
+    try {
+      const state = (fh.graph as unknown as { state(): { nodes: Array<{ label: string; type_ref: string }> } }).state();
+      exists = state.nodes.some(
+        (n) => n.label === CONNECTOR_PRINCIPAL
+      );
+    } catch {
+      // if state() fails assume we need to add
+    }
+
+    if (!exists) {
+      try {
+        await (fh.graph as unknown as {
+          principal_add(name: string, kind: string, by: string): Promise<unknown>
+        }).principal_add(CONNECTOR_PRINCIPAL, "service", "owner");
+      } catch (err) {
+        // If it already exists the call may error — that's fine
+        const msg = err instanceof Error ? err.message : String(err);
+        if (!msg.includes("already") && !msg.includes("exists") && !msg.includes("duplicate")) {
+          // Unexpected error — rethrow
+          throw err;
+        }
+      }
+    }
+  });
+}
+
+// ── Dedup: find existing comment node by external_id ─────────────────────────
+
+/**
+ * Scan admitted log + pending proposals for a ReviewComment node with the given external_id.
+ * Returns the found node or null. Robust without syncIndex.
+ */
+async function findCommentByExternalId(
+  fh: Freehold,
+  externalId: string
+): Promise<ParsedNode | null> {
+  return withGraph(fh.graph, () => {
+    return _findCommentByExternalIdSync(fh, externalId);
+  });
+}
+
+function _findCommentByExternalIdSync(
+  fh: Freehold,
+  externalId: string
+): ParsedNode | null {
+  // ── 1. Admitted log ────────────────────────────────────────────────────────
+  let log: Array<{ hash: string }> = [];
+  try {
+    log = (fh.graph as unknown as { log(): Array<{ hash: string }> }).log();
+  } catch {
+    // ignore
+  }
+
+  if (Array.isArray(log)) {
+    const csDir = join(fh.graphDir, ".allod", "changesets");
+    for (const entry of log) {
+      const bareHash = entry.hash.replace("sha256:", "");
+      const yamlPath = join(csDir, `${bareHash}.yaml`);
+      if (!existsSync(yamlPath)) continue;
+
+      let yaml: string;
+      try {
+        yaml = readFileSync(yamlPath, "utf-8");
+      } catch {
+        continue;
+      }
+
+      let doc: unknown;
+      try {
+        doc = yamlLoad(yaml);
+      } catch {
+        continue;
+      }
+      if (!doc || typeof doc !== "object" || Array.isArray(doc)) continue;
+      const cs = doc as Record<string, unknown>;
+      const operations = cs.operations;
+      if (!Array.isArray(operations)) continue;
+
+      const found = _findInOps(operations as Array<Record<string, unknown>>, externalId, "saved");
+      if (found) {
+        // Fetch current node rev
+        let nodeRev: string | null = null;
+        try {
+          nodeRev = (fh.graph as unknown as { node_rev(id: string): string | null }).node_rev(found.nodeId);
+        } catch { /* ignore */ }
+        return { ...found, nodeRev };
+      }
+    }
+  }
+
+  // ── 2. Pending proposals ──────────────────────────────────────────────────
+  let proposals: Array<{ hash: string }> = [];
+  try {
+    proposals = (fh.graph as unknown as { proposals(): Array<{ hash: string }> }).proposals();
+  } catch {
+    // ignore
+  }
+
+  if (Array.isArray(proposals)) {
+    for (const p of proposals) {
+      let cs: { operations?: Array<Record<string, unknown>> } | null = null;
+      try {
+        cs = (fh.graph as unknown as {
+          proposal_get(hash: string): { operations?: Array<Record<string, unknown>> }
+        }).proposal_get(p.hash);
+      } catch {
+        continue;
+      }
+      if (!cs || !Array.isArray(cs.operations)) continue;
+
+      const found = _findInOps(cs.operations, externalId, "pending");
+      if (found) {
+        let nodeRev: string | null = null;
+        try {
+          nodeRev = (fh.graph as unknown as { node_rev(id: string): string | null }).node_rev(found.nodeId);
+        } catch { /* ignore */ }
+        return { ...found, nodeRev };
+      }
+    }
+  }
+
+  return null;
+}
+
+function _findInOps(
+  operations: Array<Record<string, unknown>>,
+  externalId: string,
+  status: "saved" | "pending"
+): Omit<ParsedNode, "nodeRev"> | null {
+  for (const op of operations) {
+    if (!op || typeof op !== "object") continue;
+
+    // Check create ops
+    const inner = (op.create ?? op.update) as Record<string, unknown> | undefined;
+    if (!inner || typeof inner !== "object") continue;
+    if (inner.kind !== "node") continue;
+    if (typeof inner.type !== "string" || !inner.type.startsWith("review/ReviewComment")) continue;
+
+    const attrs = (inner.attributes as Record<string, unknown> | undefined) ?? {};
+    if (attrs.external_id === externalId) {
+      return {
+        nodeId: inner.id as string,
+        type: inner.type as string,
+        attributes: attrs,
+        changeset: "", // not needed for dedup
+        status,
+      };
+    }
+  }
+  return null;
+}
+
+// ── check_status upsert ───────────────────────────────────────────────────────
+
+async function upsertCheckStatus(
+  fh: Freehold,
+  graphId: string,
+  sha: string,
+  name: string,
+  status: string,
+  conclusion?: string
+): Promise<void> {
+  // Ensure table exists
+  await fh.db.pg.exec(`
+    CREATE TABLE IF NOT EXISTS check_status (
+      graph_id    text NOT NULL,
+      sha         text NOT NULL,
+      name        text NOT NULL,
+      status      text NOT NULL,
+      conclusion  text,
+      PRIMARY KEY (graph_id, sha, name)
+    )
+  `);
+
+  await fh.db.pg.query(
+    `INSERT INTO check_status (graph_id, sha, name, status, conclusion)
+     VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (graph_id, sha, name) DO UPDATE SET
+       status     = EXCLUDED.status,
+       conclusion = EXCLUDED.conclusion`,
+    [graphId, sha, name, status, conclusion ?? null]
+  );
+}
+
+// ── handleConnectorEvent ──────────────────────────────────────────────────────
+
+/**
+ * Handle a connector event.
+ *
+ * push/pr → null (computed on demand, no graph write)
+ * check   → upserted to check_status; returns null
+ * comment → ReviewComment node upserted to the graph; returns IngestResult
+ */
+export async function handleConnectorEvent(
+  fh: Freehold,
+  ev: ConnectorEvent
+): Promise<IngestResult | null> {
+  if (ev.kind === "push" || ev.kind === "pr") {
+    return null;
+  }
+
+  if (ev.kind === "check") {
+    await upsertCheckStatus(
+      fh,
+      fh.graphId,
+      ev.sha,
+      ev.name,
+      ev.status,
+      ev.conclusion
+    );
+    return null;
+  }
+
+  // ev.kind === "comment"
+  await ensureConnectorPrincipal(fh);
+
+  const repoName = basename(fh.graphDir);
+  const commitRef = ev.commitSha ? `git:${repoName}#${ev.commitSha}` : undefined;
+
+  // Build the attributes for a created/active comment
+  const activeAttrs: Record<string, unknown> = {
+    body: ev.body,
+    status: "active",
+    external_source: "github",
+    external_id: ev.id,
+    claimed_author: ev.author,
+  };
+  if (ev.path) {
+    activeAttrs.anchor = commitRef ? `${commitRef}:${ev.path}` : ev.path;
+  }
+  if (ev.inReplyTo) {
+    activeAttrs.inReplyTo = ev.inReplyTo;
+  }
+
+  // Dedup: check if we've seen this external_id before
+  const existing = await findCommentByExternalId(fh, ev.id);
+
+  if (ev.action === "deleted") {
+    if (!existing) {
+      // Nothing to tombstone — idempotent
+      return { written: "tombstoned" };
+    }
+
+    // Tombstone: update status to "tombstoned"
+    const tombstoneAttrs: Record<string, unknown> = {
+      ...existing.attributes,
+      status: "tombstoned",
+    };
+
+    await withGraph(fh.graph, async () => {
+      const rev = (fh.graph as unknown as { node_rev(id: string): string | null }).node_rev(existing.nodeId);
+      if (!rev) return; // node not in fold state yet (pending) — skip
+
+      const updateOp = {
+        update: {
+          kind: "node",
+          id: existing.nodeId,
+          type: existing.type,
+          prior: rev,
+          attributes: tombstoneAttrs,
+        },
+      };
+      await (fh.graph as unknown as {
+        commit(author: string, intent: string, ops: unknown[], envelopes: unknown[], sign: boolean): Promise<unknown>
+      }).commit(CONNECTOR_PRINCIPAL, `Tombstone ReviewComment ${ev.id}`, [updateOp], [], true);
+    });
+
+    return { written: "tombstoned", nodeId: existing.nodeId };
+  }
+
+  // created or edited
+  if (existing) {
+    // Check if the body and status are unchanged (idempotent re-delivery)
+    const existingBody = existing.attributes.body as string | undefined;
+    const existingStatus = existing.attributes.status as string | undefined;
+
+    if (
+      existingBody === ev.body &&
+      existingStatus === "active"
+    ) {
+      return { written: "unchanged", nodeId: existing.nodeId };
+    }
+
+    // Body or status changed — update the node
+    await withGraph(fh.graph, async () => {
+      const rev = (fh.graph as unknown as { node_rev(id: string): string | null }).node_rev(existing.nodeId);
+      if (!rev) {
+        // Node is pending and not in fold state — skip the update
+        // (the pending proposal has the old body; we can't update it)
+        return;
+      }
+
+      const updateOp = {
+        update: {
+          kind: "node",
+          id: existing.nodeId,
+          type: existing.type,
+          prior: rev,
+          attributes: activeAttrs,
+        },
+      };
+      await (fh.graph as unknown as {
+        commit(author: string, intent: string, ops: unknown[], envelopes: unknown[], sign: boolean): Promise<unknown>
+      }).commit(CONNECTOR_PRINCIPAL, `Update ReviewComment ${ev.id}`, [updateOp], [], true);
+    });
+
+    return { written: "updated", nodeId: existing.nodeId };
+  }
+
+  // New comment — create the node
+  const nodeId = crypto.randomUUID();
+  const createOp = {
+    create: {
+      kind: "node",
+      id: nodeId,
+      type: "review/ReviewComment@1",
+      attributes: activeAttrs,
+    },
+  };
+
+  await withGraph(fh.graph, async () => {
+    await (fh.graph as unknown as {
+      commit(author: string, intent: string, ops: unknown[], envelopes: unknown[], sign: boolean): Promise<unknown>
+    }).commit(CONNECTOR_PRINCIPAL, `Ingest ReviewComment ${ev.id}`, [createOp], [], true);
+  });
+
+  return { written: "created", nodeId };
+}

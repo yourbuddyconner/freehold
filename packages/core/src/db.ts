@@ -275,6 +275,65 @@ export async function openDb(pgDir: string): Promise<DbHandle> {
     // Ignore — table may already exist
   }
 
+  // Migrate: connector tables (idempotent, IF NOT EXISTS).
+  try {
+    await pg.exec(`
+      CREATE TABLE IF NOT EXISTS connector_config (
+        graph_id          text PRIMARY KEY,
+        mode              text NOT NULL,
+        owner             text NOT NULL,
+        repo              text NOT NULL,
+        poll_interval     integer NOT NULL DEFAULT 300,
+        webhooks_enabled  boolean NOT NULL DEFAULT false,
+        app_id            text,
+        app_slug          text,
+        installation_id   text,
+        updated_at        timestamptz NOT NULL DEFAULT now()
+      )
+    `);
+  } catch {
+    // Ignore — table may already exist
+  }
+  try {
+    await pg.exec(`
+      CREATE TABLE IF NOT EXISTS connector_secrets (
+        graph_id    text NOT NULL,
+        name        text NOT NULL,
+        ciphertext  bytea NOT NULL,
+        iv          bytea NOT NULL,
+        tag         bytea NOT NULL,
+        PRIMARY KEY (graph_id, name)
+      )
+    `);
+  } catch {
+    // Ignore
+  }
+  try {
+    await pg.exec(`
+      CREATE TABLE IF NOT EXISTS check_status (
+        graph_id    text NOT NULL,
+        sha         text NOT NULL,
+        name        text NOT NULL,
+        status      text NOT NULL,
+        conclusion  text,
+        PRIMARY KEY (graph_id, sha, name)
+      )
+    `);
+  } catch {
+    // Ignore
+  }
+  try {
+    await pg.exec(`
+      CREATE TABLE IF NOT EXISTS connector_cursor (
+        graph_id      text PRIMARY KEY,
+        last_poll_at  timestamptz,
+        state         jsonb NOT NULL DEFAULT '{}'
+      )
+    `);
+  } catch {
+    // Ignore
+  }
+
   // Migrate: recreate PKs for node_terms and meta to be (graph_id, …) composite.
   // For node_terms: old PK was (subject_id, term); new PK is (graph_id, subject_id, term).
   // For meta: old PK was (key); new PK is (graph_id, key).
