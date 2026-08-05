@@ -8,6 +8,10 @@
  *   - POST /api/v1/graphs/:id/git/proposals/:sha/decide → 200 DecideResult; 409 key-missing
  *   - POST /api/v1/graphs/:id/git/proposals/:sha/reviews → creates review nodes, returns saved/pending status
  *   - GET /api/v1/graphs/:id/git/proposals/:sha/reviews → lists reviews + comments for that sha
+ *
+ * Task 4 — Region-rule e2e:
+ *   - Branch touching a classified path (region rule) → card shows the region requirement →
+ *     decide → notes ref updated → re-list shows approved with empty unmet.
  */
 
 import { execFileSync } from "node:child_process";
@@ -578,5 +582,271 @@ describe("GET /api/v1/graphs/:id/git/proposals/:sha/reviews", () => {
     expect(status).toBe(200);
     const b = body as { reviews: unknown[] };
     expect(b.reviews.length).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Task 4: Region-rule e2e exit criterion
+//
+// Exit criterion from the spec: branch touching a classified path (region rule,
+// not just path rule) → card shows the region requirement → decide → notes ref
+// updated → re-list shows approved with empty unmet.
+//
+// This fixture uses a fresh isolated graph so it does not share state with the
+// path-rule tests above.
+// ---------------------------------------------------------------------------
+
+describe("Task 4 e2e: region-rule — classified path → proposal card → decide → re-list", () => {
+  let regionHome: string;
+  let regionRepoDir: string;
+  let regionApp: ReturnType<typeof createApp>;
+  let regionToken: string;
+  let regionGraphId: string;
+  let regionManager: GraphManager;
+  let regionKeysDir: string;
+  let regionFeatureSha: string;
+
+  beforeAll(async () => {
+    regionHome = makeTempDir("freehold-gitreview-region-home-");
+    regionKeysDir = makeTempDir("freehold-gitreview-region-keys-");
+    // Override ALLOD_KEYS_DIR for this fixture's decide calls.
+    // The outer afterAll restores the original value at suite teardown.
+    process.env.ALLOD_KEYS_DIR = regionKeysDir;
+
+    const config = loadConfig(regionHome);
+    regionToken = config.token;
+    regionManager = await GraphManager.open(regionHome);
+    regionApp = createApp(regionManager, hashEmbedder, config);
+
+    // Build git repo
+    regionRepoDir = makeTempDir("freehold-gitreview-region-repo-");
+    execFileSync("git", ["init"], { cwd: regionRepoDir });
+    execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: regionRepoDir });
+    execFileSync("git", ["config", "user.name", "Test User"], { cwd: regionRepoDir });
+
+    // main: initial commit
+    writeFileSync(join(regionRepoDir, "README.md"), "# region test");
+    execFileSync("git", ["add", "README.md"], { cwd: regionRepoDir });
+    execFileSync("git", ["commit", "-m", "init"], { cwd: regionRepoDir });
+
+    // feature branch: commit touching classified/secret.rs
+    execFileSync("git", ["checkout", "-b", "feature-region"], { cwd: regionRepoDir });
+    mkdirSync(join(regionRepoDir, "classified"), { recursive: true });
+    writeFileSync(join(regionRepoDir, "classified", "secret.rs"), "// classified code");
+    execFileSync("git", ["add", "classified/secret.rs"], { cwd: regionRepoDir });
+    execFileSync("git", ["commit", "-m", "add classified/secret.rs"], { cwd: regionRepoDir });
+    regionFeatureSha = execFileSync("git", ["rev-parse", "HEAD"], { cwd: regionRepoDir }).toString().trim();
+    execFileSync("git", ["checkout", "main"], { cwd: regionRepoDir });
+
+    // Create allod graph
+    await createGraph(regionRepoDir, "owner");
+
+    // Read allodGraphId
+    const graphYaml = readFileSync(join(regionRepoDir, ".allod", "graph.yaml"), "utf8");
+    const idMatch = graphYaml.match(/\bgraph_id:\s*(.+)/);
+    const regionAllodGraphId = idMatch ? idMatch[1].trim() : "region-test";
+
+    // Register through API
+    regionGraphId = `gitreview-region-test-${Date.now()}`;
+    const { status: regStatus } = await regionReq("POST", "/api/v1/graphs", {
+      path: regionRepoDir,
+      id: regionGraphId,
+      name: "GitReview Region Test Repo",
+    });
+    expect(regStatus, "failed to register region repo graph").toBe(201);
+
+    const fh = await regionManager.get(regionGraphId);
+
+    // Install code ontology
+    const codeYaml = stripOntologyPreamble(assetYaml("code-ontology.yaml"));
+    const codeInstall = await installOntology(fh.graph, codeYaml);
+    if (codeInstall.status === "pending" && codeInstall.hash) {
+      const d = await approve(fh.graph, "owner", codeInstall.hash);
+      expect(d.status).toBe("approved");
+    }
+
+    // Install review ontology
+    const reviewYaml = stripOntologyPreamble(assetYaml("review-ontology.yaml"));
+    const reviewInstall = await installOntology(fh.graph, reviewYaml);
+    if (reviewInstall.status === "pending" && reviewInstall.hash) {
+      const d = await approve(fh.graph, "owner", reviewInstall.hash);
+      expect(d.status).toBe("approved");
+    }
+
+    // Create SourceFile node for classified/secret.rs so it appears as indexed
+    const sfId = crypto.randomUUID();
+    const rawCs = await (fh.graph as any).commit("owner", "index classified/secret.rs", [
+      {
+        create: {
+          kind: "node",
+          id: sfId,
+          type: "code/SourceFile@1",
+          attributes: {
+            path: "classified/secret.rs",
+            language: "rust",
+            blob: `git:${basename(regionRepoDir)}#HEAD:classified/secret.rs`,
+          },
+        },
+      },
+    ], [], true);
+    if (rawCs && typeof rawCs === "object" && "Held" in rawCs) {
+      const d = await approve(fh.graph, "owner", (rawCs as any).Held.hash);
+      expect(d.status).toBe("approved");
+    }
+
+    // Install security taxonomy
+    const secTaxYaml = `security-taxonomy:
+  taxonomy: security-taxonomy
+  version: 1
+  terms:
+    - { name: security, parents: [] }
+    - { name: "security/critical", parents: [security] }
+`;
+    const taxResult = await (fh.graph as any).install_package(secTaxYaml, "owner");
+    if (taxResult && typeof taxResult === "object" && "Held" in taxResult) {
+      const d = await approve(fh.graph, "owner", (taxResult as any).Held.hash);
+      expect(d.status).toBe("approved");
+    }
+
+    // Classify classified/secret.rs as security/critical
+    const clsResult = await (fh.graph as any).classify(sfId, "security/critical", "owner", "human-reviewed");
+    if (clsResult && typeof clsResult === "object" && "Held" in clsResult) {
+      const d = await approve(fh.graph, "owner", (clsResult as any).Held.hash);
+      expect(d.status).toBe("approved");
+    }
+
+    // Add reviewer principal
+    await (fh.graph as any).principal_add("reviewer", "agent", "owner");
+
+    // Copy reviewer key to ALLOD_KEYS_DIR
+    const reviewerKeyPath = join(regionRepoDir, ".allod", "keys", "reviewer.yaml");
+    const reviewerKeyYaml = readFileSync(reviewerKeyPath, "utf8");
+    const graphComp = graphDirComponent(regionAllodGraphId);
+    mkdirSync(join(regionKeysDir, graphComp), { recursive: true });
+    writeFileSync(join(regionKeysDir, graphComp, "reviewer.yaml"), reviewerKeyYaml);
+
+    // Install policy with a REGION rule (not a path rule)
+    const policyYaml = `policy: region-test-policy
+version: 1
+default_posture: permissive
+roles:
+  security-reviewer:
+    - principal:reviewer
+rules:
+  - name: security-critical-region
+    select:
+      substrate: git
+      region: "security/critical"
+    require:
+      reviewers:
+        - role: security-reviewer
+          quorum: 1
+`;
+    const policyResult = await (fh.graph as any).install_policy(policyYaml, "owner");
+    if (policyResult && typeof policyResult === "object" && "Held" in policyResult) {
+      const d = await approve(fh.graph, "owner", (policyResult as any).Held.hash);
+      expect(d.status, "region policy approval failed").toBe("approved");
+    }
+
+    await syncIndex(fh, hashEmbedder);
+  }, 180_000);
+
+  afterAll(() => {
+    if (regionHome) rmSync(regionHome, { recursive: true, force: true });
+    if (regionRepoDir) rmSync(regionRepoDir, { recursive: true, force: true });
+    if (regionKeysDir) rmSync(regionKeysDir, { recursive: true, force: true });
+  });
+
+  function regionReq(
+    method: string,
+    path: string,
+    body?: unknown,
+  ): Promise<{ status: number; body: unknown }> {
+    const init: RequestInit = {
+      method,
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${regionToken}`,
+      },
+    };
+    if (body !== undefined) init.body = JSON.stringify(body);
+    return regionApp.request(path, init).then(async (res) => ({
+      status: res.status,
+      body: await res.json().catch(() => null),
+    }));
+  }
+
+  test("GET proposals: feature commit touching classified path shows region rule in matched", async () => {
+    const { status, body } = await regionReq(
+      "GET",
+      `/api/v1/graphs/${regionGraphId}/git/proposals`
+    );
+    expect(status).toBe(200);
+    const b = body as { proposals: Array<Record<string, unknown>> };
+    const feature = b.proposals.find((p) => p.sha === regionFeatureSha);
+    expect(feature, "feature proposal not found in region test").toBeDefined();
+    // The region rule should appear in matched
+    expect((feature!.matched as string[])).toContain("security-critical-region");
+  });
+
+  test("GET proposals: feature commit has non-empty unmet (region rule requirement unsatisfied)", async () => {
+    const { body } = await regionReq(
+      "GET",
+      `/api/v1/graphs/${regionGraphId}/git/proposals`
+    );
+    const b = body as { proposals: Array<Record<string, unknown>> };
+    const feature = b.proposals.find((p) => p.sha === regionFeatureSha);
+    expect(feature).toBeDefined();
+    expect(feature!.decided).toBe("undecided");
+    expect((feature!.unmet as string[]).length).toBeGreaterThan(0);
+  });
+
+  test("GET proposals: classified path shows region badge in paths", async () => {
+    const { body } = await regionReq(
+      "GET",
+      `/api/v1/graphs/${regionGraphId}/git/proposals`
+    );
+    const b = body as { proposals: Array<Record<string, unknown>> };
+    const feature = b.proposals.find((p) => p.sha === regionFeatureSha);
+    expect(feature).toBeDefined();
+    const paths = feature!.paths as Array<{ path: string; regions: string[]; indexed: boolean }>;
+    const secretPath = paths.find((p) => p.path === "classified/secret.rs");
+    expect(secretPath, "classified/secret.rs not in paths").toBeDefined();
+    // The region badge should show the region rule name
+    expect(secretPath!.regions).toContain("security-critical-region");
+    // The path is indexed (SourceFile node was created)
+    expect(secretPath!.indexed).toBe(true);
+  });
+
+  test("POST decide: approve with reviewer → outcome approved", async () => {
+    const { status, body } = await regionReq(
+      "POST",
+      `/api/v1/graphs/${regionGraphId}/git/proposals/${regionFeatureSha}/decide`,
+      { verdict: "approve", by: "reviewer" }
+    );
+    expect(status).toBe(200);
+    const b = body as Record<string, unknown>;
+    expect(b.outcome).toBe("approved");
+  });
+
+  test("git notes ref updated in repo after decide", () => {
+    const note = execFileSync(
+      "git",
+      ["notes", "--ref=allod-decisions", "show", regionFeatureSha],
+      { cwd: regionRepoDir }
+    ).toString().trim();
+    expect(note.length).toBeGreaterThan(0);
+  });
+
+  test("re-list shows approved with empty unmet after decide", async () => {
+    const { body } = await regionReq(
+      "GET",
+      `/api/v1/graphs/${regionGraphId}/git/proposals`
+    );
+    const b = body as { proposals: Array<Record<string, unknown>> };
+    const feature = b.proposals.find((p) => p.sha === regionFeatureSha);
+    expect(feature).toBeDefined();
+    expect(feature!.decided).toBe("approved");
+    expect((feature!.unmet as string[]).length).toBe(0);
   });
 });

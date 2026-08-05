@@ -150,6 +150,42 @@ code search rides the per-graph index.
 
 ## Sub-project 3: git-proposal Inbox + decide-to-notes
 
+**Status: shipped 2026-08-05**
+
+**Deviations from design:**
+
+- `reviews` and `concerns` edges are not created in v1. `review/Review@1`
+  and `review/ReviewComment@1` nodes are created with `part_of` edges
+  linking comments to their review. The `reviews` and `concerns` edge
+  types reference `eng`/`code` node types that may not exist in the
+  graph; these edges are deferred to a follow-on task once the engine
+  constraint (endpoints before edges) can be reliably met.
+- Blast radius on the proposal card is rendered as path-level region and
+  index badges, not per-item expansion. The card links each touched path
+  to the corresponding Code file page. The full blast radius viewer
+  components from sub-project 2 are reachable via those links but are
+  not embedded in the card.
+- The push-notes retry route is `POST /git/proposals/:sha/push-notes`
+  (added in the web integration task). The Retry button in the UI calls
+  this route rather than re-POSTing the full decide request.
+- The wasm `git_decision_record` function described in the spec does not
+  exist. The implemented two-phase API is `git_decision_payload` (builds
+  the unsigned record and payload bytes) followed by `git_decision_attach`
+  (attaches the signature). This is the same split as the allod CLI; the
+  spec named only the logical outcome.
+- The decision record's basis does not reference a `Review` node.
+  `POST /git/proposals/:sha/reviews` and `POST /git/proposals/:sha/decide`
+  are separate operations. Linking a review to a decision record is not
+  implemented in v1.
+- The checklist returned by `git_checklist` is always coerced into an
+  array (single-wrap). The wasm may return an object or an array; the
+  TypeScript layer normalises to an array before serialising to the API
+  response.
+- Check-run status on proposal cards is deferred to sub-project 4, as
+  stated in the design ("once the connector exists").
+
+---
+
 - Enumeration: freehold lists the checkout's branch heads plus main's
   HEAD, evaluates each (wasm bindings + git-computed ops + note-read
   decisions), and shows undecided ones beside native proposals. No
