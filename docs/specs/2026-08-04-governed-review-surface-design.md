@@ -121,6 +121,7 @@ reach, and signatures.
 - The graph tab (React Flow neighborhood view) lives on the file page rather than as a separate tab in the Code area. The neighborhood is scoped to the selected file by default, matching the spec intent.
 - `code/regions` resolves the repo name from `basename(graphDir)` — the filesystem directory name of the checkout — not from the graph registry id. Policy rules written with `repo: <basename>` match correctly; rules using other selectors are unaffected.
 - A fifth endpoint `code/neighborhood?path=` is exposed under `/graphs/:id/` beyond the four endpoints specified (`code/tree`, `code/file`, `code/item`, `code/regions`). It returns the React Flow node and edge payload for the file-scoped neighborhood and is consumed by the graph tab on the file page.
+- `git_checklist` is called with `refs/heads/main` hardcoded as the target ref; repos with a different default branch will receive incomplete region results.
 
 A Code area for repo graphs, two-pane like the Memory workspace:
 

@@ -418,8 +418,9 @@ export async function codeNeighborhood(
 
 // ── codeRegions ───────────────────────────────────────────────────────────────
 
-// Module-level cache keyed by "graphId:logLength"
-const regionsCache = new Map<string, RegionRule[]>();
+// Module-level cache: one entry per graphId to prevent unbounded growth in long-running daemons.
+// Each entry holds the last-seen (key, rules) pair; new keys (different logLength or repoName) overwrite.
+const regionsCache = new Map<string, { key: string; rules: RegionRule[] }>();
 
 /**
  * For each SourceFile path, call git_checklist via the wasm graph to determine
@@ -442,9 +443,9 @@ export async function codeRegions(
     return Array.isArray(log) ? log.length : 0;
   });
 
-  const cacheKey = `${fh.graphId}:${logLength}`;
-  const cached = regionsCache.get(cacheKey);
-  if (cached) return cached;
+  const cacheKey = `${fh.graphId}:${repoName}:${logLength}`;
+  const cached = regionsCache.get(fh.graphId);
+  if (cached && cached.key === cacheKey) return cached.rules;
 
   // Load all SourceFile paths
   const files = await querySourceFiles(fh);
@@ -453,7 +454,7 @@ export async function codeRegions(
     .filter((p): p is string => typeof p === "string" && p.length > 0);
 
   if (paths.length === 0) {
-    regionsCache.set(cacheKey, []);
+    regionsCache.set(fh.graphId, { key: cacheKey, rules: [] });
     return [];
   }
 
@@ -469,6 +470,7 @@ export async function codeRegions(
     try {
       checklistResult = await withGraph(fh.graph, () => {
         // git_checklist exists on the wasm instance but is missing from the re-exported TS type
+        // NOTE: refs/heads/main is hardcoded; repos with a different default branch get incomplete regions.
         return (
           fh.graph as unknown as {
             git_checklist(
@@ -531,6 +533,6 @@ export async function codeRegions(
     })
   );
 
-  regionsCache.set(cacheKey, result);
+  regionsCache.set(fh.graphId, { key: cacheKey, rules: result });
   return result;
 }
