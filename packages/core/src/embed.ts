@@ -21,8 +21,11 @@
  */
 
 import { createHash } from "node:crypto";
+import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { Worker } from "node:worker_threads";
 import type { FreeholdConfig } from "./types.js";
 
 export interface Embedder {
@@ -211,5 +214,103 @@ export function makeEmbedder(config: FreeholdConfig): Embedder {
     );
     return hashEmbedder;
   }
-  return transformersEmbedder;
+  return workerEmbedder();
+}
+
+// ---- Worker-thread embedder ----
+
+/** The worker entry: compiled .js in dist, or the .ts source under tsx/type stripping. */
+function workerEntryUrl(): URL | null {
+  const js = new URL("./embedWorker.js", import.meta.url);
+  try {
+    if (existsSync(fileURLToPath(js))) return js;
+  } catch {
+    // fall through to the .ts candidate
+  }
+  const ts = new URL("./embedWorker.ts", import.meta.url);
+  try {
+    if (existsSync(fileURLToPath(ts))) return ts;
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+/**
+ * Runs the transformers embedder in a worker thread so the ONNX model load
+ * and every embedding happen off the main event loop — the daemon keeps
+ * serving requests while indexing embeds.
+ *
+ * The worker spawns lazily on first use and is unref'd while idle so it
+ * never holds the process open. If the worker cannot start, embedding falls
+ * back to the in-process transformers path (which blocks, but works).
+ */
+export function workerEmbedder(): Embedder {
+  let worker: Worker | null = null;
+  let failed = false;
+  let nextId = 0;
+  const pending = new Map<
+    number,
+    { resolve: (v: number[][]) => void; reject: (e: Error) => void }
+  >();
+
+  function ensureWorker(): Worker | null {
+    if (failed) return null;
+    if (worker) return worker;
+    const entry = workerEntryUrl();
+    if (!entry) {
+      failed = true;
+      return null;
+    }
+    try {
+      worker = new Worker(entry);
+    } catch (err) {
+      process.stderr.write(
+        `[freehold] warn: embed worker failed to start (${String(err)}); embedding in-process\n`
+      );
+      failed = true;
+      return null;
+    }
+    worker.on("message", (msg: { id: number; vectors?: number[][]; error?: string }) => {
+      const entry = pending.get(msg.id);
+      if (!entry) return;
+      pending.delete(msg.id);
+      if (pending.size === 0) worker?.unref();
+      if (msg.vectors) {
+        entry.resolve(msg.vectors);
+      } else {
+        entry.reject(new Error(msg.error ?? "embed worker error"));
+      }
+    });
+    worker.on("error", (err) => {
+      failed = true;
+      for (const [, p] of pending) p.reject(err);
+      pending.clear();
+      worker = null;
+    });
+    worker.unref();
+    return worker;
+  }
+
+  return {
+    async embed(texts: string[]): Promise<number[][]> {
+      const w = ensureWorker();
+      if (!w) return transformersEmbedder.embed(texts);
+      const id = nextId++;
+      // Hold the process open while work is in flight
+      w.ref();
+      try {
+        return await new Promise<number[][]>((resolve, reject) => {
+          pending.set(id, { resolve, reject });
+          w.postMessage({ id, texts });
+        });
+      } catch (err) {
+        // Worker died — retry in-process so the write still lands
+        process.stderr.write(
+          `[freehold] warn: embed worker failed (${String(err)}); embedding in-process\n`
+        );
+        return transformersEmbedder.embed(texts);
+      }
+    },
+  };
 }
