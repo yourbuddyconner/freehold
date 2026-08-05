@@ -204,23 +204,27 @@ export async function getPolicy(
 }
 
 /**
- * Propose a policy change by installing `policyYaml` as the graph owner.
+ * Propose a policy change by installing `policyYaml`.
  *
- * Calls `install_policy(policyYaml, owner)` on the WASM graph, which
- * routes through `install_package` with `Some(policy)` — empty docs,
- * policy-only changeset. Under the memory-baseline policy, policy changes
- * require an owner decision record (`policy-changes-require-owner-review`),
- * so the result is typically `Held`.
+ * Calls `install_policy(policyYaml, by)` on the WASM graph, which routes
+ * through `install_package` with `Some(policy)` — empty docs, policy-only
+ * changeset. The `set-policy` operation is governed, so the proposal stays
+ * pending until the owner approves it — whether the author is the owner or
+ * an agent.
+ *
+ * @param author - Authoring principal. Defaults to the graph owner; pass an
+ *   agent name for agent-authored proposals.
  */
 export async function proposePolicyChange(
   graph: AllodGraph,
-  policyYaml: string
+  policyYaml: string,
+  author?: string
 ): Promise<OntologyProposalResult> {
   return withGraph(graph, async () => {
-    const owner = resolveOwner(graph);
+    const by = author ?? resolveOwner(graph);
     const raw = await (
       graph as unknown as { install_policy(yaml: string, by: string): Promise<unknown> }
-    ).install_policy(policyYaml, owner);
+    ).install_policy(policyYaml, by);
     return parseInstallAdmission(raw);
   });
 }

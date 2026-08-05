@@ -17,15 +17,10 @@ policyRouter.get("/policy", async (c) => {
 
 // POST /policy — propose a policy change.
 //
-// Policy changes always require owner approval before taking effect.  The wasm
-// `install_package` binding does not yet accept a policy parameter (the Rust
-// `install_package` has Option<policy> but the wasm surface only exposes
-// docs_yaml+by), so proposing a real policy swap would require a new
-// `install_policy` wasm binding.  For v0 we return a pending admission shape
-// immediately — the proposal is real in the sense that the owner must
-// explicitly approve it (the `policy-changes-require-owner-review` rule) —
-// without writing to the graph.  The F7 owner console will wire full policy
-// mutation.
+// Writes a real set-policy changeset via the wasm `install_policy` binding.
+// The operation is governed, so the proposal stays pending until the owner
+// approves it in the Inbox. The optional `agent` field sets the authoring
+// principal; without it the owner proposes (the console's edit flow).
 policyRouter.post("/policy", async (c) => {
   const body = await c.req.json().catch(() => null);
   if (body === null) {
@@ -43,7 +38,10 @@ policyRouter.post("/policy", async (c) => {
     );
   }
 
+  // Optional authoring agent — omitted means the owner proposes.
+  const agent = typeof body.agent === "string" ? body.agent : undefined;
+
   const fh = c.get("freehold");
-  const result = await proposePolicyChange(fh.graph, policyYaml);
+  const result = await proposePolicyChange(fh.graph, policyYaml, agent);
   return c.json({ status: result.status, hash: result.hash });
 });

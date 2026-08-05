@@ -1337,7 +1337,12 @@ export interface components {
         InstallOntologyBody: {
             docsYaml: string;
         };
-        PolicyBody: Record<string, never>;
+        PolicyBody: {
+            /** @description Complete replacement policy document (YAML or JSON) */
+            policy_yaml: string;
+            /** @description Authoring agent principal; omitted means the owner proposes */
+            agent?: string;
+        };
         AdmissionResponse: {
             /** @enum {string} */
             status: "saved" | "pending";

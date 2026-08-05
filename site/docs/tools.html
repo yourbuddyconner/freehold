@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MCP Tools — Freehold</title>
-  <meta name="description" content="What each of the twelve MCP tools does, what parameters it takes, and when a write needs your approval.">
+  <meta name="description" content="What each of the thirteen MCP tools does, what parameters it takes, and when a write needs your approval.">
   <link rel="stylesheet" href="../assets/site.css">
 </head>
 <body>
@@ -51,6 +51,7 @@
       <ul class="docs-sidebar-links">
         <li><a href="#describe_schema">describe_schema</a></li>
         <li><a href="#propose_ontology_change">propose_ontology_change</a></li>
+        <li><a href="#propose_policy_change">propose_policy_change</a></li>
       </ul>
     </div>
     <div class="docs-sidebar-section">
@@ -68,7 +69,7 @@
     <div class="eyebrow reveal reveal-1">Reference</div>
     <h1 class="reveal reveal-2">MCP Tools</h1>
     <p class="lead reveal reveal-3">
-      Agents connect over streamable HTTP MCP at <code>/mcp</code> and get exactly these twelve tools. There are no tools for approving, rejecting, changing policy, or touching keys; those actions belong to you. Every write tool returns either <code>{ status: "saved", changeset }</code> or <code>{ status: "pending", proposal, rule }</code>.
+      Agents connect over streamable HTTP MCP at <code>/mcp</code> and get exactly these thirteen tools. Agents can propose schema and policy changes, but there are no tools for approving, rejecting, or touching keys; every governed change waits for your decision. Every write tool returns either <code>{ status: "saved", changeset }</code> or <code>{ status: "pending", proposal, rule }</code>.
     </p>
 
     <blockquote>
@@ -342,6 +343,28 @@
         </ul>
         <div class="tool-admission">
           <strong>Approval:</strong> Always required. A schema change is an ordinary in-graph changeset: the proposal creates <code>meta/EntityType</code> and related nodes, signed and carrying provenance like every other write.
+        </div>
+      </div>
+    </div>
+
+    <div class="tool-ref reg-marks" id="propose_policy_change">
+      <span class="reg-mark-bl"></span><span class="reg-mark-br"></span>
+      <div class="tool-ref-header">
+        <span class="tool-ref-name">propose_policy_change</span>
+        <span class="chip chip-pending">needs approval</span>
+      </div>
+      <div class="tool-ref-body">
+        <p class="tool-ref-desc">
+          Propose a replacement policy for the graph. The submitted document replaces the whole policy — default posture, roles, and every rule — so an agent reads the current policy first, modifies it, and submits the complete result. The proposal waits in your inbox and the active policy is unchanged until you approve it. The Policy page in the console shows the same rules in plain language, and your own edits there travel this same path.
+        </p>
+        <strong>Parameters</strong>
+        <ul>
+          <li><code>policy_yaml</code> (string, required) — the complete policy document, YAML or JSON</li>
+          <li><code>rationale</code> (string, optional) — one or two sentences on why the change is worth your attention</li>
+          <li><code>agent</code> (string, optional) — agent principal name</li>
+        </ul>
+        <div class="tool-admission">
+          <strong>Approval:</strong> Always required. The <code>set-policy</code> operation is itself governed, so even a proposal to loosen the rules is decided under the rules that exist now.
         </div>
       </div>
     </div>

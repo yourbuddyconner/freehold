@@ -5,7 +5,7 @@
  * then drives MCP tool calls via the SDK client over streamable HTTP.
  *
  * Covered:
- *   - tools/list returns exactly 12 tools
+ *   - tools/list returns exactly 13 tools
  *   - remember → saved
  *   - create_entity → typed result
  *   - propose_ontology_change → pending
@@ -120,9 +120,9 @@ afterAll(async () => {
 // ---------------------------------------------------------------------------
 
 describe("tools/list", () => {
-  test("returns exactly 12 tools", async () => {
+  test("returns exactly 13 tools", async () => {
     const result = await client().listTools();
-    expect(result.tools).toHaveLength(12);
+    expect(result.tools).toHaveLength(13);
     const names = result.tools.map((t) => t.name).sort();
     expect(names).toEqual([
       "attach_document",
@@ -132,6 +132,7 @@ describe("tools/list", () => {
       "get_entity",
       "pending_approvals",
       "propose_ontology_change",
+      "propose_policy_change",
       "recall",
       "relate",
       "remember",
@@ -313,6 +314,39 @@ describe("POST /api/v1/policy", () => {
     expect(res.status).toBe(400);
     const body = (await res.json()) as { error: { code: string } };
     expect(body.error.code).toBe("validation");
+  });
+});
+
+describe("propose_policy_change", () => {
+  test("agent-authored proposal lands pending and shows in pending_approvals", async () => {
+    const res = await client().callTool({
+      name: "propose_policy_change",
+      arguments: {
+        policy_yaml:
+          "policy: agent-suggested\ndefault_posture: restricted\nroles: {}\nrules: []",
+        rationale: "Tighten the default while testing",
+        agent: "test-agent",
+      },
+    });
+    const content = res.content as Array<{ type: string; text: string }>;
+    const body = JSON.parse(content[0].text) as {
+      status: string;
+      hash: string;
+      provenance: { author: string };
+    };
+    expect(body.status).toBe("pending");
+    expect(typeof body.hash).toBe("string");
+    expect(body.provenance.author).toBe("test-agent");
+
+    // The proposal is visible in the approval queue
+    const pendingRes = await client().callTool({ name: "pending_approvals", arguments: {} });
+    const pendingContent = pendingRes.content as Array<{ type: string; text: string }>;
+    const pendingBody = JSON.parse(pendingContent[0].text) as {
+      proposals: Array<{ hash: string; agent: string }>;
+    };
+    const found = pendingBody.proposals.find((p) => p.hash === body.hash);
+    expect(found).toBeDefined();
+    expect(found?.agent).toBe("test-agent");
   });
 });
 

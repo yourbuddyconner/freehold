@@ -84,7 +84,16 @@ const InstallOntologyBody = z
   })
   .openapi("InstallOntologyBody");
 
-const PolicyBody = z.object({}).passthrough().openapi("PolicyBody");
+const PolicyBody = z
+  .object({
+    policy_yaml: z
+      .string()
+      .openapi({ description: "Complete replacement policy document (YAML or JSON)" }),
+    agent: z.string().optional().openapi({
+      description: "Authoring agent principal; omitted means the owner proposes",
+    }),
+  })
+  .openapi("PolicyBody");
 
 const SessionInfo = z
   .object({

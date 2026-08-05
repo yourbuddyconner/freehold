@@ -1,9 +1,10 @@
 /**
  * Freehold MCP server — streamable HTTP transport.
  *
- * Exposes the twelve tool surface defined in the product spec.  Agents may
- * read and write knowledge, but they cannot approve/reject proposals, mutate
- * policy, or install ontologies directly.
+ * Exposes the thirteen tool surface defined in the product spec.  Agents may
+ * read and write knowledge and propose schema or policy changes, but they
+ * cannot approve/reject proposals or install anything directly — every
+ * governed change waits for the owner's decision.
  *
  * Stateless mode: a new McpServer + WebStandardStreamableHTTPServerTransport
  * is created per HTTP request.  This avoids the SDK's "already connected"
@@ -20,6 +21,7 @@ import {
   getEntity,
   pending,
   proposeOntologyChange,
+  proposePolicyChange,
   recall,
   relate,
   remember,
@@ -45,7 +47,7 @@ function resolveAgent(arg: string | undefined, config: FreeholdConfig): string {
 // ---- Tool registration helper ----
 
 /**
- * Register all twelve tools on the given McpServer instance.
+ * Register all thirteen tools on the given McpServer instance.
  * Called once per request (stateless transport model).
  */
 function registerTools(
@@ -466,6 +468,43 @@ function registerTools(
             text: JSON.stringify({
               status: result.status,
               hash: result.hash,
+              provenance: { author: by, tool: "freehold@0.1" },
+            }),
+          },
+        ],
+      };
+    }
+  );
+
+  server.registerTool(
+    "propose_policy_change",
+    {
+      description:
+        "Propose a replacement policy for the graph. The proposal always waits in the owner's Inbox — the active policy is unchanged until they approve it. Fetch the current policy first (GET /api/v1/policy or ask the owner), modify it, and submit the complete document: this replaces the whole policy, not one rule.",
+      inputSchema: {
+        policy_yaml: z
+          .string()
+          .describe(
+            "Complete policy document as YAML or JSON: default_posture, roles, and the full rules list"
+          ),
+        rationale: z
+          .string()
+          .optional()
+          .describe("One or two sentences on why this change is worth the owner's attention"),
+        agent: z.string().optional().describe("Agent principal name"),
+      },
+    },
+    async ({ policy_yaml, rationale, agent }) => {
+      const by = resolveAgent(agent, config);
+      const result = await proposePolicyChange(fh.graph, policy_yaml, by);
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: JSON.stringify({
+              status: result.status,
+              hash: result.hash,
+              rationale: rationale ?? null,
               provenance: { author: by, tool: "freehold@0.1" },
             }),
           },

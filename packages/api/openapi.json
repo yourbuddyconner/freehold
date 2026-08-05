@@ -199,7 +199,19 @@
       },
       "PolicyBody": {
         "type": "object",
-        "properties": {}
+        "properties": {
+          "policy_yaml": {
+            "type": "string",
+            "description": "Complete replacement policy document (YAML or JSON)"
+          },
+          "agent": {
+            "type": "string",
+            "description": "Authoring agent principal; omitted means the owner proposes"
+          }
+        },
+        "required": [
+          "policy_yaml"
+        ]
       },
       "AdmissionResponse": {
         "type": "object",
