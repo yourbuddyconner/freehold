@@ -22,6 +22,7 @@ import { Route as CodeGraphRouteImport } from './routes/code.graph'
 import { Route as CodeItemRouteImport } from './routes/code.item'
 import { Route as MemoryIdRouteImport } from './routes/memory.$id'
 import { Route as MemoryGraphRouteImport } from './routes/memory.graph'
+import { Route as ReviewShaRouteImport } from './routes/review.$sha'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -88,6 +89,11 @@ const MemoryGraphRoute = MemoryGraphRouteImport.update({
   path: '/graph',
   getParentRoute: () => MemoryRoute,
 } as any)
+const ReviewShaRoute = ReviewShaRouteImport.update({
+  id: '/review/$sha',
+  path: '/review/$sha',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -103,6 +109,7 @@ export interface FileRoutesByFullPath {
   '/code/item': typeof CodeItemRoute
   '/memory/$id': typeof MemoryIdRoute
   '/memory/graph': typeof MemoryGraphRoute
+  '/review/$sha': typeof ReviewShaRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -118,6 +125,7 @@ export interface FileRoutesByTo {
   '/code/item': typeof CodeItemRoute
   '/memory/$id': typeof MemoryIdRoute
   '/memory/graph': typeof MemoryGraphRoute
+  '/review/$sha': typeof ReviewShaRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -134,6 +142,7 @@ export interface FileRoutesById {
   '/code/item': typeof CodeItemRoute
   '/memory/$id': typeof MemoryIdRoute
   '/memory/graph': typeof MemoryGraphRoute
+  '/review/$sha': typeof ReviewShaRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -151,6 +160,7 @@ export interface FileRouteTypes {
     | '/code/item'
     | '/memory/$id'
     | '/memory/graph'
+    | '/review/$sha'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -166,6 +176,7 @@ export interface FileRouteTypes {
     | '/code/item'
     | '/memory/$id'
     | '/memory/graph'
+    | '/review/$sha'
   id:
     | '__root__'
     | '/'
@@ -181,6 +192,7 @@ export interface FileRouteTypes {
     | '/code/item'
     | '/memory/$id'
     | '/memory/graph'
+    | '/review/$sha'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -192,6 +204,7 @@ export interface RootRouteChildren {
   SchemaRoute: typeof SchemaRoute
   SettingsRoute: typeof SettingsRoute
   VerifyRoute: typeof VerifyRoute
+  ReviewShaRoute: typeof ReviewShaRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -287,6 +300,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MemoryGraphRouteImport
       parentRoute: typeof MemoryRoute
     }
+    '/review/$sha': {
+      id: '/review/$sha'
+      path: '/review/$sha'
+      fullPath: '/review/$sha'
+      preLoaderRoute: typeof ReviewShaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -326,6 +346,7 @@ const rootRouteChildren: RootRouteChildren = {
   SchemaRoute: SchemaRoute,
   SettingsRoute: SettingsRoute,
   VerifyRoute: VerifyRoute,
+  ReviewShaRoute: ReviewShaRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
