@@ -36,8 +36,6 @@ retrievalRouter.get("/recall", async (c) => {
 retrievalRouter.get("/memories", async (c) => {
   const fh = c.get("freehold");
   if (c.req.query("scope") === "all") {
-    // Pass fh.graphId so scoped mounts read from the correct graph's index
-    // rather than falling back to the DEFAULT_GRAPH_ID ("main").
     const results = await memoryIndex(fh);
     return c.json({ results });
   }
