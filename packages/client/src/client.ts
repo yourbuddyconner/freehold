@@ -43,6 +43,10 @@ export type InstallOntologyBody = Schemas["InstallOntologyBody"];
 export type GraphInfo = Schemas["GraphInfo"];
 export type RegisterGraphBody = Schemas["RegisterGraphBody"];
 export type UpdateGraphBody = Schemas["UpdateGraphBody"];
+export type CodeItem = Schemas["CodeItem"];
+export type CodeFileView = Schemas["CodeFileView"];
+export type CodeItemView = Schemas["CodeItemView"];
+export type RegionRule = Schemas["RegionRule"];
 
 // ---------------------------------------------------------------------------
 // Health response (inline in openapi)
@@ -375,5 +379,25 @@ export class FreeholdClient {
   /** PATCH /api/v1/graphs/:id — update graph metadata */
   async updateGraph(id: string, body: UpdateGraphBody): Promise<GraphInfo> {
     return this.fetch<GraphInfo>("PATCH", `/api/v1/graphs/${id}`, { body });
+  }
+
+  /** GET /api/v1/code/tree — file tree for the active graph (must be repo kind) */
+  async codeTree(): Promise<{ tree: unknown[] }> {
+    return this.fetch<{ tree: unknown[] }>("GET", "/api/v1/code/tree");
+  }
+
+  /** GET /api/v1/code/file?path= — file view for the given path */
+  async codeFile(path: string): Promise<CodeFileView> {
+    return this.fetch<CodeFileView>("GET", "/api/v1/code/file", { query: { path } });
+  }
+
+  /** GET /api/v1/code/item/:nodeId — item view with callers/callees */
+  async codeItem(nodeId: string): Promise<CodeItemView> {
+    return this.fetch<CodeItemView>("GET", `/api/v1/code/item/${nodeId}`);
+  }
+
+  /** GET /api/v1/code/regions — policy region membership */
+  async codeRegions(): Promise<{ rules: RegionRule[] }> {
+    return this.fetch<{ rules: RegionRule[] }>("GET", "/api/v1/code/regions");
   }
 }

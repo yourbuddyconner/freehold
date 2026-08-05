@@ -8,6 +8,7 @@ import { Hono } from "hono";
 import { bearerAuth } from "./auth.js";
 import { handleMcpRequest } from "./mcp.js";
 import { getOpenApiDoc } from "./openapi.js";
+import { codeRouter } from "./routes/code.js";
 import { governanceRouter } from "./routes/governance.js";
 import { graphsRouter } from "./routes/graphs.js";
 import { healthRouter } from "./routes/health.js";
@@ -29,6 +30,7 @@ function buildApiRoutes(): Hono<AppEnv> {
   api.route("/", policyRouter);
   api.route("/", logRouter);
   api.route("/", sessionRouter);
+  api.route("/", codeRouter);
   return api;
 }
 

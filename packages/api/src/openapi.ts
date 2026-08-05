@@ -150,6 +150,58 @@ const UpdateGraphBody = z
   })
   .openapi("UpdateGraphBody");
 
+// ---- Code view schemas ----
+
+const CodeItem = z
+  .object({
+    nodeId: z.string(),
+    type: z.string(),
+    name: z.string(),
+    signature: z.string().optional(),
+    span: z.string().optional(),
+    terms: z.array(z.string()),
+  })
+  .openapi("CodeItem");
+
+const CodeTreeNode: z.ZodType<any> = z.lazy(() =>
+  z
+    .object({
+      name: z.string(),
+      path: z.string(),
+      kind: z.enum(["dir", "file"]),
+      language: z.string().optional(),
+      terms: z.array(z.string()),
+      children: z.array(CodeTreeNode).optional(),
+    })
+    .openapi("CodeTreeNode")
+);
+
+const CodeFileView = z
+  .object({
+    path: z.string(),
+    language: z.string().optional(),
+    nodeId: z.string(),
+    blobRef: z.string().optional(),
+    terms: z.array(z.string()),
+    items: z.array(CodeItem),
+  })
+  .openapi("CodeFileView");
+
+const CodeItemView = CodeItem.extend({
+  filePath: z.string().optional(),
+  callersIn: z.array(CodeItem),
+  callsOut: z.array(CodeItem),
+}).openapi("CodeItemView");
+
+const RegionRule = z
+  .object({
+    rule: z.string(),
+    region: z.string().optional(),
+    reviewers: z.unknown(),
+    paths: z.array(z.string()),
+  })
+  .openapi("RegionRule");
+
 // ---- Response schemas ----
 
 const AdmissionResponse = z
@@ -308,6 +360,10 @@ function buildRegistry(): OpenAPIRegistry {
   registry.register("GraphInfo", GraphInfo);
   registry.register("RegisterGraphBody", RegisterGraphBody);
   registry.register("UpdateGraphBody", UpdateGraphBody);
+  registry.register("CodeItem", CodeItem);
+  registry.register("CodeFileView", CodeFileView);
+  registry.register("CodeItemView", CodeItemView);
+  registry.register("RegionRule", RegionRule);
 
   const auth = [{ bearerAuth: [] }];
 
@@ -818,6 +874,90 @@ function buildRegistry(): OpenAPIRegistry {
       "401": { description: "Unauthorized" },
       "404": { description: "Graph not found" },
       "409": { description: "Cannot remove the default graph" },
+    },
+  });
+
+  // Code view — tree
+  registry.registerPath({
+    method: "get",
+    path: "/api/v1/code/tree",
+    summary: "Code file tree",
+    description: "Nested directory tree of all indexed SourceFile nodes. Only available for repo graphs.",
+    security: auth,
+    responses: {
+      "200": {
+        description: "Nested file tree",
+        content: {
+          "application/json": {
+            schema: z.object({ tree: z.array(z.unknown()) }),
+          },
+        },
+      },
+      "400": { description: "Not a repo graph" },
+      "401": { description: "Unauthorized" },
+    },
+  });
+
+  // Code view — file
+  registry.registerPath({
+    method: "get",
+    path: "/api/v1/code/file",
+    summary: "Code file view",
+    description: "View a single SourceFile with its declared items. 404 if path is not indexed.",
+    security: auth,
+    request: {
+      query: z.object({
+        path: z.string().openapi({ description: "Repo-relative file path" }),
+      }),
+    },
+    responses: {
+      "200": {
+        description: "File view with declared items",
+        content: { "application/json": { schema: CodeFileView } },
+      },
+      "400": { description: "Not a repo graph, or missing path param" },
+      "401": { description: "Unauthorized" },
+      "404": { description: "Path not indexed" },
+    },
+  });
+
+  // Code view — item
+  registry.registerPath({
+    method: "get",
+    path: "/api/v1/code/item/{nodeId}",
+    summary: "Code item view",
+    description: "Single code item (function, class, etc.) with callers and callees.",
+    security: auth,
+    request: { params: z.object({ nodeId: z.string() }) },
+    responses: {
+      "200": {
+        description: "Item view",
+        content: { "application/json": { schema: CodeItemView } },
+      },
+      "400": { description: "Not a repo graph" },
+      "401": { description: "Unauthorized" },
+      "404": { description: "Node not found" },
+    },
+  });
+
+  // Code view — regions
+  registry.registerPath({
+    method: "get",
+    path: "/api/v1/code/regions",
+    summary: "Policy region membership",
+    description: "Maps policy rules to the file paths they match via git_checklist.",
+    security: auth,
+    responses: {
+      "200": {
+        description: "Region rules",
+        content: {
+          "application/json": {
+            schema: z.object({ rules: z.array(RegionRule) }),
+          },
+        },
+      },
+      "400": { description: "Not a repo graph" },
+      "401": { description: "Unauthorized" },
     },
   });
 
