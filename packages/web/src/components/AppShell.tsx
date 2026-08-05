@@ -1,5 +1,5 @@
 import { Link, Outlet } from "@tanstack/react-router";
-import { Archive, BookOpen, GitBranch, Settings, Shield, SquareCheck } from "lucide-react";
+import { Archive, BookOpen, Code, GitBranch, Settings, Shield, SquareCheck } from "lucide-react";
 import type React from "react";
 import { cn } from "~/lib/cn";
 import { useActiveGraph, useGraphs, usePending } from "~/lib/hooks";
@@ -18,6 +18,7 @@ const NAV: NavEntry[] = [
   { to: "/inbox", label: "Inbox", icon: Archive, badge: true },
   { to: "/memory", label: "Memory", icon: BookOpen, kinds: ["memory"] },
   { to: "/schema", label: "Schema", icon: GitBranch, kinds: ["memory"] },
+  { to: "/code", label: "Code", icon: Code, kinds: ["repo"] },
   { to: "/policy", label: "Policy", icon: Shield },
   { to: "/verify", label: "Verify", icon: SquareCheck },
   { to: "/settings", label: "Settings", icon: Settings },

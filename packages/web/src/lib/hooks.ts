@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import type { SessionGraphEntry } from "@freehold/client";
+import type { CodeFileView, CodeItemView, RegionRule, SessionGraphEntry } from "@freehold/client";
 import { GRAPH_STORAGE_KEY, apiClient, setActiveGraph } from "./api";
 
 /** Pending proposals (the Inbox). */
@@ -193,3 +193,44 @@ export function useActiveGraph(): {
 
   return { activeGraphId, setActiveGraphId };
 }
+
+/** File tree for the active repo graph. */
+export function useCodeTree(enabled = true) {
+  return useQuery({
+    queryKey: ["code-tree"],
+    queryFn: () => apiClient.codeTree() as Promise<{ tree: unknown[] }>,
+    enabled,
+  });
+}
+
+/** Single file view with declared items. 404 when not indexed. */
+export function useCodeFile(path: string | undefined) {
+  return useQuery({
+    queryKey: ["code-file", path],
+    queryFn: () => apiClient.codeFile(path!),
+    enabled: !!path,
+    retry: false,
+  });
+}
+
+/** Single code item (function/class) with callers and callees. */
+export function useCodeItem(nodeId: string | undefined) {
+  return useQuery({
+    queryKey: ["code-item", nodeId],
+    queryFn: () => apiClient.codeItem(nodeId!),
+    enabled: !!nodeId,
+    retry: false,
+  });
+}
+
+/** Policy region membership rules. */
+export function useCodeRegions(enabled = true) {
+  return useQuery({
+    queryKey: ["code-regions"],
+    queryFn: () => apiClient.codeRegions(),
+    enabled,
+  });
+}
+
+// Re-export types for convenience in route components
+export type { CodeFileView, CodeItemView, RegionRule };

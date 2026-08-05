@@ -10,18 +10,26 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as CodeRouteImport } from './routes/code'
 import { Route as InboxRouteImport } from './routes/inbox'
 import { Route as MemoryRouteImport } from './routes/memory'
 import { Route as PolicyRouteImport } from './routes/policy'
 import { Route as SchemaRouteImport } from './routes/schema'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as VerifyRouteImport } from './routes/verify'
+import { Route as CodeFileRouteImport } from './routes/code.file'
+import { Route as CodeItemRouteImport } from './routes/code.item'
 import { Route as MemoryIdRouteImport } from './routes/memory.$id'
 import { Route as MemoryGraphRouteImport } from './routes/memory.graph'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CodeRoute = CodeRouteImport.update({
+  id: '/code',
+  path: '/code',
   getParentRoute: () => rootRouteImport,
 } as any)
 const InboxRoute = InboxRouteImport.update({
@@ -54,6 +62,16 @@ const VerifyRoute = VerifyRouteImport.update({
   path: '/verify',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CodeFileRoute = CodeFileRouteImport.update({
+  id: '/file',
+  path: '/file',
+  getParentRoute: () => CodeRoute,
+} as any)
+const CodeItemRoute = CodeItemRouteImport.update({
+  id: '/item',
+  path: '/item',
+  getParentRoute: () => CodeRoute,
+} as any)
 const MemoryIdRoute = MemoryIdRouteImport.update({
   id: '/$id',
   path: '/$id',
@@ -67,35 +85,44 @@ const MemoryGraphRoute = MemoryGraphRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/code': typeof CodeRouteWithChildren
   '/inbox': typeof InboxRoute
   '/memory': typeof MemoryRouteWithChildren
   '/policy': typeof PolicyRoute
   '/schema': typeof SchemaRoute
   '/settings': typeof SettingsRoute
   '/verify': typeof VerifyRoute
+  '/code/file': typeof CodeFileRoute
+  '/code/item': typeof CodeItemRoute
   '/memory/$id': typeof MemoryIdRoute
   '/memory/graph': typeof MemoryGraphRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/code': typeof CodeRouteWithChildren
   '/inbox': typeof InboxRoute
   '/memory': typeof MemoryRouteWithChildren
   '/policy': typeof PolicyRoute
   '/schema': typeof SchemaRoute
   '/settings': typeof SettingsRoute
   '/verify': typeof VerifyRoute
+  '/code/file': typeof CodeFileRoute
+  '/code/item': typeof CodeItemRoute
   '/memory/$id': typeof MemoryIdRoute
   '/memory/graph': typeof MemoryGraphRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/code': typeof CodeRouteWithChildren
   '/inbox': typeof InboxRoute
   '/memory': typeof MemoryRouteWithChildren
   '/policy': typeof PolicyRoute
   '/schema': typeof SchemaRoute
   '/settings': typeof SettingsRoute
   '/verify': typeof VerifyRoute
+  '/code/file': typeof CodeFileRoute
+  '/code/item': typeof CodeItemRoute
   '/memory/$id': typeof MemoryIdRoute
   '/memory/graph': typeof MemoryGraphRoute
 }
@@ -103,40 +130,50 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/code'
     | '/inbox'
     | '/memory'
     | '/policy'
     | '/schema'
     | '/settings'
     | '/verify'
+    | '/code/file'
+    | '/code/item'
     | '/memory/$id'
     | '/memory/graph'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/code'
     | '/inbox'
     | '/memory'
     | '/policy'
     | '/schema'
     | '/settings'
     | '/verify'
+    | '/code/file'
+    | '/code/item'
     | '/memory/$id'
     | '/memory/graph'
   id:
     | '__root__'
     | '/'
+    | '/code'
     | '/inbox'
     | '/memory'
     | '/policy'
     | '/schema'
     | '/settings'
     | '/verify'
+    | '/code/file'
+    | '/code/item'
     | '/memory/$id'
     | '/memory/graph'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  CodeRoute: typeof CodeRouteWithChildren
   InboxRoute: typeof InboxRoute
   MemoryRoute: typeof MemoryRouteWithChildren
   PolicyRoute: typeof PolicyRoute
@@ -152,6 +189,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/code': {
+      id: '/code'
+      path: '/code'
+      fullPath: '/code'
+      preLoaderRoute: typeof CodeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/inbox': {
@@ -196,6 +240,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof VerifyRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/code/file': {
+      id: '/code/file'
+      path: '/file'
+      fullPath: '/code/file'
+      preLoaderRoute: typeof CodeFileRouteImport
+      parentRoute: typeof CodeRoute
+    }
+    '/code/item': {
+      id: '/code/item'
+      path: '/item'
+      fullPath: '/code/item'
+      preLoaderRoute: typeof CodeItemRouteImport
+      parentRoute: typeof CodeRoute
+    }
     '/memory/$id': {
       id: '/memory/$id'
       path: '/$id'
@@ -213,6 +271,18 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface CodeRouteChildren {
+  CodeFileRoute: typeof CodeFileRoute
+  CodeItemRoute: typeof CodeItemRoute
+}
+
+const CodeRouteChildren: CodeRouteChildren = {
+  CodeFileRoute: CodeFileRoute,
+  CodeItemRoute: CodeItemRoute,
+}
+
+const CodeRouteWithChildren = CodeRoute._addFileChildren(CodeRouteChildren)
+
 interface MemoryRouteChildren {
   MemoryIdRoute: typeof MemoryIdRoute
   MemoryGraphRoute: typeof MemoryGraphRoute
@@ -228,6 +298,7 @@ const MemoryRouteWithChildren =
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  CodeRoute: CodeRouteWithChildren,
   InboxRoute: InboxRoute,
   MemoryRoute: MemoryRouteWithChildren,
   PolicyRoute: PolicyRoute,
