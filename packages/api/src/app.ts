@@ -42,7 +42,8 @@ function buildApiRoutes(): Hono<AppEnv> {
 export function createApp(
   manager: GraphManager,
   embedder: Embedder,
-  config: FreeholdConfig
+  config: FreeholdConfig,
+  opts?: { fetchFn?: typeof fetch }
 ): Hono<AppEnv> {
   // Validate token is not empty at boot
   if (!config.token || config.token.trim() === "") {
@@ -65,6 +66,7 @@ export function createApp(
     c.set("manager", manager);
     c.set("embedder", embedder);
     c.set("config", config);
+    if (opts?.fetchFn) c.set("fetchFn", opts.fetchFn);
     // Resolve default graph's Freehold handle (always "main")
     const defaultFh = await manager.get(manager.defaultId());
     c.set("freehold", defaultFh);

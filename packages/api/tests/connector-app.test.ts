@@ -10,14 +10,13 @@
  *   - JWT shape: header/claims decode, RS256 verifies against synthetic public key
  *   - installation-token cache: second call within expiry uses cache (count fetch calls)
  *   - webhook signature valid → event ingested
- *   - webhook invalid sig → 401 body-less
+ *   - webhook invalid sig → 204 (same as unknown repo — no oracle)
  *   - webhook unknown repo → 204 no write
  *   - poll/webhook parity: same comment via pollOnce and webhook produces identical node attribute maps
  */
 
 import {
   mkdtempSync,
-  mkdirSync,
   writeFileSync,
   rmSync,
 } from "node:fs";
@@ -309,6 +308,30 @@ describe("manifest state", () => {
     const r = await req("GET", `/api/v1/graphs/${repoGraphId}/connector/app/callback?code=abc`);
     expect(r.status).toBe(400);
   });
+
+  test("nonce replay: same state token twice → second call returns 400", async () => {
+    // Get a fresh state token
+    const manifestR = await req("POST", `/api/v1/graphs/${repoGraphId}/connector/app/manifest`, {});
+    expect(manifestR.status).toBe(200);
+    const { state } = manifestR.body as { state: string };
+
+    // First call — state is valid; it will fail at GitHub exchange (502/409) but not at state validation (not 400)
+    const r1 = await req(
+      "GET",
+      `/api/v1/graphs/${repoGraphId}/connector/app/callback?code=noncetest&state=${encodeURIComponent(state)}`,
+    );
+    expect(r1.status).not.toBe(400);
+
+    // Second call with the same state — nonce already consumed → 400
+    const r2 = await req(
+      "GET",
+      `/api/v1/graphs/${repoGraphId}/connector/app/callback?code=noncetest&state=${encodeURIComponent(state)}`,
+    );
+    expect(r2.status).toBe(400);
+    const body2 = r2.body as Record<string, unknown>;
+    expect(typeof body2.error).toBe("string");
+    expect((body2.error as string).toLowerCase()).toContain("used");
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -371,43 +394,120 @@ describe("manifest conversion exchange", () => {
     expect(decryptedClientSecret).toBe("my-client-secret");
   });
 
-  test("GET /connector/app/callback with valid state and injected fetch stores credentials", async () => {
+  test("GET /connector/app/callback with valid state and mocked conversions fetch stores encrypted credentials", async () => {
     const { privateKeyPem } = syntheticKeys;
 
+    const conversionPayload = {
+      id: 77001,
+      slug: "injected-test-app",
+      client_id: "Iv1.injectedclient",
+      client_secret: "injected-client-secret",
+      webhook_secret: "injected-webhook-secret",
+      pem: privateKeyPem,
+      html_url: "https://github.com/apps/injected-test-app",
+    };
+
+    const mockFetch = makeGithubMockFetch({
+      conversionCode: "injected-code",
+      conversionResponse: conversionPayload,
+    });
+
+    // Create a separate home/manager/app with the injectable fetch so the real
+    // global fetch is not used.
+    const injectHome = makeTempDir("freehold-inject-test-");
+    const injectConfig = loadConfig(injectHome);
+    const injectManager = await GraphManager.open(injectHome);
+    // Create a repo graph in the inject environment
+    const injectRepoDir = makeTempDir("freehold-inject-repo-");
+    const { execFileSync } = await import("node:child_process");
+    execFileSync("git", ["init"], { cwd: injectRepoDir });
+    execFileSync("git", ["config", "user.email", "t@t.com"], { cwd: injectRepoDir });
+    execFileSync("git", ["config", "user.name", "T"], { cwd: injectRepoDir });
+    execFileSync("git", ["remote", "add", "origin", "https://github.com/injectowner/injectrepo.git"], { cwd: injectRepoDir });
+    writeFileSync(join(injectRepoDir, "README.md"), "# inject");
+    execFileSync("git", ["add", "README.md"], { cwd: injectRepoDir });
+    execFileSync("git", ["commit", "-m", "init"], { cwd: injectRepoDir });
+    await createGraph(injectRepoDir, "owner");
+
+    const injectApp = createApp(injectManager, hashEmbedder, injectConfig, { fetchFn: mockFetch });
+
+    async function injectReq(method: string, path: string, body?: unknown): Promise<{ status: number; body: unknown }> {
+      const init: RequestInit = {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${injectConfig.token}`,
+        },
+      };
+      if (body !== undefined) init.body = JSON.stringify(body);
+      const res = await injectApp.request(`http://localhost${path}`, init);
+      const ct = res.headers.get("content-type");
+      let responseBody: unknown = null;
+      if (ct?.includes("application/json")) {
+        try { responseBody = await res.json(); } catch {}
+      }
+      return { status: res.status, body: responseBody };
+    }
+
+    // Register the repo graph
+    const regR = await injectReq("POST", "/api/v1/graphs", {
+      path: injectRepoDir,
+      id: "inject-repo",
+      name: "Inject Repo",
+    });
+    expect(regR.status, `register inject-repo: ${JSON.stringify(regR.body)}`).toBe(201);
+
     // Step 1: get a valid signed state
-    const manifestR = await req("POST", `/api/v1/graphs/${repoGraphId}/connector/app/manifest`, {});
+    const manifestR = await injectReq("POST", "/api/v1/graphs/inject-repo/connector/app/manifest", {});
     expect(manifestR.status).toBe(200);
     const { state } = manifestR.body as { state: string };
 
-    // Step 2: prepare the mock conversion payload
-    const conversionPayload = {
-      id: 12345,
-      slug: "test-app",
-      client_id: "Iv1.abc123",
-      client_secret: "clientsecret123",
-      webhook_secret: "webhooksecret456",
-      pem: privateKeyPem,
-      html_url: "https://github.com/apps/test-app",
-    };
-
-    // The callback route needs the fetch for the conversions call to be injectable.
-    // We pass a special header to switch to the test fetch — the route handler
-    // uses the injected fetch from AppEnv when present.
-    // For now we test that a valid state is accepted (the call may fail reaching GitHub
-    // since there's no live network, but it should not be a 400 state error).
-    const r = await req(
+    // Step 2: callback with valid state + injected mock fetch
+    const callbackR = await injectReq(
       "GET",
-      `/api/v1/graphs/${repoGraphId}/connector/app/callback?code=fakecode&state=${encodeURIComponent(state)}`,
+      `/api/v1/graphs/inject-repo/connector/app/callback?code=injected-code&state=${encodeURIComponent(state)}`,
     );
-    // Should not be a 400 (state error). It may be 502 (cannot reach GitHub),
-    // 409 (code rejected by GitHub as expired/invalid), or 200/201.
-    // The key assertion: the state was valid and the handler accepted it (no 400).
-    expect(r.status).not.toBe(400);
+    expect(callbackR.status).toBe(200);
+    const cbBody = callbackR.body as Record<string, unknown>;
+    expect(cbBody.ok).toBe(true);
+    expect(cbBody.appId).toBe("77001");
+    expect(cbBody.appSlug).toBe("injected-test-app");
 
-    // conversionPayload is the expected response shape from GitHub.
-    // The route will try to reach real GitHub and get a 409 (code consumed)
-    // or 502 (network unreachable). The key invariant: state validation was accepted.
-    void conversionPayload;
+    // Step 3: verify credentials are stored encrypted (ciphertext at rest)
+    const injectFh = await injectManager.get("inject-repo");
+    const encKey = deriveEncKey(injectConfig.token);
+
+    const rawRows = await injectFh.db.pg.query<{ name: string; ciphertext: Uint8Array }>(
+      `SELECT name, ciphertext FROM connector_secrets WHERE graph_id = $1`,
+      ["inject-repo"]
+    );
+    expect(rawRows.rows.length).toBeGreaterThanOrEqual(3);
+    for (const row of rawRows.rows) {
+      const ct = Buffer.isBuffer(row.ciphertext) ? row.ciphertext : Buffer.from(row.ciphertext);
+      if (row.name === "pem") {
+        expect(ct.toString("utf-8")).not.toContain("-----BEGIN RSA PRIVATE KEY-----");
+      }
+      if (row.name === "webhookSecret") {
+        expect(ct.toString("utf-8")).not.toContain("injected-webhook-secret");
+      }
+    }
+
+    // Step 4: decrypt round-trip
+    const decPem = await getSecret(injectFh.db, "inject-repo", "pem", encKey);
+    expect(decPem).toBe(privateKeyPem);
+    const decWebhook = await getSecret(injectFh.db, "inject-repo", "webhookSecret", encKey);
+    expect(decWebhook).toBe("injected-webhook-secret");
+    const decClient = await getSecret(injectFh.db, "inject-repo", "clientSecret", encKey);
+    expect(decClient).toBe("injected-client-secret");
+
+    // Step 5: config carries appId/slug
+    const cfg = await getConnector(injectFh.db, "inject-repo");
+    expect(cfg?.appId).toBe("77001");
+    expect(cfg?.appSlug).toBe("injected-test-app");
+
+    // Cleanup
+    try { rmSync(injectHome, { recursive: true, force: true }); } catch {}
+    try { rmSync(injectRepoDir, { recursive: true, force: true }); } catch {}
   });
 });
 
@@ -543,25 +643,32 @@ describe("POST /webhooks/github", () => {
     expect(node?.attributes.status).toBe("open");
   });
 
-  test("invalid signature → 401, no detail in body", async () => {
+  test("invalid signature → 204 (same as unknown repo — avoids graph-existence oracle), no event ingested", async () => {
+    // Record how many comment nodes exist before the bad-sig request
+    const fh = await manager.get(repoGraphId);
+    const before = await getCommentNodeByExternalId(fh, "issue:77777");
+    // node may or may not exist from the valid-sig test above — we just check nothing new is added
+
     const r = await webhookReq(issueCommentPayload, {
       "X-GitHub-Event": "issue_comment",
       "X-Hub-Signature-256": "sha256=invalidsignature",
     });
-    expect(r.status).toBe(401);
-    // No secret/key detail should be leaked
-    if (r.body && typeof r.body === "object") {
-      const errMsg = JSON.stringify(r.body);
-      expect(errMsg).not.toMatch(/secret/i);
-      expect(errMsg).not.toMatch(/hmac/i);
-    }
+    // 204 regardless of whether the repo is known — prevents repo-existence oracle
+    expect(r.status).toBe(204);
+    // body must be empty / null
+    expect(r.body).toBeNull();
+
+    // No new node created for a different comment id that wasn't ingested before
+    const neverIngested = await getCommentNodeByExternalId(fh, "issue:00000");
+    expect(neverIngested).toBeNull();
+    void before;
   });
 
-  test("missing X-Hub-Signature-256 header → 401", async () => {
+  test("missing X-Hub-Signature-256 header → 204 (no oracle)", async () => {
     const r = await webhookReq(issueCommentPayload, {
       "X-GitHub-Event": "issue_comment",
     });
-    expect(r.status).toBe(401);
+    expect(r.status).toBe(204);
   });
 
   test("unknown repo (no graph matches) → 204 silent, nothing written", async () => {

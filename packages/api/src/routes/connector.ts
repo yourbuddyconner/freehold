@@ -39,6 +39,23 @@ interface ManifestStatePayload {
 
 const STATE_TTL_MS = 15 * 60 * 1000;
 
+/**
+ * In-process nonce tracker — prevents replay of a valid manifest state within
+ * its 15-min TTL window. Each entry is { nonce → expiry ms }; entries whose
+ * expiry has passed are pruned on every rejection.
+ */
+const _usedNonces = new Map<string, number>();
+
+function _consumeNonce(nonce: string, expMs: number, nowMs: number): boolean {
+  // Prune expired entries before checking
+  for (const [n, exp] of _usedNonces) {
+    if (exp <= nowMs) _usedNonces.delete(n);
+  }
+  if (_usedNonces.has(nonce)) return false; // already used
+  _usedNonces.set(nonce, expMs);
+  return true;
+}
+
 function signManifestState(payload: ManifestStatePayload, key: Buffer): string {
   const payloadB64 = Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
   const sig = createHmac("sha256", key).update(payloadB64).digest("base64url");
@@ -357,7 +374,8 @@ connectorRouter.get("/connector/app/callback", async (c) => {
   const config = c.get("config");
   const encKey = deriveEncKey(config.token);
 
-  const verified = verifyManifestState(state, encKey, Date.now());
+  const nowMs = Date.now();
+  const verified = verifyManifestState(state, encKey, nowMs);
   if (!verified) {
     return c.json({ error: "invalid or expired state" }, 400);
   }
@@ -366,13 +384,19 @@ connectorRouter.get("/connector/app/callback", async (c) => {
     return c.json({ error: "state graph mismatch" }, 400);
   }
 
+  // Reject replayed nonces within the TTL window
+  if (!_consumeNonce(verified.nonce, verified.exp, nowMs)) {
+    return c.json({ error: "state already used" }, 400);
+  }
+
   // Exchange code for app credentials via GitHub API
   const githubApiBase = (process.env.GITHUB_API_BASE ?? "https://api.github.com").replace(/\/$/, "");
   const conversionUrl = `${githubApiBase}/app-manifests/${encodeURIComponent(code)}/conversions`;
 
+  const fetchFn = c.get("fetchFn") ?? fetch;
   let res: Response;
   try {
-    res = await fetch(conversionUrl, {
+    res = await fetchFn(conversionUrl, {
       method: "POST",
       headers: {
         Accept: "application/vnd.github+json",

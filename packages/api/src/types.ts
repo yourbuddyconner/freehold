@@ -8,6 +8,8 @@ export interface AppVariables {
   embedder: Embedder;
   config: FreeholdConfig;
   manager: GraphManager;
+  /** Injectable fetch for the manifest-conversion HTTP call. Defaults to global fetch when unset. */
+  fetchFn?: typeof fetch;
 }
 
 export type AppEnv = { Variables: AppVariables };

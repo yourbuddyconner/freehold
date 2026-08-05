@@ -4,7 +4,7 @@
  * Mounted BEFORE bearerAuth in app.ts. Security is entirely HMAC-based:
  *   - Match the graph by repository.full_name (owner/repo).
  *   - Verify X-Hub-Signature-256 against the graph's stored webhook secret.
- *   - Invalid signature → 401, no body detail.
+ *   - Invalid signature → 204 silent drop (same as unknown repo — avoids graph-existence oracle).
  *   - Unknown repo → 204 silent drop.
  *   - Valid → normalize event → handleConnectorEvent.
  *
@@ -246,10 +246,11 @@ githubWebhookRouter.post("/webhooks/github", async (c) => {
     return c.body(null, 204);
   }
 
-  // Verify HMAC
+  // Verify HMAC — return 204 (not 401) so response codes don't reveal
+  // which repositories are configured.
   const sigHeader = c.req.header("x-hub-signature-256");
   if (!verifyWebhookSig(rawBody, sigHeader, matchedWebhookSecret)) {
-    return c.body(null, 401);
+    return c.body(null, 204);
   }
 
   // Normalize and dispatch the event
