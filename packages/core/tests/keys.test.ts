@@ -3,7 +3,7 @@ import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createPublicKey, verify as nodeVerify } from "node:crypto";
-import { graphDirComponent, resolveKey, signPayload, publicHex } from "../src/keys.js";
+import { graphDirComponent, resolveKey, signPayload, publicHex, isKeychainNotFound } from "../src/keys.js";
 
 // RFC 8032 test vector secret — same one allod's parity suite uses.
 const SECRET = "9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60";
@@ -26,6 +26,20 @@ afterEach(() => {
 });
 
 describe("keys.ts", () => {
+  it("isKeychainNotFound classifies exit codes correctly", () => {
+    // Exit code 44 (as number)
+    expect(isKeychainNotFound({ code: 44 })).toBe(true);
+    // Exit code 44 (as string)
+    expect(isKeychainNotFound({ code: "44" })).toBe(true);
+    // Other exit codes should not be classified as not-found
+    expect(isKeychainNotFound({ code: 1 })).toBe(false);
+    expect(isKeychainNotFound({ code: "1" })).toBe(false);
+    expect(isKeychainNotFound({ code: 127 })).toBe(false); // ENOENT from missing binary
+    // Missing code property
+    expect(isKeychainNotFound({ stderr: "some error" })).toBe(false);
+    expect(isKeychainNotFound({})).toBe(false);
+  });
+
   it("graphDirComponent matches allod", () => {
     expect(graphDirComponent("sha256:ab/cd:ef")).toBe("ab-cd-ef");
     expect(graphDirComponent("plain-id_1.2")).toBe("plain-id_1.2");

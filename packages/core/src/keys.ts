@@ -108,10 +108,21 @@ function signWithSecret(secretHex: string, payload: string): string {
 // ─── Keychain helper (macOS) ──────────────────────────────────────────────────
 
 /**
+ * Classify whether an error from `security` is a not-found error.
+ * Exit code 44 = errSecItemNotFound; all other errors should propagate.
+ */
+export function isKeychainNotFound(err: unknown): boolean {
+  const e = err as { code?: number | string; stderr?: string };
+  // execFile reports exit codes as the `code` property
+  return e.code === 44 || e.code === "44";
+}
+
+/**
  * Attempt to fetch a YAML record from macOS Keychain for the given service + account.
  * Returns null if the item does not exist (exit code 44).
  * The `-w` flag output may be hex-encoded when the stored value contains newlines;
  * detect hex output and decode back to UTF-8.
+ * Throws if the security binary is absent, keychain is locked, or permission is denied.
  */
 async function fetchFromKeychain(service: string, account: string): Promise<string | null> {
   try {
@@ -128,12 +139,11 @@ async function fetchFromKeychain(service: string, account: string): Promise<stri
     }
     return raw;
   } catch (err: unknown) {
-    const e = err as { code?: number; stderr?: string };
-    // Exit code 44 = errSecItemNotFound — not an error, key just isn't there
-    if (e.code === 44) {
+    // Only return null for not-found (exit code 44); re-throw everything else
+    if (isKeychainNotFound(err)) {
       return null;
     }
-    return null;
+    throw err;
   }
 }
 
