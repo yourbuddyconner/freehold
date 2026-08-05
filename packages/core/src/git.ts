@@ -14,6 +14,16 @@ import { load as yamlLoad, dump as yamlDump } from "js-yaml";
 
 const execFileAsync = promisify(execFile);
 
+/**
+ * Defense-in-depth guard: reject refs/shas that start with '-' to prevent them
+ * from being parsed as git options in commands that don't support --end-of-options.
+ */
+function assertSafeRef(ref: string, label: string): void {
+  if (ref.startsWith("-")) {
+    throw new Error(`unsafe ${label}: starts with '-'`);
+  }
+}
+
 async function git(repoDir: string, args: string[]): Promise<string> {
   try {
     const { stdout } = await execFileAsync("git", args, { cwd: repoDir });
@@ -40,6 +50,7 @@ export async function originRemote(repoDir: string): Promise<string | null> {
  * Resolve a git ref (defaults to HEAD) to a 40-char hex SHA.
  */
 export async function headSha(repoDir: string, ref = "HEAD"): Promise<string> {
+  assertSafeRef(ref, "ref");
   const out = await git(repoDir, ["rev-parse", ref]);
   return out.trim();
 }
@@ -58,7 +69,7 @@ export interface CommitMeta {
  */
 export async function commitMeta(repoDir: string, sha: string): Promise<CommitMeta> {
   // Format: SHA\nAuthorName\nAuthorEmail\nISO8601timestamp\nParent SHAs\nBody…
-  const out = await git(repoDir, ["show", "-s", "--format=%H%n%an%n%ae%n%aI%n%P%n%B", sha]);
+  const out = await git(repoDir, ["show", "-s", "--format=%H%n%an%n%ae%n%aI%n%P%n%B", "--end-of-options", sha]);
   const lines = out.split("\n");
   const resultSha = lines[0].trim();
   const author = lines[1].trim();
@@ -82,10 +93,10 @@ export async function diffTreeOps(repoDir: string, sha: string): Promise<Array<[
   let args: string[];
   if (meta.parents.length === 0) {
     // Root commit: diff against empty tree
-    args = ["diff-tree", "--root", "--no-renames", "--name-status", "-r", sha];
+    args = ["diff-tree", "--root", "--no-renames", "--name-status", "-r", "--end-of-options", sha];
   } else {
     // First-parent two-tree diff
-    args = ["diff-tree", "--no-renames", "--name-status", "-r", meta.parents[0], sha];
+    args = ["diff-tree", "--no-renames", "--name-status", "-r", "--end-of-options", meta.parents[0], sha];
   }
   const out = await git(repoDir, args);
   const results: Array<[string, string]> = [];
@@ -105,6 +116,7 @@ export async function diffTreeOps(repoDir: string, sha: string): Promise<Array<[
  * Returns [] if no note exists.
  */
 export async function readDecisions(repoDir: string, sha: string): Promise<unknown[]> {
+  assertSafeRef(sha, "sha");
   let body: string;
   try {
     body = await git(repoDir, ["notes", "--ref=allod-decisions", "show", sha]);
@@ -131,6 +143,7 @@ export async function appendDecision(
   sha: string,
   record: unknown
 ): Promise<void> {
+  assertSafeRef(sha, "sha");
   const existing = await readDecisions(repoDir, sha);
   existing.push(record);
   const root = { decisions: existing };

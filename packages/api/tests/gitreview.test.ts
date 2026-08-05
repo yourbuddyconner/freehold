@@ -283,6 +283,34 @@ describe("git proposal routes on memory graph return 400", () => {
 });
 
 // ---------------------------------------------------------------------------
+// SHA validation — route 400 for injection-style params
+// ---------------------------------------------------------------------------
+
+describe("sha validation — route 400 for injection-style params", () => {
+  test("GET /git/proposals/:sha rejects --output=evil", async () => {
+    const { status, body } = await req("GET", `/api/v1/graphs/${repoGraphId}/git/proposals/--output%3Devil`);
+    expect(status).toBe(400);
+    expect((body as { error: string }).error).toBe("invalid commit sha");
+  });
+
+  test("POST /git/proposals/:sha/decide rejects --help", async () => {
+    const { status, body } = await req(
+      "POST",
+      `/api/v1/graphs/${repoGraphId}/git/proposals/--help/decide`,
+      { verdict: "approve", by: "reviewer" }
+    );
+    expect(status).toBe(400);
+    expect((body as { error: string }).error).toBe("invalid commit sha");
+  });
+
+  test("GET /git/proposals/:sha accepts 7-char hex", async () => {
+    // A valid-format sha that doesn't exist → 404, not 400
+    const { status } = await req("GET", `/api/v1/graphs/${repoGraphId}/git/proposals/abc1234`);
+    expect(status).toBe(404);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Scoped repo graph — list and detail
 // ---------------------------------------------------------------------------
 

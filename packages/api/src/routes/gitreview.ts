@@ -30,6 +30,12 @@ function repoOnly(fh: { kind: string }): boolean {
 
 const REPO_ONLY_ERROR = "git review is only available for repo graphs";
 
+const SHA_RE = /^[0-9a-f]{7,64}$/i;
+
+function validateSha(sha: string): boolean {
+  return SHA_RE.test(sha);
+}
+
 // ── GET /git/proposals ────────────────────────────────────────────────────────
 
 gitreviewRouter.get("/git/proposals", async (c) => {
@@ -49,6 +55,9 @@ gitreviewRouter.get("/git/proposals/:sha", async (c) => {
     return c.json({ error: REPO_ONLY_ERROR }, 400);
   }
   const sha = c.req.param("sha");
+  if (!validateSha(sha)) {
+    return c.json({ error: "invalid commit sha" }, 400);
+  }
   const proposal = await gitProposal(fh, sha);
   if (!proposal) {
     return c.json({ error: "proposal not found" }, 404);
@@ -83,6 +92,9 @@ gitreviewRouter.post("/git/proposals/:sha/decide", async (c) => {
 
   const { verdict, by } = parsed.data;
   const sha = c.req.param("sha");
+  if (!validateSha(sha)) {
+    return c.json({ error: "invalid commit sha" }, 400);
+  }
 
   // Verify sha exists
   const proposal = await gitProposal(fh, sha);
@@ -148,6 +160,9 @@ gitreviewRouter.post("/git/proposals/:sha/reviews", async (c) => {
 
   const { verdict, body: reviewBody, by, comments = [] } = parsed.data;
   const sha = c.req.param("sha");
+  if (!validateSha(sha)) {
+    return c.json({ error: "invalid commit sha" }, 400);
+  }
 
   // Verify sha exists as a known git proposal
   const proposal = await gitProposal(fh, sha);
@@ -246,6 +261,9 @@ gitreviewRouter.get("/git/proposals/:sha/reviews", async (c) => {
   }
 
   const sha = c.req.param("sha");
+  if (!validateSha(sha)) {
+    return c.json({ error: "invalid commit sha" }, 400);
+  }
   const reviews = await listReviewsForSha(fh, sha);
   return c.json({ reviews });
 });
@@ -259,6 +277,9 @@ gitreviewRouter.post("/git/proposals/:sha/push-notes", async (c) => {
   }
 
   const sha = c.req.param("sha");
+  if (!validateSha(sha)) {
+    return c.json({ error: "invalid commit sha" }, 400);
+  }
 
   // Resolve the graph entry for originRemote
   const manager = c.get("manager");

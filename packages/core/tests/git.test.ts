@@ -125,6 +125,18 @@ describe("git helpers", () => {
     expect(remote).toBeNull();
   });
 
+  test("headSha rejects dash-leading ref", async () => {
+    await expect(headSha(repoDir, "--not-a-ref")).rejects.toThrow();
+  });
+
+  test("readDecisions rejects dash-leading sha", async () => {
+    await expect(readDecisions(repoDir, "--bad")).rejects.toThrow(/unsafe sha/);
+  });
+
+  test("appendDecision rejects dash-leading sha", async () => {
+    await expect(appendDecision(repoDir, "--bad", {})).rejects.toThrow(/unsafe sha/);
+  });
+
   test("diffTreeOps on merge commit uses first-parent two-tree diff", async () => {
     // Get the current branch name (may be "main" or "master" depending on git config)
     const currentBranch = execFileSync("git", ["rev-parse", "--abbrev-ref", "HEAD"], { cwd: repoDir })
