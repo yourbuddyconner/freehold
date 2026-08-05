@@ -282,9 +282,8 @@ export async function handleConnectorEvent(
   if (ev.path) {
     activeAttrs.anchor = commitRef ? `${commitRef}:${ev.path}` : ev.path;
   }
-  if (ev.inReplyTo) {
-    activeAttrs.inReplyTo = ev.inReplyTo;
-  }
+  // inReplyTo is available on ConnectorEvent for future replies_to edge use,
+  // but is not written as a node attribute (not declared in the ontology).
 
   // Dedup: check if we've seen this external_id before
   const existing = await findCommentByExternalId(fh, ev.id);
