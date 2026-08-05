@@ -140,7 +140,7 @@ beforeAll(async () => {
   repoDir = makeTempDir("freehold-code-repo-");
   repoBasename = basename(repoDir);
 
-  execFileSync("git", ["init"], { cwd: repoDir });
+  execFileSync("git", ["init", "-b", "main"], { cwd: repoDir });
   execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: repoDir });
   execFileSync("git", ["config", "user.name", "Test User"], { cwd: repoDir });
   writeFileSync(join(repoDir, "README.md"), "# test");

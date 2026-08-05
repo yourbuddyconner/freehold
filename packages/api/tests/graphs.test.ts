@@ -33,7 +33,7 @@ function makeTempDir(prefix: string): string {
 
 /** Create a scratch git repo with an initialised allod graph (mirrors manager.test.ts). */
 async function makeRepoGraph(repoDir: string): Promise<void> {
-  execFileSync("git", ["init"], { cwd: repoDir });
+  execFileSync("git", ["init", "-b", "main"], { cwd: repoDir });
   execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: repoDir });
   execFileSync("git", ["config", "user.name", "Test User"], { cwd: repoDir });
   writeFileSync(join(repoDir, "README.md"), "# test repo");

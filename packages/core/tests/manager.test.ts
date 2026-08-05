@@ -54,7 +54,7 @@ function makeTempDir(prefix: string): string {
 
 /** Create a scratch git repo with an initialised allod graph. */
 async function makeRepoGraph(repoDir: string): Promise<void> {
-  execFileSync("git", ["init"], { cwd: repoDir });
+  execFileSync("git", ["init", "-b", "main"], { cwd: repoDir });
   execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: repoDir });
   execFileSync("git", ["config", "user.name", "Test User"], { cwd: repoDir });
   // Create initial file + commit so HEAD exists

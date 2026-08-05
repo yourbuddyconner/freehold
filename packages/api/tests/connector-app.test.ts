@@ -270,7 +270,7 @@ beforeAll(async () => {
   // Create a repo directory with a git repo
   repoDir = makeTempDir("freehold-app-test-repo-");
   const { execFileSync } = await import("node:child_process");
-  execFileSync("git", ["init"], { cwd: repoDir });
+  execFileSync("git", ["init", "-b", "main"], { cwd: repoDir });
   execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: repoDir });
   execFileSync("git", ["config", "user.name", "Test User"], { cwd: repoDir });
   execFileSync("git", ["remote", "add", "origin", "https://github.com/owner/testrepo.git"], {
@@ -448,7 +448,7 @@ describe("manifest conversion exchange", () => {
     // Create a repo graph in the inject environment
     const injectRepoDir = makeTempDir("freehold-inject-repo-");
     const { execFileSync } = await import("node:child_process");
-    execFileSync("git", ["init"], { cwd: injectRepoDir });
+    execFileSync("git", ["init", "-b", "main"], { cwd: injectRepoDir });
     execFileSync("git", ["config", "user.email", "t@t.com"], { cwd: injectRepoDir });
     execFileSync("git", ["config", "user.name", "T"], { cwd: injectRepoDir });
     execFileSync(
@@ -764,7 +764,7 @@ describe("poll/webhook parity", () => {
     for (const id of ["parity1", "parity2"]) {
       const dir = makeTempDir(`freehold-parity-${id}-`);
       const { execFileSync } = await import("node:child_process");
-      execFileSync("git", ["init"], { cwd: dir });
+      execFileSync("git", ["init", "-b", "main"], { cwd: dir });
       execFileSync("git", ["config", "user.email", "t@t.com"], { cwd: dir });
       execFileSync("git", ["config", "user.name", "T"], { cwd: dir });
       execFileSync(
