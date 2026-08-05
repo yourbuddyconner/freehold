@@ -242,6 +242,25 @@ export function useCodeNeighborhood(path: string | undefined) {
   });
 }
 
+/** Git proposals for the active repo graph. */
+export function useGitProposals(enabled = true) {
+  return useQuery({
+    queryKey: ["git-proposals"],
+    queryFn: () => apiClient.listGitProposals(),
+    enabled,
+  });
+}
+
+/** Single git proposal by sha. */
+export function useGitProposal(sha: string | undefined) {
+  return useQuery({
+    queryKey: ["git-proposal", sha],
+    queryFn: () => apiClient.getGitProposal(sha!),
+    enabled: !!sha,
+    retry: false,
+  });
+}
+
 /** Manual classification of a node by the owner. */
 export function useClassify() {
   const { data: sessionData } = useSession();
@@ -278,3 +297,4 @@ export function useGitHubBlobUrl(filePath: string | undefined): string | null {
 
 // Re-export types for convenience in route components
 export type { CodeFileView, CodeItemView, CodeNeighborhood, RegionRule };
+export type { GitProposal, DecideResult, PostReviewBody, PostReviewResult, ReviewEntry } from "@freehold/client";

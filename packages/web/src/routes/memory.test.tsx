@@ -19,6 +19,7 @@ vi.mock("~/lib/hooks", () => ({
   useSession: vi.fn(),
   useGraphs: vi.fn().mockReturnValue({ graphs: [], defaultGraph: "main" }),
   useActiveGraph: vi.fn().mockReturnValue({ activeGraphId: "main", setActiveGraphId: vi.fn() }),
+  useGitProposals: vi.fn().mockReturnValue({ data: { proposals: [] }, isLoading: false, isError: false, error: null }),
 }));
 
 vi.mock("~/lib/api", () => ({

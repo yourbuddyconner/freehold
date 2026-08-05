@@ -2751,6 +2751,56 @@
           }
         }
       }
+    },
+    "/api/v1/git/proposals/{sha}/push-notes": {
+      "post": {
+        "summary": "Push decision notes to remote",
+        "description": "Pushes refs/notes/allod-decisions to the graph's origin remote. Returns {pushed:true} on success or {pushed:false, pushError} on failure.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "sha",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Push result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "pushed": {
+                      "type": "boolean"
+                    },
+                    "pushError": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "pushed"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a repo graph or no remote configured"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
     }
   },
   "webhooks": {}

@@ -133,5 +133,5 @@ export type { RecallResult, RecallFilters } from "./recall.js";
 
 // Git proposal review
 export { listGitProposals, gitProposal, decideGit, KeyMissingError, listReviewsForSha } from "./gitreview.js";
-export { branchHeads } from "./git.js";
+export { branchHeads, pushNotes } from "./git.js";
 export type { GitProposal, DecideResult, ReviewEntry, ReviewCommentEntry } from "./gitreview.js";

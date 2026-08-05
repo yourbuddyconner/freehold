@@ -1207,6 +1207,31 @@ function buildRegistry(): OpenAPIRegistry {
     },
   });
 
+  // Git proposals — push notes
+  registry.registerPath({
+    method: "post",
+    path: "/api/v1/git/proposals/{sha}/push-notes",
+    summary: "Push decision notes to remote",
+    description: "Pushes refs/notes/allod-decisions to the graph's origin remote. Returns {pushed:true} on success or {pushed:false, pushError} on failure.",
+    security: auth,
+    request: { params: z.object({ sha: z.string() }) },
+    responses: {
+      "200": {
+        description: "Push result",
+        content: {
+          "application/json": {
+            schema: z.object({
+              pushed: z.boolean(),
+              pushError: z.string().optional(),
+            }),
+          },
+        },
+      },
+      "400": { description: "Not a repo graph or no remote configured" },
+      "401": { description: "Unauthorized" },
+    },
+  });
+
   // Git proposals — get reviews
   registry.registerPath({
     method: "get",

@@ -27,6 +27,7 @@ vi.mock("~/lib/hooks", () => ({
   useListGraphs: vi.fn(),
   useGitHubBlobUrl: vi.fn().mockReturnValue(null),
   useCodeNeighborhood: vi.fn(),
+  useGitProposals: vi.fn().mockReturnValue({ data: { proposals: [] }, isLoading: false, isError: false, error: null }),
 }));
 
 vi.mock("~/lib/api", () => ({

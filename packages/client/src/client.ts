@@ -441,4 +441,9 @@ export class FreeholdClient {
   async listGitReviews(sha: string): Promise<{ reviews: ReviewEntry[] }> {
     return this.fetch<{ reviews: ReviewEntry[] }>("GET", `/api/v1/git/proposals/${sha}/reviews`);
   }
+
+  /** POST /api/v1/git/proposals/:sha/push-notes — push decision notes to remote */
+  async pushGitNotes(sha: string): Promise<{ pushed: boolean; pushError?: string }> {
+    return this.fetch<{ pushed: boolean; pushError?: string }>("POST", `/api/v1/git/proposals/${sha}/push-notes`);
+  }
 }

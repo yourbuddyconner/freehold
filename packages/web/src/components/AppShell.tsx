@@ -2,7 +2,7 @@ import { Link, Outlet } from "@tanstack/react-router";
 import { Archive, BookOpen, Code, GitBranch, Settings, Shield, SquareCheck } from "lucide-react";
 import type React from "react";
 import { cn } from "~/lib/cn";
-import { useActiveGraph, useGraphs, usePending } from "~/lib/hooks";
+import { useActiveGraph, useGitProposals, useGraphs, usePending } from "~/lib/hooks";
 
 interface NavEntry {
   to: string;
@@ -26,7 +26,6 @@ const NAV: NavEntry[] = [
 
 export function AppShell() {
   const { data } = usePending();
-  const pendingCount = data?.proposals?.length ?? 0;
   const { graphs, defaultGraph } = useGraphs();
   const { activeGraphId, setActiveGraphId } = useActiveGraph();
 
@@ -35,6 +34,11 @@ export function AppShell() {
   // treat everything as "memory" — the default graph behaviour.
   const activeGraph = graphs.find((g) => g.id === activeGraphId) ?? null;
   const activeKind: "memory" | "repo" = activeGraph?.kind ?? "memory";
+
+  const { data: gitData } = useGitProposals(activeKind === "repo");
+  const nativePendingCount = data?.proposals?.length ?? 0;
+  const gitPendingCount = activeKind === "repo" ? (gitData?.proposals ?? []).filter(p => p.decided === "undecided").length : 0;
+  const pendingCount = nativePendingCount + gitPendingCount;
 
   function handleGraphChange(e: React.ChangeEvent<HTMLSelectElement>) {
     setActiveGraphId(e.target.value);

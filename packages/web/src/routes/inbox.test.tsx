@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider, createMemoryHistory, createRouter } from "@tanstack/react-router";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { apiClient } from "~/lib/api";
 import * as hooks from "~/lib/hooks";
@@ -14,6 +14,8 @@ vi.mock("~/lib/hooks", () => ({
   useEntity: vi.fn(),
   useGraphs: vi.fn().mockReturnValue({ graphs: [], defaultGraph: "main" }),
   useActiveGraph: vi.fn().mockReturnValue({ activeGraphId: "main", setActiveGraphId: vi.fn() }),
+  useGitProposals: vi.fn().mockReturnValue({ data: { proposals: [] }, isLoading: false, isError: false, error: null }),
+  useSession: vi.fn().mockReturnValue({ data: { owner: "owner", defaultAgent: "claude", port: 8710, graphs: [], defaultGraph: "main" }, isLoading: false, isError: false, error: null }),
 }));
 
 vi.mock("~/components/PierreDiff", () => ({
@@ -25,6 +27,15 @@ vi.mock("~/components/PierreDiff", () => ({
 vi.mock("~/lib/api", () => ({
   GRAPH_STORAGE_KEY: "freehold-graph",
   setActiveGraph: vi.fn(),
+  ApiError: class ApiError extends Error {
+    code: string;
+    status: number;
+    constructor(code: string, message: string, status: number) {
+      super(message);
+      this.code = code;
+      this.status = status;
+    }
+  },
   apiClient: {
     proposals: vi.fn(),
     approve: vi.fn().mockResolvedValue({}),
@@ -32,6 +43,10 @@ vi.mock("~/lib/api", () => ({
     recall: vi.fn(),
     getEntity: vi.fn(),
     schema: vi.fn(),
+    listGitProposals: vi.fn().mockResolvedValue({ proposals: [] }),
+    decideGitProposal: vi.fn().mockResolvedValue({ outcome: "approved", pushed: true }),
+    postGitReview: vi.fn().mockResolvedValue({ reviewId: "rv-1", commentIds: [], status: "saved" }),
+    pushGitNotes: vi.fn().mockResolvedValue({ pushed: true }),
   },
 }));
 
@@ -105,6 +120,18 @@ function setupHooks(proposals: TestProposal[]) {
     isError: false,
     error: null,
   } as unknown as ReturnType<typeof hooks.useVerify>);
+  vi.mocked(hooks.useGitProposals).mockReturnValue({
+    data: { proposals: [] },
+    isLoading: false,
+    isError: false,
+    error: null,
+  } as unknown as ReturnType<typeof hooks.useGitProposals>);
+  vi.mocked(hooks.useSession).mockReturnValue({
+    data: { owner: "owner", defaultAgent: "claude", port: 8710, graphs: [], defaultGraph: "main" },
+    isLoading: false,
+    isError: false,
+    error: null,
+  } as unknown as ReturnType<typeof hooks.useSession>);
 }
 
 async function renderInbox(proposals: TestProposal[]) {
@@ -262,6 +289,251 @@ describe("Inbox", () => {
     expect(diffEl.textContent).toContain("name:");
   });
 
+  describe("Inbox — git proposals (repo graph)", () => {
+    const gitProposal = {
+      sha: "deadbeef1234",
+      ref: "refs/heads/main",
+      author: "alice",
+      timestamp: "2026-01-01T00:00:00Z",
+      message: "feat: add new feature",
+      target: "refs/heads/main",
+      matched: ["require-reviewer"],
+      checklist: [{ role: "reviewer" }],
+      unmet: ["reviewer"],
+      decided: "undecided" as const,
+      paths: [
+        { verb: "M", path: "src/lib.rs", regions: ["core"], indexed: true },
+        { verb: "A", path: "src/new.rs", regions: [], indexed: false },
+      ],
+    };
+
+    function setupRepoGraph() {
+      vi.mocked(hooks.useGraphs).mockReturnValue({
+        graphs: [{ id: "repo-1", name: "my-repo", kind: "repo" }],
+        defaultGraph: "repo-1",
+      });
+      vi.mocked(hooks.useActiveGraph).mockReturnValue({
+        activeGraphId: "repo-1",
+        setActiveGraphId: vi.fn(),
+      });
+    }
+
+    async function renderRepoInbox() {
+      setupHooks([]);
+      setupRepoGraph();
+      vi.mocked(apiClient.listGitProposals).mockResolvedValue({ proposals: [gitProposal] });
+      vi.mocked(hooks.useGitProposals).mockReturnValue({
+        data: { proposals: [gitProposal] },
+        isLoading: false,
+        isError: false,
+        error: null,
+      } as unknown as ReturnType<typeof hooks.useGitProposals>);
+      vi.mocked(hooks.useSession).mockReturnValue({
+        data: { owner: "alice", defaultAgent: "claude", port: 8710, graphs: [], defaultGraph: "main" },
+        isLoading: false,
+        isError: false,
+        error: null,
+      } as unknown as ReturnType<typeof hooks.useSession>);
+
+      const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      const router = createRouter({
+        routeTree,
+        history: createMemoryHistory({ initialEntries: ["/inbox"] }),
+      });
+      await act(async () => {
+        render(
+          <QueryClientProvider client={qc}>
+            <RouterProvider router={router} />
+          </QueryClientProvider>
+        );
+      });
+    }
+
+    it("renders Commits section for repo graphs", async () => {
+      await renderRepoInbox();
+      expect(screen.getByRole("region", { name: /commits/i })).toBeInTheDocument();
+    });
+
+    it("renders git proposal card with short sha and message", async () => {
+      await renderRepoInbox();
+      expect(screen.getByText("deadbee")).toBeInTheDocument();
+      expect(screen.getByText("feat: add new feature")).toBeInTheDocument();
+    });
+
+    it("renders checklist rows with met/unmet indicators", async () => {
+      await renderRepoInbox();
+      const checklist = screen.getByTestId("checklist");
+      expect(checklist).toBeInTheDocument();
+      const unmetIndicator = within(checklist).getByLabelText("unmet");
+      expect(unmetIndicator).toBeInTheDocument();
+    });
+
+    it("renders region badge for indexed path", async () => {
+      await renderRepoInbox();
+      expect(screen.getByTestId("region-badge")).toHaveTextContent("core");
+    });
+
+    it("renders not-yet-indexed badge for unindexed path", async () => {
+      await renderRepoInbox();
+      expect(screen.getByTestId("not-indexed-badge")).toBeInTheDocument();
+      expect(screen.getByTestId("not-indexed-badge")).toHaveTextContent("not yet indexed");
+    });
+
+    it("renders undecided chip for undecided proposal", async () => {
+      await renderRepoInbox();
+      expect(screen.getByTestId("decided-chip")).toHaveTextContent("undecided");
+    });
+
+    it("disables governance actions and shows reason on key-missing 409", async () => {
+      setupHooks([]);
+      setupRepoGraph();
+      vi.mocked(hooks.useGitProposals).mockReturnValue({
+        data: { proposals: [gitProposal] },
+        isLoading: false,
+        isError: false,
+        error: null,
+      } as unknown as ReturnType<typeof hooks.useGitProposals>);
+      vi.mocked(hooks.useSession).mockReturnValue({
+        data: { owner: "alice", defaultAgent: "claude", port: 8710, graphs: [], defaultGraph: "main" },
+        isLoading: false,
+        isError: false,
+        error: null,
+      } as unknown as ReturnType<typeof hooks.useSession>);
+
+      const { ApiError } = await import("~/lib/api");
+      vi.mocked(apiClient.decideGitProposal).mockRejectedValue(
+        new ApiError("key-missing", "no signing key for alice", 409)
+      );
+
+      const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      const router = createRouter({
+        routeTree,
+        history: createMemoryHistory({ initialEntries: ["/inbox"] }),
+      });
+      await act(async () => {
+        render(
+          <QueryClientProvider client={qc}>
+            <RouterProvider router={router} />
+          </QueryClientProvider>
+        );
+      });
+
+      const rejectBtn = screen.getByRole("button", { name: /reject/i });
+      await act(async () => {
+        fireEvent.click(rejectBtn);
+      });
+      await waitFor(() => {
+        expect(screen.getByTestId("key-missing-notice")).toBeInTheDocument();
+      });
+      expect(screen.getByRole("button", { name: /reject/i })).toBeDisabled();
+    });
+
+    it("shows saved-locally notice and retry button when pushed:false", async () => {
+      setupHooks([]);
+      setupRepoGraph();
+      vi.mocked(hooks.useGitProposals).mockReturnValue({
+        data: { proposals: [gitProposal] },
+        isLoading: false,
+        isError: false,
+        error: null,
+      } as unknown as ReturnType<typeof hooks.useGitProposals>);
+      vi.mocked(hooks.useSession).mockReturnValue({
+        data: { owner: "alice", defaultAgent: "claude", port: 8710, graphs: [], defaultGraph: "main" },
+        isLoading: false,
+        isError: false,
+        error: null,
+      } as unknown as ReturnType<typeof hooks.useSession>);
+      vi.mocked(apiClient.decideGitProposal).mockResolvedValue({
+        outcome: "approved",
+        pushed: false,
+        pushError: "remote: Connection refused",
+      });
+
+      const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      const router = createRouter({
+        routeTree,
+        history: createMemoryHistory({ initialEntries: ["/inbox"] }),
+      });
+      await act(async () => {
+        render(
+          <QueryClientProvider client={qc}>
+            <RouterProvider router={router} />
+          </QueryClientProvider>
+        );
+      });
+
+      const rejectBtn = screen.getByRole("button", { name: /reject/i });
+      await act(async () => {
+        fireEvent.click(rejectBtn);
+      });
+      await waitFor(() => {
+        expect(screen.getByTestId("saved-locally-notice")).toBeInTheDocument();
+      });
+      expect(screen.getByTestId("retry-push")).toBeInTheDocument();
+    });
+
+    it("composer posts correct body shape on submit", async () => {
+      setupHooks([]);
+      setupRepoGraph();
+      vi.mocked(hooks.useGitProposals).mockReturnValue({
+        data: { proposals: [gitProposal] },
+        isLoading: false,
+        isError: false,
+        error: null,
+      } as unknown as ReturnType<typeof hooks.useGitProposals>);
+      vi.mocked(hooks.useSession).mockReturnValue({
+        data: { owner: "alice", defaultAgent: "claude", port: 8710, graphs: [], defaultGraph: "main" },
+        isLoading: false,
+        isError: false,
+        error: null,
+      } as unknown as ReturnType<typeof hooks.useSession>);
+      vi.mocked(apiClient.postGitReview).mockResolvedValue({
+        reviewId: "rv-1",
+        commentIds: [],
+        status: "saved",
+      });
+
+      const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      const router = createRouter({
+        routeTree,
+        history: createMemoryHistory({ initialEntries: ["/inbox"] }),
+      });
+      await act(async () => {
+        render(
+          <QueryClientProvider client={qc}>
+            <RouterProvider router={router} />
+          </QueryClientProvider>
+        );
+      });
+
+      const writeReviewBtn = screen.getByRole("button", { name: /write review/i });
+      await act(async () => {
+        fireEvent.click(writeReviewBtn);
+      });
+
+      const bodyTextarea = screen.getByRole("textbox", { name: /review body/i });
+      await act(async () => {
+        fireEvent.change(bodyTextarea, { target: { value: "Looks good!" } });
+      });
+
+      const submitBtn = screen.getByRole("button", { name: /submit review/i });
+      await act(async () => {
+        fireEvent.click(submitBtn);
+      });
+
+      await waitFor(() => {
+        expect(vi.mocked(apiClient.postGitReview)).toHaveBeenCalledWith(
+          "deadbeef1234",
+          expect.objectContaining({
+            verdict: "approve",
+            body: "Looks good!",
+            by: "alice",
+          })
+        );
+      });
+    });
+  });
+
   it("clicking approve button and then confirming invalidates queries", async () => {
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const invalidateSpy = vi.spyOn(qc, "invalidateQueries");
@@ -290,6 +562,18 @@ describe("Inbox", () => {
       isError: false,
       error: null,
     } as unknown as ReturnType<typeof hooks.useVerify>);
+    vi.mocked(hooks.useGitProposals).mockReturnValue({
+      data: { proposals: [] },
+      isLoading: false,
+      isError: false,
+      error: null,
+    } as unknown as ReturnType<typeof hooks.useGitProposals>);
+    vi.mocked(hooks.useSession).mockReturnValue({
+      data: { owner: "owner", defaultAgent: "claude", port: 8710, graphs: [], defaultGraph: "main" },
+      isLoading: false,
+      isError: false,
+      error: null,
+    } as unknown as ReturnType<typeof hooks.useSession>);
 
     const router = createRouter({
       routeTree,

@@ -13,6 +13,7 @@ import {
   decideGit,
   KeyMissingError,
   listReviewsForSha,
+  pushNotes,
 } from "@freehold/core";
 import { withGraph } from "@freehold/core";
 import { Hono } from "hono";
@@ -247,4 +248,34 @@ gitreviewRouter.get("/git/proposals/:sha/reviews", async (c) => {
   const sha = c.req.param("sha");
   const reviews = await listReviewsForSha(fh, sha);
   return c.json({ reviews });
+});
+
+// ── POST /git/proposals/:sha/push-notes ──────────────────────────────────────
+
+gitreviewRouter.post("/git/proposals/:sha/push-notes", async (c) => {
+  const fh = c.get("freehold");
+  if (!repoOnly(fh)) {
+    return c.json({ error: REPO_ONLY_ERROR }, 400);
+  }
+
+  const sha = c.req.param("sha");
+
+  // Resolve the graph entry for originRemote
+  const manager = c.get("manager");
+  const entry = await manager.getEntry(fh.graphId);
+  if (!entry) {
+    return c.json({ error: "graph entry not found" }, 500);
+  }
+
+  if (!entry.originRemote) {
+    return c.json({ error: "no remote configured" }, 400);
+  }
+
+  try {
+    await pushNotes(fh.graphDir, entry.originRemote);
+    return c.json({ pushed: true });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return c.json({ pushed: false, pushError: msg });
+  }
 });
