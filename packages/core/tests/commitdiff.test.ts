@@ -8,8 +8,8 @@
  *   commit 4 (merge): first-parent is commit 3 — should only show first-parent diff
  */
 
-import { execFileSync, execSync } from "node:child_process";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
@@ -21,9 +21,11 @@ describe("commitDiff (content form)", () => {
   let sha2: string;
   let sha3: string;
   let mergeSha: string;
+  const tempDirs: string[] = [];
 
   beforeEach(() => {
     repoDir = mkdtempSync(join(tmpdir(), "freehold-commitdiff-"));
+    tempDirs.push(repoDir);
     execFileSync("git", ["init", "-b", "main"], { cwd: repoDir });
     execFileSync("git", ["config", "user.email", "t@t.com"], { cwd: repoDir });
     execFileSync("git", ["config", "user.name", "T"], { cwd: repoDir });
@@ -116,6 +118,7 @@ describe("commitDiff (content form)", () => {
   test("rename carries oldPath and both contents", async () => {
     // Create a rename commit
     const renameRepo = mkdtempSync(join(tmpdir(), "freehold-rename-"));
+    tempDirs.push(renameRepo);
     execFileSync("git", ["init", "-b", "main"], { cwd: renameRepo });
     execFileSync("git", ["config", "user.email", "t@t.com"], { cwd: renameRepo });
     execFileSync("git", ["config", "user.name", "T"], { cwd: renameRepo });
@@ -145,6 +148,7 @@ describe("commitDiff (content form)", () => {
   test("binary file ships empty contents, binary true", async () => {
     // Write a file with a NUL byte to mark it as binary
     const binaryRepo = mkdtempSync(join(tmpdir(), "freehold-binary-"));
+    tempDirs.push(binaryRepo);
     execFileSync("git", ["init", "-b", "main"], { cwd: binaryRepo });
     execFileSync("git", ["config", "user.email", "t@t.com"], { cwd: binaryRepo });
     execFileSync("git", ["config", "user.name", "T"], { cwd: binaryRepo });
@@ -169,6 +173,7 @@ describe("commitDiff (content form)", () => {
 
   test("a side over 512 KB truncates the file", async () => {
     const bigRepo = mkdtempSync(join(tmpdir(), "freehold-big-"));
+    tempDirs.push(bigRepo);
     execFileSync("git", ["init", "-b", "main"], { cwd: bigRepo });
     execFileSync("git", ["config", "user.email", "t@t.com"], { cwd: bigRepo });
     execFileSync("git", ["config", "user.name", "T"], { cwd: bigRepo });
@@ -196,5 +201,12 @@ describe("commitDiff (content form)", () => {
 
   test("unknown sha throws", async () => {
     await expect(commitDiff(repoDir, "deadbeef1234567")).rejects.toThrow();
+  });
+
+  afterEach(() => {
+    for (const dir of tempDirs) {
+      rmSync(dir, { recursive: true, force: true });
+    }
+    tempDirs.length = 0;
   });
 });
