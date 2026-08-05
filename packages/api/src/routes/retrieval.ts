@@ -29,7 +29,7 @@ retrievalRouter.get("/recall", async (c) => {
     // `status` query param maps to `approval` field in RecallFilters/RecallResult
     approval: status ?? undefined,
   };
-  const results = await recall(fh, q, embedder, filters);
+  const results = await recall(fh, q, embedder, filters, undefined, fh.graphId);
   return c.json({ results });
 });
 
@@ -61,7 +61,7 @@ retrievalRouter.get("/memories", async (c) => {
 
 retrievalRouter.get("/graph", async (c) => {
   const fh = c.get("freehold");
-  const view = await memoryGraph(fh);
+  const view = await memoryGraph(fh, undefined, fh.graphId);
   return c.json(view);
 });
 

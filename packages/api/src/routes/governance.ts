@@ -86,7 +86,7 @@ governanceRouter.get("/verify", async (c) => {
 governanceRouter.post("/reindex", async (c) => {
   const fh = c.get("freehold");
   const embedder = c.get("embedder");
-  await reindex(fh, embedder);
+  await reindex(fh, embedder, fh.graphId);
   return c.json({ status: "ok" });
 });
 

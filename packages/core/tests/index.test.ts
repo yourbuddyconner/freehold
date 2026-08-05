@@ -380,7 +380,153 @@ describe("reindex: alphabetical YAML field order (live-delta regression)", () =>
   });
 });
 
-// ---- Test 7: Real transformers embedder smoke test (gated) ----
+// ---- Test 7: Scoped recall isolation ----
+//
+// A canary note written to graph "scoped" must be retrievable via recall()
+// called with graphId="scoped", and must be absent from recall() called with
+// graphId="main".  hashEmbedder makes this deterministic (no model download).
+
+describe("scoped recall isolation", () => {
+  test("canary retrievable from scoped graph, absent from main", async () => {
+    const home = mkdtempSync(join(tmpdir(), "freehold-scope-recall-"));
+    // Shared PGlite — both Freehold handles write to the same DB, different graph_id
+    const db = await openDb(join(home, "pg"));
+
+    // Graph "main" — standard makeFreehold-style handle
+    const mainGraphDir = join(home, "graphs", "main");
+    const mainGraph = await createGraph(mainGraphDir, "owner");
+    await mainGraph.principal_add("agent", "agent", "owner");
+    const mainFh = {
+      graph: mainGraph,
+      db,
+      home,
+      graphName: "main",
+      graphId: "main",
+      kind: "memory" as const,
+      graphDir: mainGraphDir,
+    } as unknown as Freehold;
+
+    // Graph "scoped" — separate graph dir, same PGlite DB, different graphId
+    const scopedGraphDir = join(home, "graphs", "scoped");
+    const scopedGraph = await createGraph(scopedGraphDir, "owner");
+    await scopedGraph.principal_add("agent", "agent", "owner");
+    const scopedFh = {
+      graph: scopedGraph,
+      db,
+      home,
+      graphName: "scoped",
+      graphId: "scoped",
+      kind: "memory" as const,
+      graphDir: scopedGraphDir,
+    } as unknown as Freehold;
+
+    // Write a canary note to the scoped graph only
+    const canary = await remember(scopedGraph, "agent", "canary scoped note uniquetoken42");
+    expect(canary.status).toBe("saved");
+
+    // Write a decoy note to main so that recall has something to return from main
+    await remember(mainGraph, "agent", "decoy main note different content");
+
+    // Sync both indexes (each reads freehold.graphId internally)
+    await syncIndex(scopedFh, hashEmbedder);
+    await syncIndex(mainFh, hashEmbedder);
+
+    // Scoped recall must find the canary
+    const scopedResults = await recall(scopedFh, "uniquetoken42", hashEmbedder, undefined, 10, "scoped");
+    const scopedIds = scopedResults.map((r) => r.id);
+    expect(scopedIds).toContain(canary.noteId);
+
+    // Main recall must NOT contain the canary
+    const mainResults = await recall(mainFh, "uniquetoken42", hashEmbedder, undefined, 10, "main");
+    const mainIds = mainResults.map((r) => r.id);
+    expect(mainIds).not.toContain(canary.noteId);
+  });
+});
+
+// ---- Test 8: Scoped reindex safety ----
+//
+// Writing to main + a scoped graph, then running reindex() with graphId="scoped",
+// must rebuild the scoped graph's rows while leaving main's rows intact.
+
+describe("scoped reindex safety", () => {
+  test("scoped reindex rebuilds scoped rows and does not wipe main", async () => {
+    const home = mkdtempSync(join(tmpdir(), "freehold-scope-reindex-"));
+    const db = await openDb(join(home, "pg"));
+
+    // Graph "main"
+    const mainGraphDir = join(home, "graphs", "main");
+    const mainGraph = await createGraph(mainGraphDir, "owner");
+    await mainGraph.principal_add("agent", "agent", "owner");
+    const mainFh = {
+      graph: mainGraph,
+      db,
+      home,
+      graphName: "main",
+      graphId: "main",
+      kind: "memory" as const,
+      graphDir: mainGraphDir,
+    } as unknown as Freehold;
+
+    // Graph "scoped"
+    const scopedGraphDir = join(home, "graphs", "scoped");
+    const scopedGraph = await createGraph(scopedGraphDir, "owner");
+    await scopedGraph.principal_add("agent", "agent", "owner");
+    const scopedFh = {
+      graph: scopedGraph,
+      db,
+      home,
+      graphName: "scoped",
+      graphId: "scoped",
+      kind: "memory" as const,
+      graphDir: scopedGraphDir,
+    } as unknown as Freehold;
+
+    // Populate both graphs and sync their indexes
+    const mainNote = await remember(mainGraph, "agent", "main graph note content");
+    const scopedNote = await remember(scopedGraph, "agent", "scoped graph note content");
+    expect(mainNote.status).toBe("saved");
+    expect(scopedNote.status).toBe("saved");
+
+    await syncIndex(mainFh, hashEmbedder);
+    await syncIndex(scopedFh, hashEmbedder);
+
+    // Verify both are in the DB under their respective graph_ids
+    const beforeMain = await db.pg.query<{ id: string }>(
+      "SELECT id FROM objects WHERE graph_id = 'main'"
+    );
+    const beforeScoped = await db.pg.query<{ id: string }>(
+      "SELECT id FROM objects WHERE graph_id = 'scoped'"
+    );
+    expect(beforeMain.rows.length).toBeGreaterThan(0);
+    expect(beforeScoped.rows.length).toBeGreaterThan(0);
+    const mainIdsBefore = beforeMain.rows.map((r) => r.id);
+
+    // Run scoped reindex — this is the operation being guarded
+    await reindex(scopedFh, hashEmbedder, "scoped");
+
+    // Main graph rows must all survive
+    const afterMain = await db.pg.query<{ id: string }>(
+      "SELECT id FROM objects WHERE graph_id = 'main'"
+    );
+    const mainIdsAfter = afterMain.rows.map((r) => r.id);
+    for (const id of mainIdsBefore) {
+      expect(mainIdsAfter).toContain(id);
+    }
+
+    // Scoped graph rows must be present (rebuilt by reindex)
+    const afterScoped = await db.pg.query<{ id: string }>(
+      "SELECT id FROM objects WHERE graph_id = 'scoped'"
+    );
+    expect(afterScoped.rows.length).toBeGreaterThan(0);
+    // The scoped note must be re-indexed
+    const scopedIds = afterScoped.rows.map((r) => r.id);
+    expect(scopedIds).toContain(scopedNote.noteId);
+  });
+});
+
+// ---- Test 9: Real transformers embedder smoke test (gated) ----
+//
+// (Renumbered from 7 — tests 7 and 8 are the scoped isolation tests above.)
 //
 // Run with: FREEHOLD_E2E_REAL_EMBEDDER=1 pnpm -r test
 //
