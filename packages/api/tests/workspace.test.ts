@@ -137,4 +137,16 @@ describe("Workspace views", () => {
     expect(status).toBe(200);
     expect((body as { owner?: string }).owner).toBe("owner");
   });
+
+  test("first registered agent becomes the MCP defaultAgent", async () => {
+    const { status, body } = await req("GET", "/api/v1/session");
+    expect(status).toBe(200);
+    // ws-agent was the first registration in beforeAll
+    expect((body as { defaultAgent?: string }).defaultAgent).toBe(wsAgent);
+
+    // A second registration does not steal the default
+    await req("POST", "/api/v1/agents", { name: "second-agent" });
+    const { body: after } = await req("GET", "/api/v1/session");
+    expect((after as { defaultAgent?: string }).defaultAgent).toBe(wsAgent);
+  });
 });

@@ -5,6 +5,7 @@ import {
   registerAgent,
   reindex,
   reject,
+  saveConfig,
   syncIndex,
   verifyGraph,
 } from "@freehold/core";
@@ -108,5 +109,14 @@ governanceRouter.post("/agents", async (c) => {
   const fh = c.get("freehold");
   // SAFETY: single-token model — bearer possession implies owner authority until multi-principal auth lands (post-v0).
   const result = await registerAgent(fh.graph, parsed.data.name, "owner");
+
+  // The first registered agent becomes the MCP default. Without this, tool
+  // calls that omit `agent` fall back to a principal with no signing key.
+  const config = c.get("config");
+  if (!config.defaultAgent) {
+    config.defaultAgent = parsed.data.name;
+    saveConfig(config, fh.home);
+  }
+
   return c.json(result);
 });
