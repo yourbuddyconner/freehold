@@ -7,7 +7,7 @@
  */
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { GitProposal } from "@freehold/client";
 import { GitProposalCard } from "./GitProposalCard";
@@ -98,5 +98,27 @@ describe("GitProposalCard — checks section", () => {
     const proposal = makeProposal({ checks: undefined });
     renderCard(proposal);
     expect(screen.queryByTestId("checks-section")).not.toBeInTheDocument();
+  });
+
+  it("governance check is highlighted first with governance-check-row testid", () => {
+    const proposal = makeProposal({
+      checks: [
+        { name: "ci/build", status: "completed", conclusion: "success" },
+        { name: "governance", status: "completed", conclusion: "success" },
+      ],
+    });
+    renderCard(proposal);
+
+    const govRow = screen.getByTestId("governance-check-row");
+    expect(govRow).toBeInTheDocument();
+
+    // The governance badge text appears inside the governance row
+    const { getByText } = within(govRow);
+    expect(getByText("governance")).toBeInTheDocument();
+
+    // Governance row appears before other check-rows in the DOM
+    const checksSection = screen.getByTestId("checks-section");
+    const allRows = checksSection.querySelectorAll("[data-testid='governance-check-row'], [data-testid='check-row']");
+    expect(allRows[0]).toHaveAttribute("data-testid", "governance-check-row");
   });
 });

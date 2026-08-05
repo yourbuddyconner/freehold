@@ -204,7 +204,7 @@ describe("T4 smoke: connector surface integration", () => {
     expect(b.errors).toHaveLength(0);
   });
 
-  test("[7] ingested comment appears via reviews read path", async () => {
+  test("[7] git/proposals endpoint returns array after poll", async () => {
     const proposalsRes = await req("GET", `/api/v1/graphs/smoke-repo/git/proposals`);
     expect(proposalsRes.status).toBe(200);
     const proposals = (proposalsRes.body as { proposals: Array<{ sha: string }> }).proposals;

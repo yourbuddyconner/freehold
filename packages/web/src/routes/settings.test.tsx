@@ -55,7 +55,6 @@ vi.mock("~/lib/api", () => {
     putConnector: vi.fn(),
     pollConnector: vi.fn(),
     getConnectorManifest: vi.fn(),
-    putConnectorWebhooks: vi.fn(),
     },
   };
 });
@@ -361,6 +360,28 @@ describe("Connector section", () => {
       expect(screen.getByTestId("poll-result")).toBeInTheDocument();
     });
     expect(screen.getByTestId("poll-result")).toHaveTextContent("5 events, 2 unchanged, 0 errors");
+  });
+
+  it("publicUrl input populates from stored config after query resolves", async () => {
+    vi.mocked(apiClient.getConnector).mockResolvedValue({
+      configured: true,
+      config: {
+        mode: "app",
+        owner: "test-owner",
+        repo: "test-repo",
+        pollIntervalSec: 300,
+        webhooksEnabled: false,
+        appId: "123",
+        publicUrl: "https://stored.example.com",
+      },
+      status: {},
+    });
+
+    await renderSettings();
+
+    await waitFor(() => {
+      expect(screen.getByTestId("public-url-input")).toHaveValue("https://stored.example.com");
+    });
   });
 
   it("manifest form renders with action URL when manifest data is available", async () => {

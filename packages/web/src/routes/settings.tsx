@@ -2,7 +2,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createRoute, useNavigate } from "@tanstack/react-router";
 import { Check, Copy } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { type Principal, PrincipalCard } from "~/components/PrincipalCard";
 import { ApiError, apiClient } from "~/lib/api";
 import { cn } from "~/lib/cn";
@@ -467,9 +467,14 @@ function ConnectorSection() {
 
   // Webhook state
   const [publicUrl, setPublicUrl] = useState(cfg?.publicUrl ?? "");
+  useEffect(() => {
+    if (cfg?.publicUrl) {
+      setPublicUrl(cfg.publicUrl);
+    }
+  }, [cfg?.publicUrl]);
   const webhookMut = useMutation({
     mutationFn: (enabled: boolean) =>
-      apiClient.putConnectorWebhooks({ webhooksEnabled: enabled, publicUrl: publicUrl || undefined }),
+      apiClient.putConnector({ webhooksEnabled: enabled, publicUrl: publicUrl || undefined }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["connector"] }),
   });
 
@@ -609,7 +614,10 @@ function ConnectorSection() {
             </div>
           )}
 
-          {/* Webhook toggle (app mode only) */}
+          {/* Webhook toggle — shown for app mode only in the UI.
+              The server also accepts webhooksEnabled on credential-mode PUT; this
+              UI intentionally restricts the toggle to app mode since credential
+              mode polling does not use webhooks. */}
           {cfg?.mode === "app" && (
             <div className="space-y-2 border-t border-(--border) pt-3">
               <div className="flex items-center gap-3">

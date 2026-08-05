@@ -378,10 +378,18 @@ const ConnectorResponse = z
   .openapi("ConnectorResponse");
 
 const PutConnectorBody = z
-  .object({
-    mode: z.literal("credential").openapi({ description: "Credential mode uses gh CLI token discovery" }),
-    pollIntervalSec: z.number().int().positive().optional().openapi({ description: "Poll interval in seconds (default 300)" }),
-  })
+  .union([
+    z.object({
+      mode: z.literal("credential").openapi({ description: "Credential mode uses gh CLI token discovery" }),
+      pollIntervalSec: z.number().int().positive().optional().openapi({ description: "Poll interval in seconds (default 300)" }),
+      webhooksEnabled: z.boolean().optional().openapi({ description: "Enable webhook delivery (requires publicUrl)" }),
+      publicUrl: z.string().optional().openapi({ description: "Public URL for webhook delivery" }),
+    }),
+    z.object({
+      webhooksEnabled: z.boolean().openapi({ description: "Enable or disable webhook delivery" }),
+      publicUrl: z.string().optional().openapi({ description: "Public URL for webhook delivery" }),
+    }),
+  ])
   .openapi("PutConnectorBody");
 
 const PollResult = z
@@ -1080,6 +1088,14 @@ function buildRegistry(): OpenAPIRegistry {
     })
     .openapi("GitProposalPath");
 
+  const GitProposalCheck = z
+    .object({
+      name: z.string(),
+      status: z.string(),
+      conclusion: z.string().nullable().optional(),
+    })
+    .openapi("GitProposalCheck");
+
   const GitProposal = z
     .object({
       sha: z.string(),
@@ -1093,6 +1109,7 @@ function buildRegistry(): OpenAPIRegistry {
       unmet: z.array(z.string()),
       decided: z.enum(["undecided", "approved", "rejected"]),
       paths: z.array(GitProposalPath),
+      checks: z.array(GitProposalCheck).optional(),
     })
     .openapi("GitProposal");
 
@@ -1166,6 +1183,7 @@ function buildRegistry(): OpenAPIRegistry {
     .openapi("ReviewEntry");
 
   registry.register("GitProposalPath", GitProposalPath);
+  registry.register("GitProposalCheck", GitProposalCheck);
   registry.register("GitProposal", GitProposal);
   registry.register("DecideBody", DecideBody);
   registry.register("DecideResult", DecideResult);

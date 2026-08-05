@@ -2540,6 +2540,15 @@ export interface components {
             mode: "credential";
             /** @description Poll interval in seconds (default 300) */
             pollIntervalSec?: number;
+            /** @description Enable webhook delivery (requires publicUrl) */
+            webhooksEnabled?: boolean;
+            /** @description Public URL for webhook delivery */
+            publicUrl?: string;
+        } | {
+            /** @description Enable or disable webhook delivery */
+            webhooksEnabled: boolean;
+            /** @description Public URL for webhook delivery */
+            publicUrl?: string;
         };
         PollResult: {
             /** @description Number of events processed */
@@ -2555,6 +2564,11 @@ export interface components {
             regions: string[];
             indexed: boolean;
         };
+        GitProposalCheck: {
+            name: string;
+            status: string;
+            conclusion?: string | null;
+        };
         GitProposal: {
             sha: string;
             ref: string;
@@ -2568,11 +2582,7 @@ export interface components {
             /** @enum {string} */
             decided: "undecided" | "approved" | "rejected";
             paths: components["schemas"]["GitProposalPath"][];
-            checks?: {
-                name: string;
-                status: string;
-                conclusion?: string;
-            }[];
+            checks?: components["schemas"]["GitProposalCheck"][];
         };
         DecideBody: {
             /** @enum {string} */

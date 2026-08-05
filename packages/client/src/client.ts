@@ -452,8 +452,11 @@ export class FreeholdClient {
     return this.fetch("GET", "/api/v1/connector");
   }
 
-  /** PUT /connector — configure credential mode */
-  async putConnector(body: { mode: "credential"; pollIntervalSec?: number }): Promise<Record<string, unknown>> {
+  /** PUT /connector — configure credential mode or update webhook settings */
+  async putConnector(body:
+    | { mode: "credential"; pollIntervalSec?: number; webhooksEnabled?: boolean; publicUrl?: string }
+    | { webhooksEnabled: boolean; publicUrl?: string }
+  ): Promise<Record<string, unknown>> {
     return this.fetch("PUT", "/api/v1/connector", { body });
   }
 
@@ -472,8 +475,4 @@ export class FreeholdClient {
     return this.fetch("POST", "/api/v1/connector/app/manifest");
   }
 
-  /** PUT /connector with webhooksEnabled + publicUrl */
-  async putConnectorWebhooks(body: { webhooksEnabled: boolean; publicUrl?: string }): Promise<Record<string, unknown>> {
-    return this.fetch("PUT", "/api/v1/connector", { body });
-  }
 }

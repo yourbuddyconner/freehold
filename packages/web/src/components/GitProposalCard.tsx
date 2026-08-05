@@ -388,24 +388,44 @@ export function GitProposalCard({ proposal, by }: GitProposalCardProps) {
       {proposal.checks && proposal.checks.length > 0 && (
         <div className="space-y-1" data-testid="checks-section">
           <div className="text-[10px] font-mono uppercase text-(--fg-muted) tracking-[0.08em]">CI checks</div>
-          {proposal.checks.map((check) => (
-            <div key={check.name} className="flex items-center gap-2 text-xs" data-testid="check-row">
-              <span
-                className={cn(
-                  "inline-block h-2 w-2 rounded-full shrink-0",
-                  check.conclusion === "success" && "bg-green-500",
-                  check.conclusion === "failure" && "bg-red-400",
-                  (check.status === "in_progress" || check.status === "queued") && "bg-amber-400",
-                  !check.conclusion && check.status === "completed" && "bg-gray-400",
-                  !check.conclusion && check.status !== "in_progress" && check.status !== "queued" && check.status !== "completed" && "bg-gray-300",
-                )}
-              />
-              <span className="font-mono text-[11px] text-(--fg)">{check.name}</span>
-              <span className="ml-auto text-[10px] text-(--fg-muted) font-mono">
-                {check.conclusion ?? check.status}
-              </span>
-            </div>
-          ))}
+          {[...proposal.checks]
+            .sort((a, b) => {
+              const aIsGov = /governance/i.test(a.name);
+              const bIsGov = /governance/i.test(b.name);
+              if (aIsGov && !bIsGov) return -1;
+              if (!aIsGov && bIsGov) return 1;
+              return 0;
+            })
+            .map((check) => {
+              const isGovernance = /governance/i.test(check.name);
+              return (
+                <div
+                  key={check.name}
+                  className="flex items-center gap-2 text-xs"
+                  data-testid={isGovernance ? "governance-check-row" : "check-row"}
+                >
+                  <span
+                    className={cn(
+                      "inline-block h-2 w-2 rounded-full shrink-0",
+                      check.conclusion === "success" && "bg-green-500",
+                      check.conclusion === "failure" && "bg-red-400",
+                      (check.status === "in_progress" || check.status === "queued") && "bg-amber-400",
+                      !check.conclusion && check.status === "completed" && "bg-gray-400",
+                      !check.conclusion && check.status !== "in_progress" && check.status !== "queued" && check.status !== "completed" && "bg-gray-300",
+                    )}
+                  />
+                  <span className="font-mono text-[11px] text-(--fg)">{check.name}</span>
+                  {isGovernance && (
+                    <span className="inline-flex items-center border border-purple-400 bg-purple-50 dark:bg-purple-950 px-1 py-0.5 text-[10px] font-mono text-purple-700 dark:text-purple-300">
+                      governance
+                    </span>
+                  )}
+                  <span className="ml-auto text-[10px] text-(--fg-muted) font-mono">
+                    {check.conclusion ?? check.status}
+                  </span>
+                </div>
+              );
+            })}
         </div>
       )}
 

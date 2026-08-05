@@ -898,23 +898,51 @@
         ]
       },
       "PutConnectorBody": {
-        "type": "object",
-        "properties": {
-          "mode": {
-            "type": "string",
-            "enum": [
-              "credential"
-            ],
-            "description": "Credential mode uses gh CLI token discovery"
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "credential"
+                ],
+                "description": "Credential mode uses gh CLI token discovery"
+              },
+              "pollIntervalSec": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "description": "Poll interval in seconds (default 300)"
+              },
+              "webhooksEnabled": {
+                "type": "boolean",
+                "description": "Enable webhook delivery (requires publicUrl)"
+              },
+              "publicUrl": {
+                "type": "string",
+                "description": "Public URL for webhook delivery"
+              }
+            },
+            "required": [
+              "mode"
+            ]
           },
-          "pollIntervalSec": {
-            "type": "integer",
-            "exclusiveMinimum": 0,
-            "description": "Poll interval in seconds (default 300)"
+          {
+            "type": "object",
+            "properties": {
+              "webhooksEnabled": {
+                "type": "boolean",
+                "description": "Enable or disable webhook delivery"
+              },
+              "publicUrl": {
+                "type": "string",
+                "description": "Public URL for webhook delivery"
+              }
+            },
+            "required": [
+              "webhooksEnabled"
+            ]
           }
-        },
-        "required": [
-          "mode"
         ]
       },
       "PollResult": {
@@ -966,6 +994,27 @@
           "path",
           "regions",
           "indexed"
+        ]
+      },
+      "GitProposalCheck": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "conclusion": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "status"
         ]
       },
       "GitProposal": {
@@ -1022,13 +1071,7 @@
           "checks": {
             "type": "array",
             "items": {
-              "type": "object",
-              "properties": {
-                "name": { "type": "string" },
-                "status": { "type": "string" },
-                "conclusion": { "type": "string" }
-              },
-              "required": ["name", "status"]
+              "$ref": "#/components/schemas/GitProposalCheck"
             }
           }
         },
