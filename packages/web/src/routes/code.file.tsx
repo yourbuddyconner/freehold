@@ -138,23 +138,23 @@ export function CodeFilePage({ filePath }: { filePath?: string }) {
     );
   }
 
-  if (isLoading) {
+  // Show a loading state while either request is in flight
+  if (isLoading || sourceLoading) {
     return <p className="text-xs text-(--fg-muted)">Loading…</p>;
   }
 
   // If codeFile 404d but source is available, still show source + hint
   const fileUnavailable = isError || !data;
 
-  if (fileUnavailable && !sourceData && !sourceLoading) {
+  if (fileUnavailable && !sourceData) {
     return (
       <div className="border border-(--border) bg-(--bg-subtle) p-6 max-w-xl space-y-2">
         <p className="text-sm font-semibold text-(--fg)">{filePath}</p>
         <p className="text-sm text-(--fg-muted)">
-          This file has not been indexed yet. Run{" "}
+          File not indexed. Run:{" "}
           <code className="border border-(--border) bg-(--bg-subtle) px-1 py-0.5 font-mono text-[11px]">
             allod git index
-          </code>{" "}
-          to index the repository.
+          </code>
         </p>
       </div>
     );
@@ -224,11 +224,10 @@ export function CodeFilePage({ filePath }: { filePath?: string }) {
       {fileUnavailable && sourceData && (
         <div className="border border-(--border) bg-(--bg-subtle) px-3 py-2 space-y-1">
           <p className="text-xs text-(--fg-muted)">
-            File is not indexed yet. Run{" "}
+            File not indexed. Run:{" "}
             <code className="border border-(--border) bg-(--bg-subtle) px-1 py-0.5 font-mono text-[11px]">
               allod git index
-            </code>{" "}
-            to add it to the code graph.
+            </code>
           </p>
         </div>
       )}

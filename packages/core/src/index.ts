@@ -121,6 +121,7 @@ export {
   codeNeighborhood,
   codeRegions,
   codeSource,
+  PathTraversalError,
 } from "./codeview.js";
 export type {
   CodeTreeNode,

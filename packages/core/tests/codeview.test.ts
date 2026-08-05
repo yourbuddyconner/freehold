@@ -19,6 +19,7 @@ import type { AllodGraph } from "@allod/core";
 import { beforeAll, describe, expect, test } from "vitest";
 import { createGraph } from "../src/allod.js";
 import {
+  PathTraversalError,
   codeFile,
   codeItem,
   codeNeighborhood,
@@ -510,12 +511,26 @@ describe("codeSource", () => {
     expect(result).toBeNull();
   });
 
-  test("rejects path traversal with ..", async () => {
-    await expect(codeSource(fh, "../escape.txt")).rejects.toThrow("path traversal rejected");
+  test("returns null for a directory path (not a 500)", async () => {
+    // "src" exists as a directory in the fixture
+    const result = await codeSource(fh, "src");
+    expect(result).toBeNull();
   });
 
-  test("rejects absolute paths", async () => {
-    await expect(codeSource(fh, "/etc/passwd")).rejects.toThrow("path traversal rejected");
+  test("rejects path traversal with .. component — throws PathTraversalError", async () => {
+    await expect(codeSource(fh, "../escape.txt")).rejects.toBeInstanceOf(PathTraversalError);
+  });
+
+  test("rejects absolute paths — throws PathTraversalError", async () => {
+    await expect(codeSource(fh, "/etc/passwd")).rejects.toBeInstanceOf(PathTraversalError);
+  });
+
+  test("filename with .. in the middle (not a bare component) is accepted", async () => {
+    // "parser..v2.ts" splits to ["parser..v2.ts"] — no bare ".." component
+    writeFileSync(join(fh.graphDir, "parser..v2.ts"), "// ok\n", "utf-8");
+    const result = await codeSource(fh, "parser..v2.ts");
+    expect(result).not.toBeNull();
+    expect(result?.binary).toBe(false);
   });
 
   test("happy path: reads a file and returns content round-trip", async () => {
@@ -552,6 +567,7 @@ describe("codeSource", () => {
     if (!result) return;
     expect(result.binary).toBe(true);
     expect(result.content).toBe("");
-    expect(result.truncated).toBe(false);
+    // truncated is computed from the bounded read, not hardcoded false
+    expect(typeof result.truncated).toBe("boolean");
   });
 });

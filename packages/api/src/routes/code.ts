@@ -1,5 +1,6 @@
 import { basename } from "node:path";
 import {
+  PathTraversalError,
   codeFile,
   codeItem,
   codeNeighborhood,
@@ -100,8 +101,7 @@ codeRouter.get("/code/source", async (c) => {
   try {
     source = await codeSource(fh, path);
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (msg.includes("path traversal")) {
+    if (err instanceof PathTraversalError) {
       return c.json({ error: "invalid path" }, 400);
     }
     throw err;

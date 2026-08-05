@@ -15,7 +15,7 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
@@ -489,6 +489,17 @@ describe("GET /api/v1/graphs/:id/code/source on repo graph", () => {
     expect(status).toBe(404);
     const b = body as { error: string };
     expect(b.error).toBe("file not found");
+  });
+
+  test("returns 404 for a path that is a directory on disk", async () => {
+    // Create a real directory in the repo dir to test EISDIR → 404 (not 500)
+    const repoFh = await manager.get(repoGraphId);
+    mkdirSync(join(repoFh.graphDir, "src-dir-test"), { recursive: true });
+    const { status } = await req(
+      "GET",
+      `/api/v1/graphs/${repoGraphId}/code/source?path=src-dir-test`
+    );
+    expect(status).toBe(404);
   });
 
   test("returns 400 for a traversal path (../)", async () => {

@@ -10,7 +10,7 @@
  * from git_checklist per path.
  */
 
-import { access, readFile, stat } from "node:fs/promises";
+import { open, stat } from "node:fs/promises";
 import { join, normalize, sep } from "node:path";
 import type { Freehold } from "./graphs.js";
 import { withGraph } from "./lock.js";
@@ -535,6 +535,17 @@ export async function codeRegions(fh: Freehold, repoName = "repo"): Promise<Regi
   return result;
 }
 
+// ── PathTraversalError ────────────────────────────────────────────────────────
+
+/** Thrown by codeSource when the requested path escapes the checkout directory. */
+export class PathTraversalError extends Error {
+  readonly code = "path-traversal" as const;
+  constructor(message: string) {
+    super(message);
+    this.name = "PathTraversalError";
+  }
+}
+
 // ── codeSource ────────────────────────────────────────────────────────────────
 
 const MAX_BYTES = 512 * 1024; // 512 KB
@@ -543,13 +554,19 @@ const BINARY_PROBE = 8 * 1024; // 8 KB
 /**
  * Read the working-tree content of a file relative to the checkout directory.
  *
- * Returns null when the file does not exist (caller → 404).
- * Rejects with an Error for path traversal attempts.
+ * Returns null when the file does not exist or is a directory (caller → 404).
+ * Throws PathTraversalError for path traversal attempts.
  */
 export async function codeSource(fh: Freehold, path: string): Promise<CodeSource | null> {
-  // Guard: reject absolute paths and paths containing ".."
-  if (path.startsWith("/") || path.includes("..")) {
-    throw new Error("path traversal rejected");
+  // Guard: reject absolute paths. Reject path components that are exactly "..";
+  // a filename like "parser..v2.ts" is fine but a bare ".." segment is not.
+  if (path.startsWith("/")) {
+    throw new PathTraversalError("path traversal rejected");
+  }
+  const pathSep = "/";
+  const components = path.split(pathSep);
+  if (components.some((c) => c === "..")) {
+    throw new PathTraversalError("path traversal rejected");
   }
 
   const resolved = normalize(join(fh.graphDir, path));
@@ -557,30 +574,45 @@ export async function codeSource(fh: Freehold, path: string): Promise<CodeSource
   // Guard: resolved path must be a strict descendant of graphDir
   const base = fh.graphDir.endsWith(sep) ? fh.graphDir : fh.graphDir + sep;
   if (!resolved.startsWith(base)) {
-    throw new Error("path traversal rejected");
+    throw new PathTraversalError("path traversal rejected");
   }
 
-  // Check existence without throwing
+  // stat to check existence and whether it is a regular file
+  let info: Awaited<ReturnType<typeof stat>>;
   try {
-    await access(resolved);
-  } catch {
-    return null;
+    info = await stat(resolved);
+  } catch (err: unknown) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === "ENOENT" || code === "ENOTDIR") return null;
+    throw err;
   }
 
-  const info = await stat(resolved);
+  // Directories are not files — return null (caller → 404)
+  if (!info.isFile()) return null;
+
   const size = info.size;
 
-  // Read file and detect truncation
-  const buf = await readFile(resolved);
-  const truncated = buf.length > MAX_BYTES;
-  const slice = truncated ? buf.subarray(0, MAX_BYTES) : buf;
+  // Bounded read: read at most MAX_BYTES + 1 bytes so we can detect truncation
+  // without loading the whole file into memory.
+  const readLen = MAX_BYTES + 1;
+  const buf = Buffer.allocUnsafe(readLen);
+  let bytesRead: number;
+  const fh2 = await open(resolved, "r");
+  try {
+    ({ bytesRead } = await fh2.read(buf, 0, readLen, 0));
+  } finally {
+    await fh2.close();
+  }
+
+  const truncated = bytesRead > MAX_BYTES;
+  const slice = buf.subarray(0, truncated ? MAX_BYTES : bytesRead);
 
   // Binary detection: NUL byte in first BINARY_PROBE bytes
   const probe = slice.subarray(0, BINARY_PROBE);
   const binary = probe.includes(0);
 
   if (binary) {
-    return { path, content: "", truncated: false, binary: true, size };
+    return { path, content: "", truncated, binary: true, size };
   }
 
   return {
