@@ -22,11 +22,14 @@ import {
   discoverCredential,
   parseOriginRemote,
   makeTokenClient,
+  makeAppClient,
+  clearAppClientCache,
   pollOnce,
   deriveEncKey,
   getSecret,
   buildConnectorManifest,
 } from "@freehold/core";
+import type { GithubClient } from "@freehold/core";
 import type { AppEnv } from "../types.js";
 
 // ── HMAC state helpers (manifest flow) ───────────────────────────────────────
@@ -336,18 +339,31 @@ connectorRouter.post("/connector/poll", async (c) => {
     return c.json({ error: "connector not configured" }, 409);
   }
 
-  // Retrieve stored token (credential mode: stored under "credentialToken" key)
   const config = c.get("config");
   const encKey = deriveEncKey(config.token);
-  const token = await getSecret(fh.db, fh.graphId, "credentialToken", encKey);
-  if (!token) {
-    return c.json({ error: "no stored token; configure the connector first" }, 409);
+  const fetchFn = c.get("fetchFn") ?? fetch;
+
+  let client: GithubClient | null = null;
+
+  if (cfg.mode === "credential") {
+    const token = await getSecret(fh.db, fh.graphId, "credentialToken", encKey);
+    if (!token) {
+      return c.json({ error: "no stored token; configure the connector first" }, 409);
+    }
+    client = makeTokenClient(token, fetchFn);
+  } else if (cfg.mode === "app") {
+    client = await makeAppClient(fh, encKey, fetchFn);
+    if (!client) {
+      return c.json(
+        { error: "app mode not fully configured; set installationId first" },
+        409
+      );
+    }
+  } else {
+    return c.json({ error: "unsupported connector mode" }, 409);
   }
 
-  const fetchFn = c.get("fetchFn") ?? undefined;
-  const client = makeTokenClient(token, fetchFn);
   const result = await pollOnce(fh, cfg, client);
-
   return c.json(result);
 });
 
@@ -359,7 +375,7 @@ connectorRouter.delete("/connector", async (c) => {
     return c.json({ error: REPO_ONLY_ERROR }, 400);
   }
 
-  // Remove config row
+  // Remove all connector state for this graph
   try {
     await fh.db.pg.query(
       `DELETE FROM connector_config WHERE graph_id = $1`,
@@ -373,9 +389,19 @@ connectorRouter.delete("/connector", async (c) => {
       `DELETE FROM connector_cursor WHERE graph_id = $1`,
       [fh.graphId]
     );
+    await fh.db.pg.query(
+      `DELETE FROM check_status WHERE graph_id = $1`,
+      [fh.graphId]
+    );
+    await fh.db.pg.query(
+      `DELETE FROM connector_soft_tombstone WHERE graph_id = $1`,
+      [fh.graphId]
+    );
   } catch {
     // Table may not exist — that's fine; just return success.
   }
+
+  clearAppClientCache(fh.graphId);
 
   return c.json({ ok: true });
 });
@@ -568,6 +594,9 @@ connectorRouter.post("/connector/app/installation", async (c) => {
     undefined,
     encKey
   );
+
+  // Clear the in-process app token cache — a new installationId invalidates any cached token.
+  clearAppClientCache(fh.graphId);
 
   return c.body(null, 204);
 });

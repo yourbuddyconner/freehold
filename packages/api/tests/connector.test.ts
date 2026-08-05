@@ -21,12 +21,15 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { generateKeyPairSync } from "node:crypto";
 import { describe, expect, test, beforeAll, afterAll, vi } from "vitest";
 import {
   GraphManager,
   createGraph,
   hashEmbedder,
   loadConfig,
+  setConnector,
+  deriveEncKey,
 } from "@freehold/core";
 import { createApp } from "../src/app.js";
 
@@ -37,6 +40,16 @@ import { createApp } from "../src/app.js";
 
 function makeTempDir(prefix: string): string {
   return mkdtempSync(join(tmpdir(), prefix));
+}
+
+/** Generate a synthetic RSA-2048 keypair for app-mode JWT tests. */
+function makeSyntheticRsaKeys(): { privateKeyPem: string; publicKeyPem: string } {
+  const { privateKey, publicKey } = generateKeyPairSync("rsa", {
+    modulusLength: 2048,
+    publicKeyEncoding: { type: "pkcs1", format: "pem" },
+    privateKeyEncoding: { type: "pkcs1", format: "pem" },
+  });
+  return { privateKeyPem: privateKey, publicKeyPem: publicKey };
 }
 
 /** Write an executable shell script `gh` that prints a fake token, then prepend its dir to PATH. */
@@ -643,5 +656,114 @@ describe("PUT /connector — webhooksEnabled validation", () => {
     expect(getStatus).toBe(200);
     expect((getBody as any).config.webhooksEnabled).toBe(true);
     expect((getBody as any).config.publicUrl).toBe("https://example.com");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// App-mode poll
+// ---------------------------------------------------------------------------
+
+describe("app-mode poll", () => {
+  let appModeDir: string;
+  let appModeManager: GraphManager;
+  let appModeConfig: ReturnType<typeof loadConfig>;
+  let appModeRepoDir: string;
+  const appModeRepoGraphId = "app-mode-poll-repo";
+
+  beforeAll(async () => {
+    appModeDir = makeTempDir("freehold-connector-appmode-");
+    appModeManager = await GraphManager.open(appModeDir);
+    appModeConfig = loadConfig(appModeDir);
+
+    // Create a repo directory with git + remote
+    appModeRepoDir = makeTempDir("freehold-connector-appmode-repo-");
+    const { execFileSync } = await import("node:child_process");
+    execFileSync("git", ["init"], { cwd: appModeRepoDir });
+    execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: appModeRepoDir });
+    execFileSync("git", ["config", "user.name", "Test User"], { cwd: appModeRepoDir });
+    execFileSync("git", ["remote", "add", "origin", "https://github.com/testowner/testrepo.git"], { cwd: appModeRepoDir });
+    writeFileSync(join(appModeRepoDir, "README.md"), "# test");
+    execFileSync("git", ["add", "README.md"], { cwd: appModeRepoDir });
+    execFileSync("git", ["commit", "-m", "init"], { cwd: appModeRepoDir });
+    await createGraph(appModeRepoDir, "owner");
+  });
+
+  afterAll(() => {
+    try { rmSync(appModeDir, { recursive: true, force: true }); } catch {}
+    try { rmSync(appModeRepoDir, { recursive: true, force: true }); } catch {}
+  });
+
+  test("POST /connector/poll works for app-mode with injected fetch", async () => {
+    // Mock fetch: returns installation token then empty poll data
+    let fetchCallCount = 0;
+    const mockFetch: typeof fetch = async (url, _init) => {
+      fetchCallCount++;
+      const urlStr = typeof url === "string" ? url : url instanceof Request ? url.url : String(url);
+      if (urlStr.includes("/access_tokens")) {
+        // Installation token response
+        const exp = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+        return new Response(JSON.stringify({ token: "ghs_app_token", expires_at: exp }), {
+          status: 201,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      // All other calls (PR listing, comments, etc.) return empty arrays
+      return new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    };
+
+    const appInstance = createApp(appModeManager, hashEmbedder, appModeConfig, { fetchFn: mockFetch });
+
+    // Register the repo graph via HTTP so it's kind="repo"
+    const regRes = await appInstance.request("/api/v1/graphs", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${appModeConfig.token}`,
+      },
+      body: JSON.stringify({
+        path: appModeRepoDir,
+        id: appModeRepoGraphId,
+        name: "App Mode Poll Repo",
+      }),
+    });
+    expect(regRes.status, "failed to register app-mode repo graph").toBe(201);
+
+    const fh = await appModeManager.get(appModeRepoGraphId);
+
+    // Store an app-mode connector config with appId + installationId
+    const encKey = deriveEncKey(appModeConfig.token);
+    const { privateKeyPem } = makeSyntheticRsaKeys();
+    await setConnector(
+      fh.db,
+      {
+        graphId: appModeRepoGraphId,
+        mode: "app",
+        owner: "testowner",
+        repo: "testrepo",
+        pollIntervalSec: 300,
+        webhooksEnabled: false,
+        appId: "123",
+        installationId: "456",
+      },
+      { pem: privateKeyPem, webhookSecret: "", clientSecret: "" },
+      encKey
+    );
+
+    const res = await appInstance.request(
+      `/api/v1/graphs/${appModeRepoGraphId}/connector/poll`,
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${appModeConfig.token}` },
+      }
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json() as { events: number; unchanged: number; errors: string[] };
+    expect(typeof body.events).toBe("number");
+    expect(Array.isArray(body.errors)).toBe(true);
+    // fetch was called at least once (for installation token)
+    expect(fetchCallCount).toBeGreaterThan(0);
   });
 });

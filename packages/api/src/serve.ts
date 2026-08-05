@@ -6,6 +6,7 @@ import {
   syncIndex,
   getConnector,
   makeTokenClient,
+  makeAppClient,
   deriveEncKey,
   getSecret,
   startPoller,
@@ -60,24 +61,40 @@ async function main() {
         // Catch-up poll at startup for webhook-enabled graphs (webhooks may have
         // fired while the daemon was down; run one poll to close the gap).
         if (cfg.webhooksEnabled) {
-          const credToken = await getSecret(fh.db, entry.id, "credentialToken", encKey);
-          if (credToken) {
-            const client = makeTokenClient(credToken);
-            pollOnce(fh, cfg, client).catch((e) =>
+          let catchUpClient = null;
+          if (cfg.mode === "credential") {
+            const credToken = await getSecret(fh.db, entry.id, "credentialToken", encKey);
+            if (credToken) {
+              catchUpClient = makeTokenClient(credToken);
+            }
+          } else if (cfg.mode === "app") {
+            catchUpClient = await makeAppClient({ db: fh.db, graphId: entry.id }, encKey).catch(() => null);
+          }
+          if (catchUpClient) {
+            pollOnce(fh, cfg, catchUpClient).catch((e) =>
               console.error(`[connector] startup catch-up poll failed for ${entry.id}:`, e)
             );
           }
         }
 
-        if (cfg.mode !== "credential") continue;
+        if (cfg.mode !== "credential" && cfg.mode !== "app") continue;
 
         const handle = startPoller(
           fh,
           async () => getConnector(fh.db, entry.id),
           async () => {
-            const token = await getSecret(fh.db, entry.id, "credentialToken", encKey);
-            if (!token) throw new Error("no stored token for graph " + entry.id);
-            return makeTokenClient(token);
+            const latestCfg = await getConnector(fh.db, entry.id);
+            if (!latestCfg) throw new Error("no connector config for graph " + entry.id);
+            if (latestCfg.mode === "credential") {
+              const token = await getSecret(fh.db, entry.id, "credentialToken", encKey);
+              if (!token) throw new Error("no stored token for graph " + entry.id);
+              return makeTokenClient(token);
+            } else if (latestCfg.mode === "app") {
+              const client = await makeAppClient({ db: fh.db, graphId: entry.id }, encKey);
+              if (!client) throw new Error("app client not available for graph " + entry.id);
+              return client;
+            }
+            throw new Error("unsupported connector mode " + latestCfg.mode);
           }
         );
         pollerHandles.push(handle);
