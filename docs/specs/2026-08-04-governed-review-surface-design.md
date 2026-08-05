@@ -183,6 +183,7 @@ code search rides the per-graph index.
   response.
 - Check-run status on proposal cards is deferred to sub-project 4, as
   stated in the design ("once the connector exists").
+- The decide route accepts client-supplied `by` as the acting principal. This is an accepted design for the single-user daemon: bearer token authenticates the host owner; signing requires the principal's key on the host (409 without it); repo graphs use graph-specific principal names, making a fixed "owner" principal unviable.
 
 ---
 

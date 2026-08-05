@@ -90,6 +90,12 @@ gitreviewRouter.post("/git/proposals/:sha/decide", async (c) => {
     return c.json({ error: "verdict and by are required" }, 400);
   }
 
+  // Trust boundary: `by` is accepted from the client as the acting principal.
+  // This is an explicit design choice for the single-user daemon: the bearer
+  // token authenticates the host owner, signatures require the principal's key
+  // to be present on the host (409 without it), and repo graphs use
+  // graph-specific principal names — pinning to a fixed "owner" principal is
+  // not viable. The 409/KeyMissingError path is the enforcement mechanism.
   const { verdict, by } = parsed.data;
   const sha = c.req.param("sha");
   if (!validateSha(sha)) {
