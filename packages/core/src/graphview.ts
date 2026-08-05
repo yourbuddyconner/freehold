@@ -2,10 +2,10 @@
  * @freehold/core — Workspace views over the memory graph.
  *
  * Flat index listing (backs the console's tree) and full graph export
- * (backs the graph canvas). Nodes come from the PGlite index; taxonomy
- * terms and edges come from fold state via entity_context, read inside
- * one withGraph critical section. System nodes (meta/*, core/*) are not
- * memories and are excluded.
+ * (backs the graph canvas). Nodes, terms, and edges all come from the
+ * PGlite index — no per-node wasm calls, so listings stay fast at any
+ * size. Only pending proposals are read from the graph. System nodes
+ * (meta/*, core/*) are not memories and are excluded.
  */
 
 import type { Freehold } from "./graphs.js";
@@ -41,16 +41,6 @@ export interface MemoryGraphView {
   truncated: boolean;
 }
 
-interface RawEntityContext {
-  classifications: Array<{ term: string; asserted_by: string; basis: string }>;
-  edges_out: Array<{ id: string; type: string; to: string; attributes: Record<string, unknown> }>;
-  edges_in: Array<{ id: string; type: string; from: string; attributes: Record<string, unknown> }>;
-}
-
-interface CtxGraph {
-  entity_context(nodeId: string): RawEntityContext | null;
-}
-
 interface RawProposalSummary {
   hash?: string;
   author?: string;
@@ -74,20 +64,6 @@ interface IndexRow {
   author: string;
   approval: string;
   updated_at: string | Date;
-}
-
-function bareId(ref: string): string {
-  const colon = ref.indexOf(":");
-  return colon >= 0 ? ref.slice(colon + 1) : ref;
-}
-
-/** entity_context, null when the node is not in fold state (pending/rejected/unknown). */
-function contextOf(graph: unknown, nodeId: string): RawEntityContext | null {
-  try {
-    return (graph as CtxGraph).entity_context(nodeId);
-  } catch {
-    return null;
-  }
 }
 
 /**
@@ -128,25 +104,25 @@ async function indexRows(freehold: Freehold, cap: number): Promise<IndexRow[]> {
 
 /**
  * Flat listing of every non-meta node for the workspace tree: id, type,
- * derived title, approval, author, updated time, and taxonomy terms.
- * Terms come from fold state, so pending and rejected nodes carry [].
+ * derived title, approval, author, updated time, and taxonomy terms —
+ * all from the index.
  */
 export async function memoryIndex(freehold: Freehold, cap = 5000): Promise<MemoryIndexEntry[]> {
   const rows = await indexRows(freehold, cap);
   const knownIds = new Set(rows.map((r) => r.id));
 
-  const { termsById, pendingEntries } = await withGraph(freehold.graph, () => {
-    const map = new Map<string, string[]>();
-    for (const row of rows) {
-      if (row.approval !== "saved") continue;
-      const ctx = contextOf(freehold.graph, row.id);
-      if (ctx)
-        map.set(
-          row.id,
-          ctx.classifications.map((c) => c.term)
-        );
-    }
+  // Terms come from the mirrored node_terms table — one query, no wasm calls
+  const termsResult = await freehold.db.pg.query<{ subject_id: string; term: string }>(
+    "SELECT subject_id, term FROM node_terms"
+  );
+  const termsById = new Map<string, string[]>();
+  for (const row of termsResult.rows) {
+    const list = termsById.get(row.subject_id) ?? [];
+    list.push(row.term);
+    termsById.set(row.subject_id, list);
+  }
 
+  const pendingEntries = await withGraph(freehold.graph, () => {
     // Pending proposals are not in the index; surface their node creates so
     // the tree shows a proposed note in place before it is decided.
     const fromProposals: MemoryIndexEntry[] = [];
@@ -180,7 +156,7 @@ export async function memoryIndex(freehold: Freehold, cap = 5000): Promise<Memor
     } catch {
       // proposals() unavailable — index rows alone are still a correct listing
     }
-    return { termsById: map, pendingEntries: fromProposals };
+    return fromProposals;
   });
 
   return [
@@ -198,32 +174,25 @@ export async function memoryIndex(freehold: Freehold, cap = 5000): Promise<Memor
 }
 
 /**
- * Nodes and edges for the graph canvas. Edges come from each saved node's
- * edges_out in fold state, so every edge appears once. Edges pointing at
- * nodes outside the (capped) node set are dropped. `truncated` reports
- * whether the node cap cut the listing short.
+ * Nodes and edges for the graph canvas, all from the index. Edges whose
+ * endpoints fall outside the (capped) node set are dropped. `truncated`
+ * reports whether the node cap cut the listing short.
  */
 export async function memoryGraph(freehold: Freehold, nodeCap = 2000): Promise<MemoryGraphView> {
   const rows = await indexRows(freehold, nodeCap);
   const truncated = rows.length >= nodeCap;
   const nodeIds = new Set(rows.map((r) => r.id));
 
-  const edges = await withGraph(freehold.graph, () => {
-    const out: GraphEdge[] = [];
-    const seen = new Set<string>();
-    for (const row of rows) {
-      if (row.approval !== "saved") continue;
-      const ctx = contextOf(freehold.graph, row.id);
-      if (!ctx) continue;
-      for (const e of ctx.edges_out) {
-        const to = bareId(e.to);
-        if (!nodeIds.has(to) || seen.has(e.id)) continue;
-        seen.add(e.id);
-        out.push({ id: e.id, type: e.type, from: row.id, to });
-      }
-    }
-    return out;
-  });
+  // Edges come from the mirrored graph_edges table — one query, no wasm calls
+  const edgeResult = await freehold.db.pg.query<{
+    id: string;
+    type: string;
+    from_id: string;
+    to_id: string;
+  }>("SELECT id, type, from_id, to_id FROM graph_edges");
+  const edges: GraphEdge[] = edgeResult.rows
+    .filter((e) => nodeIds.has(e.from_id) && nodeIds.has(e.to_id))
+    .map((e) => ({ id: e.id, type: e.type, from: e.from_id, to: e.to_id }));
 
   return {
     nodes: rows.map((row) => ({

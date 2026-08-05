@@ -56,6 +56,23 @@ CREATE TABLE IF NOT EXISTS meta (
   key text PRIMARY KEY,
   value text NOT NULL
 );
+
+-- Edges and taxonomy terms mirrored from admitted changesets, so listings
+-- never need per-node wasm calls.
+CREATE TABLE IF NOT EXISTS graph_edges (
+  id text PRIMARY KEY,
+  type text NOT NULL,
+  from_id text NOT NULL,
+  to_id text NOT NULL
+);
+CREATE INDEX IF NOT EXISTS graph_edges_from ON graph_edges(from_id);
+CREATE INDEX IF NOT EXISTS graph_edges_to ON graph_edges(to_id);
+
+CREATE TABLE IF NOT EXISTS node_terms (
+  subject_id text NOT NULL,
+  term text NOT NULL,
+  PRIMARY KEY (subject_id, term)
+);
 `;
 
 /**

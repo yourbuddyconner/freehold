@@ -114,6 +114,71 @@ function parseNodeOps(yaml: string): NodeOp[] {
   return results;
 }
 
+interface EdgeOp {
+  id: string;
+  type: string;
+  from: string;
+  to: string;
+}
+
+interface TermOp {
+  subjectId: string;
+  term: string;
+}
+
+function stripRef(ref: string): string {
+  const colon = ref.indexOf(":");
+  return colon >= 0 ? ref.slice(colon + 1) : ref;
+}
+
+/**
+ * Parse edge creations and node classifications from a changeset YAML.
+ * These mirror into PGlite so listings never need per-node wasm calls.
+ */
+function parseRelationOps(yaml: string): { edges: EdgeOp[]; terms: TermOp[] } {
+  let doc: unknown;
+  try {
+    doc = yamlLoad(yaml);
+  } catch {
+    return { edges: [], terms: [] };
+  }
+  const operations = (doc as Record<string, unknown> | null)?.operations;
+  if (!Array.isArray(operations)) return { edges: [], terms: [] };
+
+  const edges: EdgeOp[] = [];
+  const terms: TermOp[] = [];
+  for (const op of operations) {
+    if (!op || typeof op !== "object" || Array.isArray(op)) continue;
+    const inner = (op as Record<string, unknown>).create as Record<string, unknown> | undefined;
+    if (!inner || typeof inner !== "object") continue;
+
+    if (
+      inner.kind === "edge" &&
+      typeof inner.id === "string" &&
+      typeof inner.type === "string" &&
+      typeof inner.from === "string" &&
+      typeof inner.to === "string"
+    ) {
+      edges.push({
+        id: inner.id,
+        type: inner.type,
+        from: stripRef(inner.from),
+        to: stripRef(inner.to),
+      });
+    }
+
+    if (
+      inner.kind === "classification" &&
+      typeof inner.subject === "string" &&
+      inner.subject.startsWith("node:") &&
+      typeof inner.term === "string"
+    ) {
+      terms.push({ subjectId: stripRef(inner.subject), term: inner.term });
+    }
+  }
+  return { edges, terms };
+}
+
 /**
  * Get the changeset directory for a Freehold instance.
  */
@@ -137,10 +202,14 @@ function collectNodeOps(
   log: RawLogEntry[]
 ): {
   nodeMap: Map<string, { type: string; author: string; changesetHash: string }>;
+  edgeOps: EdgeOp[];
+  termOps: TermOp[];
   warnings: string[];
 } {
   const csDir = changesetDir(freehold);
   const nodeMap = new Map<string, { type: string; author: string; changesetHash: string }>();
+  const edgeOps: EdgeOp[] = [];
+  const termOps: TermOp[] = [];
   const warnings: string[] = [];
 
   for (const entry of log) {
@@ -175,9 +244,13 @@ function collectNodeOps(
       // Later entries (higher index in log) take precedence for updated nodes
       nodeMap.set(id, { type, author, changesetHash: entry.hash });
     }
+
+    const rel = parseRelationOps(yaml);
+    edgeOps.push(...rel.edges);
+    termOps.push(...rel.terms);
   }
 
-  return { nodeMap, warnings };
+  return { nodeMap, edgeOps, termOps, warnings };
 }
 
 /**
@@ -213,7 +286,7 @@ export async function syncIndex(freehold: Freehold, embedder: Embedder): Promise
 
   // Step 4: collect node operations from new changeset files (structural YAML parse)
   // collectNodeOps reads the filesystem only — no graph lock needed
-  const { nodeMap: nodeOps, warnings } = collectNodeOps(freehold, newEntries);
+  const { nodeMap: nodeOps, edgeOps, termOps, warnings } = collectNodeOps(freehold, newEntries);
 
   // Surface any file-read warnings. A missing changeset during indexing is not
   // expected in normal operation and indicates a data-integrity issue worth logging.
@@ -302,6 +375,22 @@ export async function syncIndex(freehold: Freehold, embedder: Embedder): Promise
     }
   }
 
+  // Step 7.5: mirror edges and node classifications
+  for (const e of edgeOps) {
+    await pg.query(
+      `INSERT INTO graph_edges (id, type, from_id, to_id) VALUES ($1, $2, $3, $4)
+       ON CONFLICT (id) DO NOTHING`,
+      [e.id, e.type, e.from, e.to]
+    );
+  }
+  for (const t of termOps) {
+    await pg.query(
+      `INSERT INTO node_terms (subject_id, term) VALUES ($1, $2)
+       ON CONFLICT (subject_id, term) DO NOTHING`,
+      [t.subjectId, t.term]
+    );
+  }
+
   // Step 8: update indexed_head.
   // NOTE: indexed_head stores the log *length* (not a hash), so it is a position
   // cursor, not a content fingerprint. If the allod log were ever compacted or
@@ -323,6 +412,8 @@ export async function reindex(freehold: Freehold, embedder: Embedder): Promise<v
   const { pg } = freehold.db;
   // Truncate objects (CASCADE removes embeddings via FK)
   await pg.exec("TRUNCATE TABLE objects CASCADE");
+  await pg.exec("TRUNCATE TABLE graph_edges");
+  await pg.exec("TRUNCATE TABLE node_terms");
   await pg.query("DELETE FROM meta WHERE key = 'indexed_head'");
   await syncIndex(freehold, embedder);
 }

@@ -28,6 +28,13 @@ export async function runServe(): Promise<void> {
 
   await syncIndex(fh, embedder);
 
+  // Load the embedding model now, not on the first search: the ONNX load
+  // blocks the event loop for tens of seconds, and at boot nobody is waiting.
+  embedder
+    .embed(["warmup"])
+    .then(() => console.log("[freehold] embedder ready"))
+    .catch((err) => console.warn(`[freehold] embedder warmup failed: ${err}`));
+
   const app = createApp(fh, embedder, config);
 
   honoServe(
