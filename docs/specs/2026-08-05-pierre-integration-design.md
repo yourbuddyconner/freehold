@@ -223,16 +223,14 @@ ontology change.
 
 ### Core and API
 
-- `listReviewComments(fh, repo, sha)` (core): ReviewComment entities whose
-  anchor matches the commit, joined with their Review's verdict and author
-  (signing principal, or `claimed_author` + `external_source` for connector-
-  ingested comments). Exposed as
-  `GET /git/proposals/:sha/comments` →
-  `{ comments: [{ id, body, path, span, status, author, source }] }`.
-- `submitReview(fh, {repo, sha, verdict, body?, comments: [{path, span, body}]})`
-  (core): creates the artifacts and edges, then delegates to the existing
-  decide path. Exposed as `POST /git/proposals/:sha/review`. The existing
-  bare-decision endpoint remains for comment-less decisions from the card.
+The backend already exists from M4 and is reused as-is:
+`POST /git/proposals/:sha/reviews` accepts
+`{ verdict, body?, by, comments: [{ body, anchor?, span? }] }` and creates the
+Review, ReviewComments, and `part_of` edges through the signed flow;
+`GET /git/proposals/:sha/reviews` returns them (core `listReviewsForSha`,
+saved and pending both included). The web submit flow calls the reviews
+endpoint first, then the existing decide endpoint. The bare decide endpoint
+remains for comment-less decisions from the card.
 
 ### Web
 
@@ -260,11 +258,11 @@ annotations plus the standard error panel.
 
 ### Tests
 
-Core: artifact creation with edges and spans, verdict mapping, list join.
-API: both endpoints, validation (span format, paths must be in the diff — path
-membership validated against `commitDiff` output). Web: annotations render on
-the right file/side, composer creates a draft, drafts survive remount
-(localStorage), submit posts verdict + comments and clears drafts.
+Web: annotations render on the right file/side (path parsed from the comment
+anchor, side from the `old:` span prefix), composer creates a draft, drafts
+survive remount (localStorage), submit posts verdict + comments to the
+reviews endpoint then the decision, and clears drafts. Backend behavior is
+already covered by the existing M4 tests.
 
 ## Rollout
 
