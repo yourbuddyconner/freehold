@@ -18,6 +18,7 @@ import { Route as SchemaRouteImport } from './routes/schema'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as VerifyRouteImport } from './routes/verify'
 import { Route as CodeFileRouteImport } from './routes/code.file'
+import { Route as CodeGraphRouteImport } from './routes/code.graph'
 import { Route as CodeItemRouteImport } from './routes/code.item'
 import { Route as MemoryIdRouteImport } from './routes/memory.$id'
 import { Route as MemoryGraphRouteImport } from './routes/memory.graph'
@@ -67,6 +68,11 @@ const CodeFileRoute = CodeFileRouteImport.update({
   path: '/file',
   getParentRoute: () => CodeRoute,
 } as any)
+const CodeGraphRoute = CodeGraphRouteImport.update({
+  id: '/graph',
+  path: '/graph',
+  getParentRoute: () => CodeRoute,
+} as any)
 const CodeItemRoute = CodeItemRouteImport.update({
   id: '/item',
   path: '/item',
@@ -93,6 +99,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof SettingsRoute
   '/verify': typeof VerifyRoute
   '/code/file': typeof CodeFileRoute
+  '/code/graph': typeof CodeGraphRoute
   '/code/item': typeof CodeItemRoute
   '/memory/$id': typeof MemoryIdRoute
   '/memory/graph': typeof MemoryGraphRoute
@@ -107,6 +114,7 @@ export interface FileRoutesByTo {
   '/settings': typeof SettingsRoute
   '/verify': typeof VerifyRoute
   '/code/file': typeof CodeFileRoute
+  '/code/graph': typeof CodeGraphRoute
   '/code/item': typeof CodeItemRoute
   '/memory/$id': typeof MemoryIdRoute
   '/memory/graph': typeof MemoryGraphRoute
@@ -122,6 +130,7 @@ export interface FileRoutesById {
   '/settings': typeof SettingsRoute
   '/verify': typeof VerifyRoute
   '/code/file': typeof CodeFileRoute
+  '/code/graph': typeof CodeGraphRoute
   '/code/item': typeof CodeItemRoute
   '/memory/$id': typeof MemoryIdRoute
   '/memory/graph': typeof MemoryGraphRoute
@@ -138,6 +147,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/verify'
     | '/code/file'
+    | '/code/graph'
     | '/code/item'
     | '/memory/$id'
     | '/memory/graph'
@@ -152,6 +162,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/verify'
     | '/code/file'
+    | '/code/graph'
     | '/code/item'
     | '/memory/$id'
     | '/memory/graph'
@@ -166,6 +177,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/verify'
     | '/code/file'
+    | '/code/graph'
     | '/code/item'
     | '/memory/$id'
     | '/memory/graph'
@@ -247,6 +259,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CodeFileRouteImport
       parentRoute: typeof CodeRoute
     }
+    '/code/graph': {
+      id: '/code/graph'
+      path: '/graph'
+      fullPath: '/code/graph'
+      preLoaderRoute: typeof CodeGraphRouteImport
+      parentRoute: typeof CodeRoute
+    }
     '/code/item': {
       id: '/code/item'
       path: '/item'
@@ -273,11 +292,13 @@ declare module '@tanstack/react-router' {
 
 interface CodeRouteChildren {
   CodeFileRoute: typeof CodeFileRoute
+  CodeGraphRoute: typeof CodeGraphRoute
   CodeItemRoute: typeof CodeItemRoute
 }
 
 const CodeRouteChildren: CodeRouteChildren = {
   CodeFileRoute: CodeFileRoute,
+  CodeGraphRoute: CodeGraphRoute,
   CodeItemRoute: CodeItemRoute,
 }
 

@@ -1,4 +1,4 @@
-import { codeFile, codeItem, codeRegions, codeTree } from "@freehold/core";
+import { codeFile, codeItem, codeNeighborhood, codeRegions, codeTree } from "@freehold/core";
 import { Hono } from "hono";
 import { basename } from "node:path";
 import type { AppEnv } from "../types.js";
@@ -49,6 +49,20 @@ codeRouter.get("/code/item/:nodeId", async (c) => {
     return c.json({ error: "not found" }, 404);
   }
   return c.json(item);
+});
+
+// GET /code/neighborhood?path=
+codeRouter.get("/code/neighborhood", async (c) => {
+  const fh = c.get("freehold");
+  if (!repoOnly(fh)) {
+    return c.json({ error: "code view is only available for repo graphs" }, 400);
+  }
+  const path = c.req.query("path");
+  if (!path) {
+    return c.json({ error: "path query parameter is required" }, 400);
+  }
+  const neighborhood = await codeNeighborhood(fh, path);
+  return c.json(neighborhood);
 });
 
 // GET /code/regions

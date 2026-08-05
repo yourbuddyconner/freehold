@@ -47,6 +47,7 @@ export type CodeItem = Schemas["CodeItem"];
 export type CodeFileView = Schemas["CodeFileView"];
 export type CodeItemView = Schemas["CodeItemView"];
 export type RegionRule = Schemas["RegionRule"];
+export type CodeNeighborhood = Schemas["CodeNeighborhood"];
 
 // ---------------------------------------------------------------------------
 // Health response (inline in openapi)
@@ -399,5 +400,10 @@ export class FreeholdClient {
   /** GET /api/v1/code/regions — policy region membership */
   async codeRegions(): Promise<{ rules: RegionRule[] }> {
     return this.fetch<{ rules: RegionRule[] }>("GET", "/api/v1/code/regions");
+  }
+
+  /** GET /api/v1/code/neighborhood?path= — nodes and edges one hop from the file */
+  async codeNeighborhood(path: string): Promise<CodeNeighborhood> {
+    return this.fetch<CodeNeighborhood>("GET", "/api/v1/code/neighborhood", { query: { path } });
   }
 }

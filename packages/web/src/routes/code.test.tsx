@@ -23,6 +23,10 @@ vi.mock("~/lib/hooks", () => ({
   useCodeFile: vi.fn(),
   useCodeItem: vi.fn(),
   useCodeRegions: vi.fn(),
+  useClassify: vi.fn(),
+  useListGraphs: vi.fn(),
+  useGitHubBlobUrl: vi.fn().mockReturnValue(null),
+  useCodeNeighborhood: vi.fn(),
 }));
 
 vi.mock("~/lib/api", () => ({
@@ -35,6 +39,9 @@ vi.mock("~/lib/api", () => ({
     codeFile: vi.fn(),
     codeItem: vi.fn(),
     codeRegions: vi.fn(),
+    classify: vi.fn(),
+    listGraphs: vi.fn(),
+    codeNeighborhood: vi.fn(),
   },
 }));
 
@@ -94,6 +101,16 @@ const sampleFileView = {
 
 type GraphKind = "memory" | "repo";
 
+const sampleNeighborhood = {
+  nodes: [
+    { id: "node-file-1", label: "src/main.ts", type: "code/SourceFile@1", terms: [] },
+    { id: "node-item-1", label: "main", type: "code/Function@1", terms: [] },
+  ],
+  edges: [
+    { id: "edge-1", from: "node-file-1", to: "node-item-1", type: "code/declares" },
+  ],
+};
+
 function setupHooks(
   overrides: {
     tree?: unknown[];
@@ -102,6 +119,8 @@ function setupHooks(
     regions?: typeof sampleRegions;
     activeGraphId?: string;
     graphs?: { id: string; name: string; kind: GraphKind }[];
+    blobUrl?: string | null;
+    neighborhood?: typeof sampleNeighborhood | null;
   } = {}
 ) {
   const graphs = overrides.graphs ?? [];
@@ -175,6 +194,24 @@ function setupHooks(
     data: { rules: overrides.regions ?? sampleRegions },
     ...emptyQuery,
   } as unknown as ReturnType<typeof hooks.useCodeRegions>);
+  vi.mocked(hooks.useClassify).mockReturnValue({
+    mutate: vi.fn(),
+    mutateAsync: vi.fn(),
+    isPending: false,
+  } as unknown as ReturnType<typeof hooks.useClassify>);
+  vi.mocked(hooks.useListGraphs).mockReturnValue({
+    data: { graphs: [] },
+    ...emptyQuery,
+  } as unknown as ReturnType<typeof hooks.useListGraphs>);
+  vi.mocked(hooks.useGitHubBlobUrl).mockReturnValue(
+    overrides.blobUrl !== undefined ? overrides.blobUrl : null
+  );
+  vi.mocked(hooks.useCodeNeighborhood).mockReturnValue({
+    data: overrides.neighborhood === null ? undefined : (overrides.neighborhood ?? sampleNeighborhood),
+    isLoading: false,
+    isError: overrides.neighborhood === null,
+    error: null,
+  } as unknown as ReturnType<typeof hooks.useCodeNeighborhood>);
 }
 
 async function renderCode(
@@ -276,6 +313,57 @@ describe("Code workspace", () => {
       await renderCode();
       expect(screen.getByText("policy/api-review")).toBeInTheDocument();
       expect(screen.getByText("src/api/routes.ts")).toBeInTheDocument();
+    });
+  });
+
+  describe("Classify affordance", () => {
+    it("renders a classification input and Apply button on the file page", async () => {
+      await renderCode({}, "/code/file?path=src%2Fmain.ts");
+      expect(screen.getByRole("textbox", { name: /classification term/i })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /apply/i })).toBeInTheDocument();
+    });
+
+    it("Classify section heading is visible on the file page", async () => {
+      await renderCode({}, "/code/file?path=src%2Fmain.ts");
+      expect(screen.getByText("Classify")).toBeInTheDocument();
+    });
+  });
+
+  describe("GitHub blob link", () => {
+    it("does not render the link when blobUrl is null", async () => {
+      await renderCode({ blobUrl: null }, "/code/file?path=src%2Fmain.ts");
+      expect(screen.queryByTestId("github-blob-link")).not.toBeInTheDocument();
+    });
+
+    it("renders the link when a GitHub blobUrl is provided", async () => {
+      await renderCode(
+        { blobUrl: "https://github.com/acme/myrepo/blob/HEAD/src/main.ts" },
+        "/code/file?path=src%2Fmain.ts"
+      );
+      const link = screen.getByTestId("github-blob-link");
+      expect(link).toBeInTheDocument();
+      expect(link).toHaveAttribute(
+        "href",
+        "https://github.com/acme/myrepo/blob/HEAD/src/main.ts"
+      );
+    });
+  });
+
+  describe("Graph tab", () => {
+    it("renders the Graph tab link on the file page", async () => {
+      await renderCode({}, "/code/file?path=src%2Fmain.ts");
+      expect(screen.getByTestId("graph-tab-link")).toBeInTheDocument();
+    });
+
+    it("graph page renders node labels from the neighborhood", async () => {
+      await renderCode({}, "/code/graph?path=src%2Fmain.ts");
+      // The ReactFlow canvas renders nodes; check that node label text appears
+      expect(screen.getByText("src/main.ts")).toBeInTheDocument();
+    });
+
+    it("graph page renders empty state when no nodes returned", async () => {
+      await renderCode({ neighborhood: null }, "/code/graph?path=src%2Fmain.ts");
+      expect(screen.getByText(/no neighborhood data/i)).toBeInTheDocument();
     });
   });
 });

@@ -1,5 +1,6 @@
+import { useState } from "react";
 import { Link, createRoute } from "@tanstack/react-router";
-import { useCodeItem } from "~/lib/hooks";
+import { useClassify, useCodeItem } from "~/lib/hooks";
 import { Route as RootRoute } from "./__root";
 
 export const Route = createRoute({
@@ -19,6 +20,57 @@ interface CodeItem {
   span?: string;
   terms: string[];
   filePath?: string;
+}
+
+/** Classify a code node with a manually entered term. */
+function ClassifyPanel({ nodeId }: { nodeId: string }) {
+  const [term, setTerm] = useState("");
+  const [result, setResult] = useState<{ status: "saved" | "pending" } | null>(null);
+  const classify = useClassify();
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!term.trim()) return;
+    classify.mutate(
+      { nodeId, term: term.trim() },
+      {
+        onSuccess: (r) => {
+          setResult(r);
+          setTerm("");
+        },
+      }
+    );
+  }
+
+  return (
+    <section className="space-y-2">
+      <h3 className="text-sm font-semibold text-(--fg)">Classify</h3>
+      <form onSubmit={handleSubmit} className="flex gap-2">
+        <input
+          type="text"
+          value={term}
+          onChange={(e) => setTerm(e.target.value)}
+          placeholder="term (e.g. workspace/core)"
+          aria-label="Classification term"
+          className="flex-1 border border-(--border) bg-(--bg) px-2 py-1 font-mono text-xs text-(--fg) placeholder:text-(--fg-muted)"
+        />
+        <button
+          type="submit"
+          disabled={classify.isPending || !term.trim()}
+          className="border border-(--border) bg-(--bg-subtle) px-3 py-1 font-mono text-[11px] uppercase tracking-[0.06em] text-(--fg) hover:bg-(--bg) disabled:opacity-50"
+        >
+          Apply
+        </button>
+      </form>
+      {result && (
+        <p className="font-mono text-[11px] text-(--fg-muted)">
+          {result.status === "saved"
+            ? "Saved."
+            : "Pending — review in the Inbox."}
+        </p>
+      )}
+    </section>
+  );
 }
 
 function ItemRef({ item }: { item: CodeItem }) {
@@ -115,6 +167,8 @@ export function CodeItemPage({ nodeId }: { nodeId?: string }) {
           </Link>
         )}
       </header>
+
+      <ClassifyPanel nodeId={item.nodeId} />
 
       {callersIn.length > 0 && (
         <section className="space-y-2">

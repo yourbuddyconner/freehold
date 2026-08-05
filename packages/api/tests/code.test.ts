@@ -398,3 +398,42 @@ describe("GET /api/v1/graphs/:id/code/regions on repo graph", () => {
     }
   });
 });
+
+describe("GET /api/v1/graphs/:id/code/neighborhood on repo graph", () => {
+  test("returns 200 with nodes and edges for an indexed path", async () => {
+    const { status, body } = await req(
+      "GET",
+      `/api/v1/graphs/${repoGraphId}/code/neighborhood?path=src/lib.rs`
+    );
+    expect(status).toBe(200);
+    const b = body as { nodes: unknown[]; edges: unknown[] };
+    expect(Array.isArray(b.nodes)).toBe(true);
+    expect(Array.isArray(b.edges)).toBe(true);
+  });
+
+  test("returns 200 with empty arrays for an unindexed path", async () => {
+    const { status, body } = await req(
+      "GET",
+      `/api/v1/graphs/${repoGraphId}/code/neighborhood?path=nonexistent.rs`
+    );
+    expect(status).toBe(200);
+    const b = body as { nodes: unknown[]; edges: unknown[] };
+    expect(b.nodes).toHaveLength(0);
+    expect(b.edges).toHaveLength(0);
+  });
+
+  test("returns 400 when path is missing", async () => {
+    const { status } = await req(
+      "GET",
+      `/api/v1/graphs/${repoGraphId}/code/neighborhood`
+    );
+    expect(status).toBe(400);
+  });
+
+  test("returns 400 on memory graph", async () => {
+    const { status, body } = await req("GET", "/api/v1/code/neighborhood?path=src/lib.rs");
+    expect(status).toBe(400);
+    const b = body as { error: string };
+    expect(b.error).toBe("code view is only available for repo graphs");
+  });
+});

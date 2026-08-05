@@ -758,6 +758,38 @@
           "paths"
         ]
       },
+      "CodeNeighborhood": {
+        "type": "object",
+        "properties": {
+          "nodes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string" },
+                "label": { "type": "string" },
+                "type": { "type": "string" },
+                "terms": { "type": "array", "items": { "type": "string" } }
+              },
+              "required": ["id", "label", "type", "terms"]
+            }
+          },
+          "edges": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string" },
+                "from": { "type": "string" },
+                "to": { "type": "string" },
+                "type": { "type": "string" }
+              },
+              "required": ["id", "from", "to", "type"]
+            }
+          }
+        },
+        "required": ["nodes", "edges"]
+      },
       "MemoryIndexEntry": {
         "type": "object",
         "properties": {
@@ -2106,6 +2138,33 @@
           "401": {
             "description": "Unauthorized"
           }
+        }
+      }
+    },
+    "/api/v1/code/neighborhood": {
+      "get": {
+        "summary": "Code neighborhood graph",
+        "description": "Nodes and edges one hop from the given file path.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "schema": { "type": "string", "description": "Repo-relative file path" },
+            "required": true,
+            "name": "path",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Neighborhood graph",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CodeNeighborhood" }
+              }
+            }
+          },
+          "400": { "description": "Not a repo graph, or missing path param" },
+          "401": { "description": "Unauthorized" }
         }
       }
     },

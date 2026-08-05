@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import type { CodeFileView, CodeItemView, RegionRule, SessionGraphEntry } from "@freehold/client";
+import type { CodeFileView, CodeItemView, CodeNeighborhood, RegionRule, SessionGraphEntry } from "@freehold/client";
 import { GRAPH_STORAGE_KEY, apiClient, setActiveGraph } from "./api";
 
 /** Pending proposals (the Inbox). */
@@ -232,5 +232,49 @@ export function useCodeRegions(enabled = true) {
   });
 }
 
+/** Neighborhood graph for a given file path — nodes and edges one hop out. */
+export function useCodeNeighborhood(path: string | undefined) {
+  return useQuery({
+    queryKey: ["code-neighborhood", path],
+    queryFn: () => apiClient.codeNeighborhood(path!),
+    enabled: !!path,
+    retry: false,
+  });
+}
+
+/** Manual classification of a node by the owner. */
+export function useClassify() {
+  const { data: sessionData } = useSession();
+  const agent = sessionData?.owner ?? "owner";
+  return useMutation({
+    mutationFn: ({ nodeId, term }: { nodeId: string; term: string }) =>
+      apiClient.classify({ agent, nodeId, term, basis: "manual" }),
+  });
+}
+
+/** Full graph info list from /api/v1/graphs — includes originRemote and path. */
+export function useListGraphs() {
+  return useQuery({
+    queryKey: ["list-graphs"],
+    queryFn: () => apiClient.listGraphs(),
+  });
+}
+
+/** Returns a GitHub blob URL for the given file path if the active graph has a GitHub remote. */
+export function useGitHubBlobUrl(filePath: string | undefined): string | null {
+  const { activeGraphId } = useActiveGraph();
+  const { data } = useListGraphs();
+  if (!filePath || !data) return null;
+  const entry = data.graphs.find((g) => g.id === activeGraphId);
+  if (!entry?.originRemote) return null;
+  const remote = entry.originRemote;
+  // Parse https://github.com/org/repo.git or git@github.com:org/repo.git
+  const httpsMatch = remote.match(/https?:\/\/github\.com\/([^/]+\/[^/]+?)(?:\.git)?$/);
+  const sshMatch = remote.match(/git@github\.com:([^/]+\/[^/]+?)(?:\.git)?$/);
+  const repoPath = (httpsMatch?.[1] ?? sshMatch?.[1]) ?? null;
+  if (!repoPath) return null;
+  return `https://github.com/${repoPath}/blob/HEAD/${filePath}`;
+}
+
 // Re-export types for convenience in route components
-export type { CodeFileView, CodeItemView, RegionRule };
+export type { CodeFileView, CodeItemView, CodeNeighborhood, RegionRule };
