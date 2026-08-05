@@ -137,6 +137,19 @@ describe("git helpers", () => {
     await expect(appendDecision(repoDir, "--bad", {})).rejects.toThrow(/unsafe sha/);
   });
 
+  test("concurrent appendDecision calls on the same sha both survive", async () => {
+    // Two concurrent appends — neither should overwrite the other
+    await Promise.all([
+      appendDecision(repoDir, sha1, { verdict: "approve", by: "alice" }),
+      appendDecision(repoDir, sha1, { verdict: "reject", by: "bob" }),
+    ]);
+    const decisions = await readDecisions(repoDir, sha1);
+    expect(decisions).toHaveLength(2);
+    // Both records must be present (order may vary)
+    const bys = (decisions as Array<{ by: string }>).map((d) => d.by).sort();
+    expect(bys).toEqual(["alice", "bob"]);
+  });
+
   test("diffTreeOps on merge commit uses first-parent two-tree diff", async () => {
     // Get the current branch name (may be "main" or "master" depending on git config)
     const currentBranch = execFileSync("git", ["rev-parse", "--abbrev-ref", "HEAD"], { cwd: repoDir })

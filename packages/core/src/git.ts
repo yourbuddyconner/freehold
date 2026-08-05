@@ -14,6 +14,25 @@ import { load as yamlLoad, dump as yamlDump } from "js-yaml";
 
 const execFileAsync = promisify(execFile);
 
+// Per-(repoDir+sha) serialization for appendDecision read-modify-write.
+// Uses the same promise-chain pattern as withGraph in lock.ts.
+const appendLocks = new Map<string, Promise<void>>();
+
+function withAppendLock<T>(repoDir: string, sha: string, fn: () => Promise<T>): Promise<T> {
+  const key = `${repoDir}\0${sha}`;
+  const prev = appendLocks.get(key) ?? Promise.resolve();
+  let resolve!: () => void;
+  const next = new Promise<void>((r) => { resolve = r; });
+  appendLocks.set(key, next);
+  return prev.then(() => fn()).finally(() => {
+    resolve();
+    // Clean up if this is still the current tail to avoid unbounded growth
+    if (appendLocks.get(key) === next) {
+      appendLocks.delete(key);
+    }
+  });
+}
+
 /**
  * Defense-in-depth guard: reject refs/shas that start with '-' to prevent them
  * from being parsed as git options in commands that don't support --end-of-options.
@@ -143,22 +162,24 @@ export async function appendDecision(
   sha: string,
   record: unknown
 ): Promise<void> {
-  assertSafeRef(sha, "sha");
-  const existing = await readDecisions(repoDir, sha);
-  existing.push(record);
-  const root = { decisions: existing };
-  const body = yamlDump(root);
-  const tmpFile = join(tmpdir(), `allod-note-${sha}-${Date.now()}.yaml`);
-  writeFileSync(tmpFile, body);
-  try {
-    await git(repoDir, ["notes", "--ref=allod-decisions", "add", "-f", "-F", tmpFile, sha]);
-  } finally {
+  assertSafeRef(sha, "sha"); // reject before locking
+  return withAppendLock(repoDir, sha, async () => {
+    const existing = await readDecisions(repoDir, sha);
+    existing.push(record);
+    const root = { decisions: existing };
+    const body = yamlDump(root);
+    const tmpFile = join(tmpdir(), `allod-note-${sha}-${Date.now()}.yaml`);
+    writeFileSync(tmpFile, body);
     try {
-      unlinkSync(tmpFile);
-    } catch {
-      // Ignore cleanup errors
+      await git(repoDir, ["notes", "--ref=allod-decisions", "add", "-f", "-F", tmpFile, sha]);
+    } finally {
+      try {
+        unlinkSync(tmpFile);
+      } catch {
+        // Ignore cleanup errors
+      }
     }
-  }
+  });
 }
 
 /**
