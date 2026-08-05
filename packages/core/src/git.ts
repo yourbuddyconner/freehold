@@ -203,6 +203,96 @@ export async function pushNotes(repoDir: string, remote = "origin"): Promise<voi
   await git(repoDir, ["push", remote, "refs/notes/allod-decisions"]);
 }
 
+export interface FileDiffEntry {
+  path: string;
+  /** Original path before rename/copy; absent for other verbs. */
+  oldPath?: string;
+  /** Status character: A/M/D/R/C or other git status char. */
+  verb: string;
+  /** Unified diff hunk text for this file. Empty string for binary files. */
+  patch: string;
+  binary: boolean;
+}
+
+const PATCH_SIZE_LIMIT = 1_000_000; // 1 MB
+
+/**
+ * Return per-file unified diff entries for a commit SHA.
+ *
+ * Uses the same first-parent / --root logic as diffTreeOps.
+ * Total patch bytes are capped at 1 MB.
+ */
+export async function commitDiff(repoDir: string, sha: string): Promise<FileDiffEntry[]> {
+  assertSafeRef(sha, "sha");
+  const meta = await commitMeta(repoDir, sha);
+
+  let args: string[];
+  if (meta.parents.length === 0) {
+    args = ["diff-tree", "--root", "--no-renames", "-p", "-r", "--end-of-options", sha];
+  } else {
+    args = [
+      "diff-tree",
+      "--no-renames",
+      "-p",
+      "-r",
+      "--end-of-options",
+      meta.parents[0],
+      sha,
+    ];
+  }
+
+  const out = await git(repoDir, args);
+  return parsePatchOutput(out);
+}
+
+/**
+ * Parse `git diff-tree -p` multi-file output into per-file entries.
+ */
+function parsePatchOutput(raw: string): FileDiffEntry[] {
+  const entries: FileDiffEntry[] = [];
+  let totalBytes = 0;
+
+  const blocks = raw.split(/(?=^diff --git )/m).filter((b) => b.trim());
+
+  for (const block of blocks) {
+    if (totalBytes >= PATCH_SIZE_LIMIT) break;
+
+    const headerMatch = block.match(/^diff --git a\/(.*?) b\/(.*?)$/m);
+    if (!headerMatch) continue;
+    const aPath = headerMatch[1];
+    const bPath = headerMatch[2];
+
+    const isBinary = /^Binary files .+ differ$/m.test(block);
+
+    let verb = "M";
+    if (/^new file mode/m.test(block)) {
+      verb = "A";
+    } else if (/^deleted file mode/m.test(block)) {
+      verb = "D";
+    } else if (/^similarity index/m.test(block)) {
+      verb = "R";
+    }
+
+    const patch = isBinary ? "" : block;
+    totalBytes += patch.length;
+
+    const entry: FileDiffEntry = {
+      path: bPath,
+      verb,
+      patch: totalBytes <= PATCH_SIZE_LIMIT ? patch : "",
+      binary: isBinary,
+    };
+
+    if (aPath !== bPath && verb === "R") {
+      entry.oldPath = aPath;
+    }
+
+    entries.push(entry);
+  }
+
+  return entries;
+}
+
 /**
  * Return all local branch heads as { ref, sha } pairs.
  * Uses `git for-each-ref refs/heads --format=%(refname)%09%(objectname)`.
