@@ -266,3 +266,31 @@ One event-handler core behind two auth modes and two transports:
 - Semantic embedding of code graphs by default (per-graph opt-in exists).
 - Item-level extraction beyond Rust (file-level reach covers all
   languages; the extractor gap is an allod-side follow-on).
+
+## Sub-project 4 status
+
+**Status: shipped 2026-08-05**
+
+Shipped in branch `worktree-governed-review-m4` (commits from Task 1 through Task 4), merged to local main. All four sub-projects are now complete; the branch has not been pushed to the remote. The dependency pre-push note from sub-project 3 applies: push freehold after pushing any allod commits it depends on, so the remote reference resolves for CI.
+
+### Implementation decisions and deviations
+
+- **Ingest principal**: a `github-connector` service principal is created at first ingest on each graph. Its key lives in the graph's doc store (file-backed). Writes commit as this principal so provenance is auditable in the changeset log.
+- **credentialToken slot**: the discovered GitHub token is stored in a dedicated `credentialToken` connector secret rather than in the general `pem`/`webhookSecret`/`clientSecret` slots. This distinguishes credential-mode tokens from app-mode credentials and prevents accidental cross-mode reads.
+- **Tombstone detection via cursor id-diff**: deletion detection in the poller compares the set of comment ids ingested in the previous poll (stored in `connector_cursor.state` jsonb) against the current listing for each open PR. A comment absent from the current listing while its PR is still open is emitted as a tombstone event. This is cursor-semantic rather than a separate deletion event from GitHub.
+- **Webhook 204 oracle**: the webhook route returns 204 for accepted or unknown-repo events; 401 only on signature failure with no body detail. This minimises information leakage and matches GitHub's recommended webhook handler contract.
+- **publicUrl persistence**: `public_url` is stored in `connector_config`. The `webhooksEnabled` PUT validates that a publicUrl is either present in the request body or already persisted before accepting `webhooksEnabled: true`, returning 400 with code `missing-public-url` otherwise.
+- **Startup catch-up poll**: when a graph's connector has `webhooksEnabled: true`, `serve.ts` runs one `pollOnce` at boot (fire-and-forget) in addition to the regular poller. Errors are logged but do not block startup.
+- **fetchFn injection for testing**: the poll route (`POST /connector/poll`) now passes the injected `fetchFn` from Hono context to `makeTokenClient`, so integration tests can supply a mock fetch without a live GitHub connection.
+- **`checks` field on GitProposal**: check-run rows from `check_status` are read in `evaluateSha` and included in the API response and client types as an optional `checks` array. The openapi schema and `packages/client/src/types.ts` are updated to match. The web card renders a CI checks row when the array is non-empty.
+
+## M4 overall status
+
+All four sub-projects shipped 2026-08-05 on branch `worktree-governed-review-m4`.
+
+- Sub-project 1: governed repo review surface (policies, wasm bindings, inbox, viewer)
+- Sub-project 2: signing and key backends (file key, keychain, two-phase decide flow)
+- Sub-project 3: GitHub App mode (manifest flow, HMAC webhooks, installation tokens, poll/webhook parity)
+- Sub-project 4: surface integration (check-runs on cards, connector settings UI, smoke, spec)
+
+The branch is local only. **Dependency note**: this freehold branch depends on allod commits that must be pushed first; push the allod dependency commits before pushing this freehold branch so the remote package reference resolves for CI.

@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider, createMemoryHistory, createRouter } from "@tanstack/react-router";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { apiClient } from "~/lib/api";
+import { ApiError, apiClient } from "~/lib/api";
 import * as hooks from "~/lib/hooks";
 import { routeTree } from "~/routes/../routeTree.gen";
 
@@ -21,10 +21,23 @@ vi.mock("~/lib/hooks", () => ({
   useGitProposals: vi.fn().mockReturnValue({ data: { proposals: [] }, isLoading: false, isError: false, error: null }),
 }));
 
-vi.mock("~/lib/api", () => ({
-  GRAPH_STORAGE_KEY: "freehold-graph",
-  setActiveGraph: vi.fn(),
-  apiClient: {
+vi.mock("~/lib/api", () => {
+  class ApiError extends Error {
+    code: string;
+    status: number;
+    constructor(code: string, message: string, status: number) {
+      super(message);
+      this.name = "ApiError";
+      this.code = code;
+      this.status = status;
+    }
+  }
+
+  return {
+    GRAPH_STORAGE_KEY: "freehold-graph",
+    setActiveGraph: vi.fn(),
+    ApiError,
+    apiClient: {
     proposals: vi.fn(),
     approve: vi.fn().mockResolvedValue({}),
     reject: vi.fn().mockResolvedValue({}),
@@ -38,8 +51,14 @@ vi.mock("~/lib/api", () => ({
     registerAgent: vi.fn(),
     installOntology: vi.fn().mockResolvedValue({}),
     verify: vi.fn().mockResolvedValue({ ok: true }),
-  },
-}));
+    getConnector: vi.fn().mockResolvedValue({ configured: false, status: {} }),
+    putConnector: vi.fn(),
+    pollConnector: vi.fn(),
+    getConnectorManifest: vi.fn(),
+    putConnectorWebhooks: vi.fn(),
+    },
+  };
+});
 
 const principalsFixture = {
   principals: [
@@ -246,5 +265,136 @@ describe("Settings", () => {
   it("shows empty state when no principals", async () => {
     await renderSettings({ principals: [] });
     expect(screen.getByText(/no principals registered/i)).toBeInTheDocument();
+  });
+});
+
+describe("Connector section", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(apiClient.getConnector).mockResolvedValue({ configured: false, status: {} });
+  });
+
+  it("renders connector section", async () => {
+    await renderSettings();
+    await waitFor(() => {
+      expect(screen.getByTestId("connector-section")).toBeInTheDocument();
+    });
+  });
+
+  it("shows 'no credential found' error when putConnector returns 409 no-credential", async () => {
+    vi.mocked(apiClient.putConnector).mockRejectedValue(
+      new ApiError("no-credential", "no credential found", 409)
+    );
+
+    await renderSettings();
+
+    await waitFor(() => {
+      expect(screen.getByTestId("connect-btn")).toBeInTheDocument();
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("connect-btn"));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("connect-error")).toBeInTheDocument();
+    });
+    expect(screen.getByTestId("connect-error")).toHaveTextContent(
+      "No GitHub credential found. Install the gh CLI and run `gh auth login`."
+    );
+  });
+
+  it("webhook toggle is disabled when public URL field is empty", async () => {
+    vi.mocked(apiClient.getConnector).mockResolvedValue({
+      configured: true,
+      config: {
+        mode: "app",
+        owner: "test-owner",
+        repo: "test-repo",
+        pollIntervalSec: 300,
+        webhooksEnabled: false,
+        appId: "123",
+      },
+      status: {},
+    });
+
+    await renderSettings();
+
+    await waitFor(() => {
+      expect(screen.getByTestId("webhooks-toggle")).toBeInTheDocument();
+    });
+
+    const toggle = screen.getByTestId("webhooks-toggle");
+    // publicUrl field is empty by default → toggle must be disabled
+    expect(toggle).toBeDisabled();
+  });
+
+  it("poll-result shows formatted output after polling", async () => {
+    vi.mocked(apiClient.getConnector).mockResolvedValue({
+      configured: true,
+      config: {
+        mode: "credential",
+        owner: "test-owner",
+        repo: "test-repo",
+        pollIntervalSec: 300,
+        webhooksEnabled: false,
+      },
+      status: {},
+    });
+    vi.mocked(apiClient.pollConnector).mockResolvedValue({
+      events: 5,
+      unchanged: 2,
+      errors: [],
+    });
+
+    await renderSettings();
+
+    await waitFor(() => {
+      expect(screen.getByTestId("poll-btn")).toBeInTheDocument();
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("poll-btn"));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("poll-result")).toBeInTheDocument();
+    });
+    expect(screen.getByTestId("poll-result")).toHaveTextContent("5 events, 2 unchanged, 0 errors");
+  });
+
+  it("manifest form renders with action URL when manifest data is available", async () => {
+    vi.mocked(apiClient.getConnectorManifest).mockResolvedValue({
+      manifestUrl: "https://github.com/settings/apps/new",
+      manifest: { name: "test-app" },
+      state: "abc123",
+    });
+
+    await renderSettings();
+
+    await waitFor(() => {
+      expect(screen.getByTestId("mode-app")).toBeInTheDocument();
+    });
+
+    // Switch to app mode
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("mode-app"));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("create-app-btn")).toBeInTheDocument();
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("create-app-btn"));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("manifest-form")).toBeInTheDocument();
+    });
+
+    const form = screen.getByTestId("manifest-form");
+    expect(form).toHaveAttribute("action", "https://github.com/settings/apps/new");
+    expect(screen.getByTestId("manifest-submit")).toBeInTheDocument();
   });
 });

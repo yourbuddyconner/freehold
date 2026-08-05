@@ -1,10 +1,10 @@
 import * as Dialog from "@radix-ui/react-dialog";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createRoute, useNavigate } from "@tanstack/react-router";
 import { Check, Copy } from "lucide-react";
 import { useState } from "react";
 import { type Principal, PrincipalCard } from "~/components/PrincipalCard";
-import { apiClient } from "~/lib/api";
+import { ApiError, apiClient } from "~/lib/api";
 import { cn } from "~/lib/cn";
 import { usePrincipals, useSession } from "~/lib/hooks";
 import { type ThemeChoice, readStoredTheme, setTheme } from "~/lib/theme";
@@ -408,6 +408,275 @@ function ThemeSection() {
 }
 
 // ---------------------------------------------------------------------------
+// Connector section
+// ---------------------------------------------------------------------------
+
+interface ConnectorConfig {
+  mode: "credential" | "app";
+  owner?: string;
+  repo?: string;
+  pollIntervalSec?: number;
+  webhooksEnabled?: boolean;
+  appId?: string;
+  appSlug?: string;
+  installationId?: string;
+  publicUrl?: string;
+}
+
+interface ConnectorStatus {
+  configured: boolean;
+  config?: ConnectorConfig;
+  status: { lastPollAt?: string; lastErrors?: string[] };
+}
+
+function ConnectorSection() {
+  const qc = useQueryClient();
+
+  const connectorQuery = useQuery<ConnectorStatus>({
+    queryKey: ["connector"],
+    queryFn: () => apiClient.getConnector() as Promise<ConnectorStatus>,
+    retry: false,
+  });
+
+  const cfg = connectorQuery.data?.config;
+
+  // Mode picker state
+  const [selectedMode, setSelectedMode] = useState<"credential" | "app">("credential");
+
+  // Poll result state
+  const [pollResult, setPollResult] = useState<{ events: number; unchanged: number; errors: string[] } | null>(null);
+
+  // Connect mutation (credential mode)
+  const connectMut = useMutation({
+    mutationFn: () => apiClient.putConnector({ mode: "credential" }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["connector"] }),
+  });
+
+  // Poll mutation
+  const pollMut = useMutation({
+    mutationFn: () => apiClient.pollConnector(),
+    onSuccess: (result) => setPollResult(result),
+  });
+
+  // Manifest form state
+  const [manifestData, setManifestData] = useState<{ manifestUrl: string; manifest: Record<string, unknown>; state: string } | null>(null);
+  const manifestMut = useMutation({
+    mutationFn: () => apiClient.getConnectorManifest(),
+    onSuccess: (data) => setManifestData(data),
+  });
+
+  // Webhook state
+  const [publicUrl, setPublicUrl] = useState(cfg?.publicUrl ?? "");
+  const webhookMut = useMutation({
+    mutationFn: (enabled: boolean) =>
+      apiClient.putConnectorWebhooks({ webhooksEnabled: enabled, publicUrl: publicUrl || undefined }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["connector"] }),
+  });
+
+  // Connect error message
+  let connectError: string | null = null;
+  if (connectMut.isError) {
+    const err = connectMut.error;
+    if (err instanceof ApiError) {
+      if (err.code === "no-credential") {
+        connectError = "No GitHub credential found. Install the gh CLI and run `gh auth login`.";
+      } else if (err.code === "missing-origin-remote") {
+        connectError = "Graph has no origin remote configured.";
+      } else {
+        connectError = err.message;
+      }
+    } else {
+      connectError = err instanceof Error ? err.message : "Connect failed";
+    }
+  }
+
+  // App status
+  let appStatus: string | null = null;
+  if (cfg?.mode === "app") {
+    if (cfg.installationId) appStatus = "installed";
+    else if (cfg.appId) appStatus = "awaiting installation";
+    else appStatus = "app created";
+  }
+
+  return (
+    <section className="space-y-4" data-testid="connector-section">
+      <h3 className="text-sm font-semibold text-(--fg)">GitHub connector</h3>
+      <p className="text-xs text-(--fg-muted)">
+        Connect this graph to a GitHub repository to ingest PR comments as review nodes.
+      </p>
+
+      {connectorQuery.isLoading && <p className="text-xs text-(--fg-muted)">Loading…</p>}
+
+      {!connectorQuery.isLoading && (
+        <>
+          {/* Mode picker */}
+          <div className="flex gap-2 items-center">
+            <span className="text-xs text-(--fg-muted) w-16 shrink-0">Mode</span>
+            <div className="flex gap-1">
+              {(["credential", "app"] as const).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setSelectedMode(m)}
+                  aria-pressed={selectedMode === m}
+                  data-testid={`mode-${m}`}
+                  className={cn(
+                    "border px-2 py-1 text-xs font-mono transition-colors",
+                    selectedMode === m
+                      ? "border-(--fg) text-(--fg) bg-(--border)"
+                      : "border-(--border) text-(--fg-muted) hover:text-(--fg)"
+                  )}
+                >
+                  {m}
+                </button>
+              ))}
+            </div>
+            {cfg && (
+              <span className="text-[10px] text-(--fg-muted) font-mono ml-2">
+                current: {cfg.mode}
+              </span>
+            )}
+          </div>
+
+          {/* Credential mode */}
+          {selectedMode === "credential" && (
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={() => connectMut.mutate()}
+                disabled={connectMut.isPending}
+                data-testid="connect-btn"
+                className="border border-(--border) px-3 py-1.5 text-xs font-medium text-(--fg-muted) hover:text-(--fg) disabled:opacity-50 transition-colors"
+              >
+                {connectMut.isPending ? "Connecting…" : "Connect with credential"}
+              </button>
+              {connectMut.isSuccess && (
+                <p className="text-xs text-green-700 dark:text-green-400" data-testid="connect-success">Connector configured.</p>
+              )}
+              {connectError && (
+                <p className="text-xs text-red-600 dark:text-red-400" role="alert" data-testid="connect-error">
+                  {connectError}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* App mode wizard */}
+          {selectedMode === "app" && (
+            <div className="space-y-3">
+              {appStatus && (
+                <p className="text-xs text-(--fg-muted)" data-testid="app-status">
+                  Status: <span className="font-mono">{appStatus}</span>
+                </p>
+              )}
+              <div>
+                <p className="text-xs text-(--fg-muted) mb-2">
+                  Create a GitHub App using GitHub's manifest flow. A form will be submitted to GitHub.
+                </p>
+                {!manifestData ? (
+                  <button
+                    type="button"
+                    onClick={() => manifestMut.mutate()}
+                    disabled={manifestMut.isPending}
+                    data-testid="create-app-btn"
+                    className="border border-(--border) px-3 py-1.5 text-xs font-medium text-(--fg-muted) hover:text-(--fg) disabled:opacity-50 transition-colors"
+                  >
+                    {manifestMut.isPending ? "Preparing…" : "Create GitHub App"}
+                  </button>
+                ) : (
+                  <form
+                    method="post"
+                    action={manifestData.manifestUrl}
+                    data-testid="manifest-form"
+                  >
+                    <input type="hidden" name="manifest" value={JSON.stringify(manifestData.manifest)} />
+                    <input type="hidden" name="state" value={manifestData.state} />
+                    <button
+                      type="submit"
+                      className="bg-(--fg) text-white font-mono text-[12px] uppercase tracking-wide px-3 py-1.5"
+                      data-testid="manifest-submit"
+                    >
+                      Open GitHub to finish setup
+                    </button>
+                  </form>
+                )}
+                {manifestMut.isError && (
+                  <p className="text-xs text-red-600 dark:text-red-400" role="alert">
+                    {manifestMut.error instanceof Error ? manifestMut.error.message : "Failed to prepare manifest"}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Webhook toggle (app mode only) */}
+          {cfg?.mode === "app" && (
+            <div className="space-y-2 border-t border-(--border) pt-3">
+              <div className="flex items-center gap-3">
+                <label className="text-xs text-(--fg-muted) w-24 shrink-0">Public URL</label>
+                <input
+                  type="text"
+                  value={publicUrl}
+                  onChange={(e) => setPublicUrl(e.target.value)}
+                  placeholder="https://example.com"
+                  data-testid="public-url-input"
+                  className="flex-1 border border-(--border) bg-white dark:bg-neutral-900 px-2 py-1 text-xs font-mono text-(--fg) placeholder:text-(--fg-muted) focus:outline-none"
+                />
+              </div>
+              <div className="flex items-center gap-3">
+                <label className="text-xs text-(--fg-muted) w-24 shrink-0">Webhooks</label>
+                <button
+                  type="button"
+                  role="checkbox"
+                  aria-checked={cfg.webhooksEnabled ?? false}
+                  disabled={!publicUrl.trim() || webhookMut.isPending}
+                  data-testid="webhooks-toggle"
+                  onClick={() => webhookMut.mutate(!(cfg.webhooksEnabled ?? false))}
+                  className={cn(
+                    "border px-3 py-1 text-xs font-mono transition-colors",
+                    cfg.webhooksEnabled
+                      ? "border-green-400 text-green-700 dark:text-green-300"
+                      : "border-(--border) text-(--fg-muted)",
+                    (!publicUrl.trim() || webhookMut.isPending) && "opacity-50 cursor-not-allowed"
+                  )}
+                >
+                  {cfg.webhooksEnabled ? "enabled" : "disabled"}
+                </button>
+                {!publicUrl.trim() && (
+                  <span className="text-[10px] text-(--fg-muted)">enter a public URL to enable webhooks</span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Poll now */}
+          {connectorQuery.data?.configured && (
+            <div className="space-y-2 border-t border-(--border) pt-3">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => pollMut.mutate()}
+                  disabled={pollMut.isPending}
+                  data-testid="poll-btn"
+                  className="border border-(--border) px-3 py-1.5 text-xs font-medium text-(--fg-muted) hover:text-(--fg) disabled:opacity-50 transition-colors"
+                >
+                  {pollMut.isPending ? "Polling…" : "Poll now"}
+                </button>
+                {pollResult && (
+                  <span className="text-xs text-(--fg-muted) font-mono" data-testid="poll-result">
+                    {pollResult.events} events, {pollResult.unchanged} unchanged, {pollResult.errors.length} errors
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 
@@ -546,6 +815,10 @@ function SettingsPage() {
       <div className="border-t border-(--border)" />
 
       <OntologyInstallSection />
+
+      <div className="border-t border-(--border)" />
+
+      <ConnectorSection />
 
       <div className="border-t border-(--border)" />
 

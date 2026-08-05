@@ -2568,6 +2568,11 @@ export interface components {
             /** @enum {string} */
             decided: "undecided" | "approved" | "rejected";
             paths: components["schemas"]["GitProposalPath"][];
+            checks?: {
+                name: string;
+                status: string;
+                conclusion?: string;
+            }[];
         };
         DecideBody: {
             /** @enum {string} */

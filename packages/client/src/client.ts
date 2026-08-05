@@ -446,4 +446,34 @@ export class FreeholdClient {
   async pushGitNotes(sha: string): Promise<{ pushed: boolean; pushError?: string }> {
     return this.fetch<{ pushed: boolean; pushError?: string }>("POST", `/api/v1/git/proposals/${sha}/push-notes`);
   }
+
+  /** GET /connector — get connector status and config */
+  async getConnector(): Promise<{ configured: boolean; config?: Record<string, unknown>; status: { lastPollAt?: string; lastErrors?: string[] } }> {
+    return this.fetch("GET", "/api/v1/connector");
+  }
+
+  /** PUT /connector — configure credential mode */
+  async putConnector(body: { mode: "credential"; pollIntervalSec?: number }): Promise<Record<string, unknown>> {
+    return this.fetch("PUT", "/api/v1/connector", { body });
+  }
+
+  /** DELETE /connector — remove connector config */
+  async deleteConnector(): Promise<{ ok: boolean }> {
+    return this.fetch("DELETE", "/api/v1/connector");
+  }
+
+  /** POST /connector/poll — run a poll immediately */
+  async pollConnector(): Promise<{ events: number; unchanged: number; errors: string[] }> {
+    return this.fetch("POST", "/api/v1/connector/poll");
+  }
+
+  /** POST /connector/app/manifest — get manifest + URL for GitHub App creation form-POST */
+  async getConnectorManifest(): Promise<{ manifestUrl: string; manifest: Record<string, unknown>; state: string }> {
+    return this.fetch("POST", "/api/v1/connector/app/manifest");
+  }
+
+  /** PUT /connector with webhooksEnabled + publicUrl */
+  async putConnectorWebhooks(body: { webhooksEnabled: boolean; publicUrl?: string }): Promise<Record<string, unknown>> {
+    return this.fetch("PUT", "/api/v1/connector", { body });
+  }
 }

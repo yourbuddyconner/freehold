@@ -174,6 +174,7 @@ connectorRouter.get("/connector", async (c) => {
     ...(cfg.appId ? { appId: cfg.appId } : {}),
     ...(cfg.appSlug ? { appSlug: cfg.appSlug } : {}),
     ...(cfg.installationId ? { installationId: cfg.installationId } : {}),
+    ...(cfg.publicUrl ? { publicUrl: cfg.publicUrl } : {}),
   };
 
   const status: Record<string, unknown> = {};
@@ -185,10 +186,18 @@ connectorRouter.get("/connector", async (c) => {
 
 // ── PUT /connector ────────────────────────────────────────────────────────────
 
-const PutConnectorBody = z.object({
-  mode: z.literal("credential"),
-  pollIntervalSec: z.number().int().positive().optional(),
-});
+const PutConnectorBody = z.union([
+  z.object({
+    mode: z.literal("credential"),
+    pollIntervalSec: z.number().int().positive().optional(),
+    webhooksEnabled: z.boolean().optional(),
+    publicUrl: z.string().optional(),
+  }),
+  z.object({
+    webhooksEnabled: z.boolean(),
+    publicUrl: z.string().optional(),
+  }),
+]);
 
 connectorRouter.put("/connector", async (c) => {
   const fh = c.get("freehold");
@@ -208,7 +217,49 @@ connectorRouter.put("/connector", async (c) => {
     return c.json({ error: "invalid body", details: parsed.error.issues }, 400);
   }
 
-  const { pollIntervalSec = 300 } = parsed.data;
+  const data = parsed.data;
+
+  // Webhook-only update path (no mode field)
+  if (!("mode" in data)) {
+    const { webhooksEnabled, publicUrl } = data;
+
+    // Validate: webhooksEnabled=true requires a publicUrl
+    const existingCfg = await getConnector(fh.db, fh.graphId);
+    const resolvedPublicUrl = publicUrl || existingCfg?.publicUrl;
+    if (webhooksEnabled && !resolvedPublicUrl) {
+      return c.json(
+        { error: "webhooks require a public URL", code: "missing-public-url" },
+        400
+      );
+    }
+
+    if (!existingCfg) {
+      return c.json({ error: "connector not configured" }, 409);
+    }
+
+    const config = c.get("config");
+    const encKey = deriveEncKey(config.token);
+    await setConnector(
+      fh.db,
+      { ...existingCfg, webhooksEnabled, publicUrl: publicUrl ?? existingCfg.publicUrl },
+      undefined,
+      encKey
+    );
+
+    return c.json({
+      config: {
+        mode: existingCfg.mode,
+        owner: existingCfg.owner,
+        repo: existingCfg.repo,
+        pollIntervalSec: existingCfg.pollIntervalSec,
+        webhooksEnabled,
+        publicUrl: publicUrl ?? existingCfg.publicUrl,
+      },
+    });
+  }
+
+  // Credential mode setup path
+  const { pollIntervalSec = 300, webhooksEnabled = false, publicUrl } = data;
 
   // Discover credential via gh auth token / git credential fill
   const token = await discoverCredential();
@@ -237,13 +288,22 @@ connectorRouter.put("/connector", async (c) => {
     );
   }
 
+  // Validate webhooksEnabled requires publicUrl
+  if (webhooksEnabled && !publicUrl) {
+    return c.json(
+      { error: "webhooks require a public URL", code: "missing-public-url" },
+      400
+    );
+  }
+
   const cfg = {
     graphId: fh.graphId,
     mode: "credential" as const,
     owner: parsed_remote.owner,
     repo: parsed_remote.repo,
     pollIntervalSec,
-    webhooksEnabled: false,
+    webhooksEnabled,
+    publicUrl,
   };
 
   // Store config (token stored as a secret encrypted under daemon key)
@@ -258,6 +318,7 @@ connectorRouter.put("/connector", async (c) => {
       repo: cfg.repo,
       pollIntervalSec: cfg.pollIntervalSec,
       webhooksEnabled: cfg.webhooksEnabled,
+      ...(cfg.publicUrl ? { publicUrl: cfg.publicUrl } : {}),
     },
   });
 });
@@ -283,7 +344,8 @@ connectorRouter.post("/connector/poll", async (c) => {
     return c.json({ error: "no stored token; configure the connector first" }, 409);
   }
 
-  const client = makeTokenClient(token);
+  const fetchFn = c.get("fetchFn") ?? undefined;
+  const client = makeTokenClient(token, fetchFn);
   const result = await pollOnce(fh, cfg, client);
 
   return c.json(result);

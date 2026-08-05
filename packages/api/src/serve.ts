@@ -9,6 +9,7 @@ import {
   deriveEncKey,
   getSecret,
   startPoller,
+  pollOnce,
 } from "@freehold/core";
 import { serve } from "@hono/node-server";
 import { createApp } from "./app.js";
@@ -52,9 +53,24 @@ async function main() {
       try {
         const fh = await manager.get(entry.id);
         const cfg = await getConnector(fh.db, entry.id);
-        if (!cfg || cfg.mode !== "credential") continue;
+        if (!cfg) continue;
 
         const encKey = deriveEncKey(config.token);
+
+        // Catch-up poll at startup for webhook-enabled graphs (webhooks may have
+        // fired while the daemon was down; run one poll to close the gap).
+        if (cfg.webhooksEnabled) {
+          const credToken = await getSecret(fh.db, entry.id, "credentialToken", encKey);
+          if (credToken) {
+            const client = makeTokenClient(credToken);
+            pollOnce(fh, cfg, client).catch((e) =>
+              console.error(`[connector] startup catch-up poll failed for ${entry.id}:`, e)
+            );
+          }
+        }
+
+        if (cfg.mode !== "credential") continue;
+
         const handle = startPoller(
           fh,
           async () => getConnector(fh.db, entry.id),

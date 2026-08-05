@@ -599,3 +599,49 @@ describe("startPoller", () => {
     vi.useRealTimers();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Deferral A: webhooksEnabled PUT validation
+// ---------------------------------------------------------------------------
+
+describe("PUT /connector — webhooksEnabled validation", () => {
+  let ghStub: { restorePath: () => void };
+
+  beforeAll(() => {
+    ghStub = stubGhBinary("ghp_webhook_test_token");
+  });
+
+  afterAll(() => {
+    ghStub.restorePath();
+  });
+
+  test("PUT with webhooksEnabled=true and no publicUrl returns 400 missing-public-url", async () => {
+    const { status, body } = await req(
+      "PUT",
+      `/api/v1/graphs/${repoGraphId}/connector`,
+      { mode: "credential", webhooksEnabled: true }
+    );
+    expect(status).toBe(400);
+    expect((body as any).code).toBe("missing-public-url");
+  });
+
+  test("PUT with webhooksEnabled=true and publicUrl succeeds and persists both", async () => {
+    const { status, body } = await req(
+      "PUT",
+      `/api/v1/graphs/${repoGraphId}/connector`,
+      { mode: "credential", webhooksEnabled: true, publicUrl: "https://example.com" }
+    );
+    expect(status).toBe(200);
+    expect((body as any).config.webhooksEnabled).toBe(true);
+    expect((body as any).config.publicUrl).toBe("https://example.com");
+
+    // Verify persisted via GET
+    const { status: getStatus, body: getBody } = await req(
+      "GET",
+      `/api/v1/graphs/${repoGraphId}/connector`
+    );
+    expect(getStatus).toBe(200);
+    expect((getBody as any).config.webhooksEnabled).toBe(true);
+    expect((getBody as any).config.publicUrl).toBe("https://example.com");
+  });
+});

@@ -385,6 +385,30 @@ export function GitProposalCard({ proposal, by }: GitProposalCardProps) {
         </div>
       )}
 
+      {proposal.checks && proposal.checks.length > 0 && (
+        <div className="space-y-1" data-testid="checks-section">
+          <div className="text-[10px] font-mono uppercase text-(--fg-muted) tracking-[0.08em]">CI checks</div>
+          {proposal.checks.map((check) => (
+            <div key={check.name} className="flex items-center gap-2 text-xs" data-testid="check-row">
+              <span
+                className={cn(
+                  "inline-block h-2 w-2 rounded-full shrink-0",
+                  check.conclusion === "success" && "bg-green-500",
+                  check.conclusion === "failure" && "bg-red-400",
+                  (check.status === "in_progress" || check.status === "queued") && "bg-amber-400",
+                  !check.conclusion && check.status === "completed" && "bg-gray-400",
+                  !check.conclusion && check.status !== "in_progress" && check.status !== "queued" && check.status !== "completed" && "bg-gray-300",
+                )}
+              />
+              <span className="font-mono text-[11px] text-(--fg)">{check.name}</span>
+              <span className="ml-auto text-[10px] text-(--fg-muted) font-mono">
+                {check.conclusion ?? check.status}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
       {paths.length > 0 && (
         <div className="space-y-0.5" data-testid="paths-section">
           <div className="text-[10px] font-mono uppercase text-(--fg-muted) tracking-[0.08em]">Touched paths</div>

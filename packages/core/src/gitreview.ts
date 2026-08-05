@@ -51,6 +51,8 @@ export interface GitProposal {
   unmet: string[];
   decided: "undecided" | "approved" | "rejected";
   paths: Array<{ verb: string; path: string; regions: string[]; indexed: boolean }>;
+  /** CI check runs from the check_status table for this sha. */
+  checks: Array<{ name: string; status: string; conclusion?: string }>;
 }
 
 // ── DecideResult ──────────────────────────────────────────────────────────────
@@ -255,6 +257,22 @@ async function evaluateSha(
     })
   );
 
+  // Query check_status for this sha
+  let checks: Array<{ name: string; status: string; conclusion?: string }> = [];
+  try {
+    const rows = await fh.db.pg.query<{ name: string; status: string; conclusion: string | null }>(
+      `SELECT name, status, conclusion FROM check_status WHERE graph_id = $1 AND sha = $2`,
+      [fh.graphId, sha]
+    );
+    checks = rows.rows.map((r) => ({
+      name: r.name,
+      status: r.status,
+      ...(r.conclusion != null ? { conclusion: r.conclusion } : {}),
+    }));
+  } catch {
+    // Table may not exist yet — treat as no checks
+  }
+
   return {
     sha,
     ref,
@@ -269,6 +287,7 @@ async function evaluateSha(
     unmet,
     decided,
     paths,
+    checks,
   };
 }
 

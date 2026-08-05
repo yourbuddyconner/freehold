@@ -38,6 +38,7 @@ export interface ConnectorConfig {
   appId?: string;
   appSlug?: string;
   installationId?: string;
+  publicUrl?: string;
 }
 
 // ── Schema migration ──────────────────────────────────────────────────────────
@@ -58,6 +59,7 @@ async function ensureTables(db: DbHandle): Promise<void> {
       app_id            text,
       app_slug          text,
       installation_id   text,
+      public_url        text,
       updated_at        timestamptz NOT NULL DEFAULT now()
     );
 
@@ -92,6 +94,9 @@ async function ensureTables(db: DbHandle): Promise<void> {
       PRIMARY KEY (graph_id, external_id)
     );
   `);
+
+  // Schema migrations — run separately so IF NOT EXISTS works on pre-existing tables.
+  await db.pg.query(`ALTER TABLE connector_config ADD COLUMN IF NOT EXISTS public_url text`);
 }
 
 // ── deriveEncKey ──────────────────────────────────────────────────────────────
@@ -142,8 +147,9 @@ export async function getConnector(db: DbHandle, graphId: string): Promise<Conne
     app_id: string | null;
     app_slug: string | null;
     installation_id: string | null;
+    public_url: string | null;
   }>(
-    `SELECT mode, owner, repo, poll_interval, webhooks_enabled, app_id, app_slug, installation_id
+    `SELECT mode, owner, repo, poll_interval, webhooks_enabled, app_id, app_slug, installation_id, public_url
      FROM connector_config WHERE graph_id = $1`,
     [graphId]
   );
@@ -162,6 +168,7 @@ export async function getConnector(db: DbHandle, graphId: string): Promise<Conne
   if (row.app_id) cfg.appId = row.app_id;
   if (row.app_slug) cfg.appSlug = row.app_slug;
   if (row.installation_id) cfg.installationId = row.installation_id;
+  if (row.public_url) cfg.publicUrl = row.public_url;
 
   return cfg;
 }
@@ -182,8 +189,8 @@ export async function setConnector(
 
   await db.pg.query(
     `INSERT INTO connector_config
-       (graph_id, mode, owner, repo, poll_interval, webhooks_enabled, app_id, app_slug, installation_id, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now())
+       (graph_id, mode, owner, repo, poll_interval, webhooks_enabled, app_id, app_slug, installation_id, public_url, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now())
      ON CONFLICT (graph_id) DO UPDATE SET
        mode             = EXCLUDED.mode,
        owner            = EXCLUDED.owner,
@@ -193,6 +200,7 @@ export async function setConnector(
        app_id           = EXCLUDED.app_id,
        app_slug         = EXCLUDED.app_slug,
        installation_id  = EXCLUDED.installation_id,
+       public_url       = EXCLUDED.public_url,
        updated_at       = now()`,
     [
       cfg.graphId,
@@ -204,6 +212,7 @@ export async function setConnector(
       cfg.appId ?? null,
       cfg.appSlug ?? null,
       cfg.installationId ?? null,
+      cfg.publicUrl ?? null,
     ]
   );
 
