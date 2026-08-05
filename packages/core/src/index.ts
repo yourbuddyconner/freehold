@@ -143,7 +143,7 @@ export {
   listReviewsForSha,
 } from "./gitreview.js";
 export { branchHeads, pushNotes, commitDiff } from "./git.js";
-export type { FileDiffEntry } from "./git.js";
+export type { DiffFile } from "./git.js";
 export type { GitProposal, DecideResult, ReviewEntry, ReviewCommentEntry } from "./gitreview.js";
 
 // Connector core

@@ -277,8 +277,6 @@ gitreviewRouter.get("/git/proposals/:sha/reviews", async (c) => {
 
 // ── GET /git/proposals/:sha/diff ─────────────────────────────────────────────
 
-const DIFF_SIZE_LIMIT = 1_000_000; // 1 MB — matches core cap
-
 gitreviewRouter.get("/git/proposals/:sha/diff", async (c) => {
   const fh = c.get("freehold");
   if (!repoOnly(fh)) {
@@ -295,11 +293,8 @@ gitreviewRouter.get("/git/proposals/:sha/diff", async (c) => {
     return c.json({ error: "proposal not found" }, 404);
   }
 
-  const files = await commitDiff(fh.graphDir, sha);
-
-  // Compute truncated flag: total patch bytes >= limit
-  const totalBytes = files.reduce((sum, f) => sum + f.patch.length, 0);
-  const truncated = totalBytes >= DIFF_SIZE_LIMIT;
+  // TODO(Task 2): wire new DiffFile shape through OpenAPI schema and client.
+  const { files, truncated } = await commitDiff(fh.graphDir, sha);
 
   return c.json({ files, truncated });
 });

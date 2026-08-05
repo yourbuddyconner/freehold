@@ -203,86 +203,130 @@ export async function pushNotes(repoDir: string, remote = "origin"): Promise<voi
   await git(repoDir, ["push", remote, "refs/notes/allod-decisions"]);
 }
 
-export interface FileDiffEntry {
+export interface DiffFile {
   path: string;
-  /** Original path before rename/copy; absent for other verbs. */
+  /** Original path before rename; absent for non-rename verbs. */
   oldPath?: string;
-  /** Status character: A/M/D/R/C or other git status char. */
-  verb: string;
-  /** Unified diff hunk text for this file. Empty string for binary files. */
-  patch: string;
+  /** Status character: A=added, M=modified, D=deleted, R=renamed. */
+  verb: "A" | "M" | "D" | "R";
   binary: boolean;
+  /** Full text of the old file side. Empty for adds, binary files, or truncated files. */
+  oldContent: string;
+  /** Full text of the new file side. Empty for deletes, binary files, or truncated files. */
+  newContent: string;
+  /** True when a side exceeded SIDE_LIMIT or envelope was already full. */
+  truncated: boolean;
 }
 
-const PATCH_SIZE_LIMIT = 1_000_000; // 1 MB
+const SIDE_LIMIT = 512 * 1024; // 512 KB per side
+const ENVELOPE_LIMIT = 10 * 1024 * 1024; // 10 MB total
+
+/** Read one blob side. Absent path (add/delete side) → empty content. */
+async function blobAt(
+  repoDir: string,
+  rev: string,
+  path: string
+): Promise<{ content: string; truncated: boolean; binary: boolean }> {
+  let sizeOut: string;
+  try {
+    sizeOut = await git(repoDir, ["cat-file", "-s", `${rev}:${path}`]);
+  } catch {
+    return { content: "", truncated: false, binary: false };
+  }
+  const size = Number.parseInt(sizeOut.trim(), 10);
+  if (Number.isNaN(size)) return { content: "", truncated: false, binary: false };
+  if (size > SIDE_LIMIT) return { content: "", truncated: true, binary: false };
+  // git() returns stdout without trimming, preserving trailing newlines
+  const content = await git(repoDir, ["show", "--end-of-options", `${rev}:${path}`]);
+  if (content.includes("\0")) return { content: "", truncated: false, binary: true };
+  return { content, truncated: false, binary: false };
+}
 
 /**
- * Return per-file unified diff entries for a commit SHA.
+ * Return per-file old/new content for a commit SHA.
  *
  * Uses the same first-parent / --root logic as diffTreeOps.
- * Total patch bytes are capped at 1 MB.
+ * Each file side is capped at 512 KB; total envelope capped at 10 MB.
  */
-export async function commitDiff(repoDir: string, sha: string): Promise<FileDiffEntry[]> {
+export async function commitDiff(
+  repoDir: string,
+  sha: string
+): Promise<{ files: DiffFile[]; truncated: boolean }> {
   assertSafeRef(sha, "sha");
   const meta = await commitMeta(repoDir, sha);
+  const parent = meta.parents.length > 0 ? meta.parents[0] : null;
 
-  let args: string[];
-  if (meta.parents.length === 0) {
-    args = ["diff-tree", "--root", "--no-renames", "-p", "-r", "--end-of-options", sha];
-  } else {
-    args = ["diff-tree", "--no-renames", "-p", "-r", "--end-of-options", meta.parents[0], sha];
-  }
-
+  const args = parent
+    ? ["diff-tree", "-M", "-r", "-z", "--name-status", "--end-of-options", parent, sha]
+    : ["diff-tree", "--root", "-M", "-r", "-z", "--name-status", "--end-of-options", sha];
   const out = await git(repoDir, args);
-  return parsePatchOutput(out);
-}
 
-/**
- * Parse `git diff-tree -p` multi-file output into per-file entries.
- */
-function parsePatchOutput(raw: string): FileDiffEntry[] {
-  const entries: FileDiffEntry[] = [];
-  let totalBytes = 0;
-
-  const blocks = raw.split(/(?=^diff --git )/m).filter((b) => b.trim());
-
-  for (const block of blocks) {
-    if (totalBytes >= PATCH_SIZE_LIMIT) break;
-
-    const headerMatch = block.match(/^diff --git a\/(.*?) b\/(.*?)$/m);
-    if (!headerMatch) continue;
-    const aPath = headerMatch[1];
-    const bPath = headerMatch[2];
-
-    const isBinary = /^Binary files .+ differ$/m.test(block);
-
-    let verb = "M";
-    if (/^new file mode/m.test(block)) {
-      verb = "A";
-    } else if (/^deleted file mode/m.test(block)) {
-      verb = "D";
-    } else if (/^similarity index/m.test(block)) {
-      verb = "R";
+  // -z output: STATUS \0 path \0 [newpath \0]  (R/C carry two paths).
+  // With --root the first record is prefixed by the commit sha — skip non-status tokens.
+  const tokens = out.split("\0").filter((t) => t.length > 0);
+  const specs: Array<{ verb: DiffFile["verb"]; oldPath: string; path: string }> = [];
+  let i = 0;
+  if (tokens[0] && /^[0-9a-f]{40}/.test(tokens[0])) i = 1;
+  while (i < tokens.length) {
+    const status = tokens[i][0] as string;
+    if (status === "R" || status === "C") {
+      specs.push({ verb: "R", oldPath: tokens[i + 1], path: tokens[i + 2] });
+      i += 3;
+    } else if (status === "A" || status === "M" || status === "D") {
+      specs.push({ verb: status, oldPath: tokens[i + 1], path: tokens[i + 1] });
+      i += 2;
+    } else {
+      // T (typechange) etc: treat as modify of the same path
+      specs.push({ verb: "M", oldPath: tokens[i + 1], path: tokens[i + 1] });
+      i += 2;
     }
-
-    const patch = isBinary ? "" : block;
-    totalBytes += patch.length;
-
-    const entry: FileDiffEntry = {
-      path: bPath,
-      verb,
-      patch: totalBytes <= PATCH_SIZE_LIMIT ? patch : "",
-      binary: isBinary,
-    };
-
-    if (aPath !== bPath && verb === "R") {
-      entry.oldPath = aPath;
-    }
-
-    entries.push(entry);
   }
 
-  return entries;
+  const files: DiffFile[] = [];
+  let totalBytes = 0;
+  let envelopeFull = false;
+
+  for (const spec of specs) {
+    if (envelopeFull) {
+      files.push({
+        path: spec.path,
+        ...(spec.verb === "R" ? { oldPath: spec.oldPath } : {}),
+        verb: spec.verb,
+        binary: false,
+        oldContent: "",
+        newContent: "",
+        truncated: true,
+      });
+      continue;
+    }
+    const old =
+      spec.verb === "A" || !parent
+        ? { content: "", truncated: false, binary: false }
+        : await blobAt(repoDir, parent, spec.oldPath);
+    const neu =
+      spec.verb === "D"
+        ? { content: "", truncated: false, binary: false }
+        : await blobAt(repoDir, sha, spec.path);
+
+    const binary = old.binary || neu.binary;
+    const truncated = old.truncated || neu.truncated;
+    const oldContent = binary || truncated ? "" : old.content;
+    const newContent = binary || truncated ? "" : neu.content;
+    totalBytes += oldContent.length + newContent.length;
+    if (totalBytes > ENVELOPE_LIMIT) envelopeFull = true;
+
+    files.push({
+      path: spec.path,
+      ...(spec.verb === "R" && spec.oldPath !== spec.path ? { oldPath: spec.oldPath } : {}),
+      verb: spec.verb,
+      binary,
+      oldContent,
+      newContent,
+      truncated,
+    });
+  }
+
+  return { files, truncated: files.some((f) => f.truncated) };
 }
 
 /**

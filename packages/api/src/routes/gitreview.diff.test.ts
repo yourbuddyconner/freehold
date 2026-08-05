@@ -86,9 +86,19 @@ describe("GET /git/proposals/:sha/diff", () => {
       decided: "undecided",
     } as never;
     mockGitProposal.mockResolvedValue(fakeProposal);
-    mockCommitDiff.mockResolvedValue([
-      { path: "src/main.rs", verb: "M", patch: "@@ -1 +1 @@\n-old\n+new\n", binary: false },
-    ]);
+    mockCommitDiff.mockResolvedValue({
+      files: [
+        {
+          path: "src/main.rs",
+          verb: "M" as const,
+          binary: false,
+          oldContent: "old\n",
+          newContent: "new\n",
+          truncated: false,
+        },
+      ],
+      truncated: false,
+    });
 
     const res = await app.request("/git/proposals/abc1234abc1234/diff");
     expect(res.status).toBe(200);
@@ -98,7 +108,7 @@ describe("GET /git/proposals/:sha/diff", () => {
     expect((body.files[0] as { path: string }).path).toBe("src/main.rs");
   });
 
-  test("truncated:true when commitDiff returns >= 1MB total patch", async () => {
+  test("truncated:true when commitDiff returns truncated:true", async () => {
     const app = buildApp();
     const fakeProposal = {
       sha: "abc1234abc1234abc1234abc1234abc1234abc1234",
@@ -106,11 +116,19 @@ describe("GET /git/proposals/:sha/diff", () => {
     } as never;
     mockGitProposal.mockResolvedValue(fakeProposal);
 
-    const bigPatch = "x".repeat(600_000);
-    mockCommitDiff.mockResolvedValue([
-      { path: "a.txt", verb: "M", patch: bigPatch, binary: false },
-      { path: "b.txt", verb: "M", patch: bigPatch, binary: false },
-    ]);
+    mockCommitDiff.mockResolvedValue({
+      files: [
+        {
+          path: "a.txt",
+          verb: "M" as const,
+          binary: false,
+          oldContent: "",
+          newContent: "",
+          truncated: true,
+        },
+      ],
+      truncated: true,
+    });
 
     const res = await app.request("/git/proposals/abc1234abc1234/diff");
     expect(res.status).toBe(200);
@@ -118,22 +136,35 @@ describe("GET /git/proposals/:sha/diff", () => {
     expect(body.truncated).toBe(true);
   });
 
-  test("binary file has binary:true and empty patch", async () => {
+  test("binary file has binary:true and empty contents", async () => {
     const app = buildApp();
     const fakeProposal = {
       sha: "abc1234abc1234abc1234abc1234abc1234abc1234",
       decided: "undecided",
     } as never;
     mockGitProposal.mockResolvedValue(fakeProposal);
-    mockCommitDiff.mockResolvedValue([{ path: "image.png", verb: "A", patch: "", binary: true }]);
+    mockCommitDiff.mockResolvedValue({
+      files: [
+        {
+          path: "image.png",
+          verb: "A" as const,
+          binary: true,
+          oldContent: "",
+          newContent: "",
+          truncated: false,
+        },
+      ],
+      truncated: false,
+    });
 
     const res = await app.request("/git/proposals/abc1234abc1234/diff");
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
-      files: { binary: boolean; patch: string }[];
+      files: { binary: boolean; oldContent: string; newContent: string }[];
       truncated: boolean;
     };
     expect(body.files[0].binary).toBe(true);
-    expect(body.files[0].patch).toBe("");
+    expect(body.files[0].oldContent).toBe("");
+    expect(body.files[0].newContent).toBe("");
   });
 });
