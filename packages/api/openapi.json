@@ -480,6 +480,29 @@
           "terms"
         ]
       },
+      "SessionGraphEntry": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "memory",
+              "repo"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "kind"
+        ]
+      },
       "SessionInfo": {
         "type": "object",
         "properties": {
@@ -505,13 +528,26 @@
           "owner": {
             "type": "string",
             "description": "The graph's owner principal; console edits sign as this name"
+          },
+          "graphs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SessionGraphEntry"
+            },
+            "description": "Slim list of registered graphs (id, name, kind)"
+          },
+          "defaultGraph": {
+            "type": "string",
+            "description": "ID of the default graph"
           }
         },
         "required": [
           "defaultAgent",
           "embedder",
           "port",
-          "owner"
+          "owner",
+          "graphs",
+          "defaultGraph"
         ]
       },
       "GraphInfo": {

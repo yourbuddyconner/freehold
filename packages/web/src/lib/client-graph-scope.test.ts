@@ -108,7 +108,7 @@ describe("FreeholdClient — graph-scoped path prefixing", () => {
     globalThis.fetch = mock;
 
     const client = new FreeholdClient({ baseUrl: "", token: "tok" });
-    await client.registerGraph({ name: "repo", kind: "repo" });
+    await client.registerGraph({ path: "/tmp/repo", name: "repo" });
 
     const [url, init] = mock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe("/api/v1/graphs");
@@ -144,7 +144,7 @@ describe("FreeholdClient — graph-scoped path prefixing", () => {
     globalThis.fetch = mock;
 
     const client = new FreeholdClient({ baseUrl: "", token: "tok", graphId: "g1" });
-    await client.registerGraph({ name: "repo", kind: "repo" });
+    await client.registerGraph({ path: "/tmp/repo", name: "repo" });
 
     const [url, init] = mock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe("/api/v1/graphs");

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import type { GraphInfo } from "@freehold/client";
+import type { SessionGraphEntry } from "@freehold/client";
 import { GRAPH_STORAGE_KEY, apiClient, setActiveGraph } from "./api";
 
 /** Pending proposals (the Inbox). */
@@ -137,7 +137,7 @@ export function useSession() {
 }
 
 /** All registered graphs from the session response. Falls back to empty list. */
-export function useGraphs(): { graphs: GraphInfo[]; defaultGraph: string } {
+export function useGraphs(): { graphs: SessionGraphEntry[]; defaultGraph: string } {
   const { data } = useSession();
   return {
     graphs: data?.graphs ?? [],

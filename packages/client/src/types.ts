@@ -1596,6 +1596,12 @@ export interface components {
                 parent?: string;
             }[];
         };
+        SessionGraphEntry: {
+            id: string;
+            name: string;
+            /** @enum {string} */
+            kind: "memory" | "repo";
+        };
         SessionInfo: {
             /** @description Default MCP agent name, if set */
             defaultAgent: string | null;
@@ -1608,6 +1614,10 @@ export interface components {
             port: number;
             /** @description The graph's owner principal; console edits sign as this name */
             owner: string;
+            /** @description Slim list of registered graphs (id, name, kind) */
+            graphs: components["schemas"]["SessionGraphEntry"][];
+            /** @description ID of the default graph */
+            defaultGraph: string;
         };
         GraphInfo: {
             id: string;

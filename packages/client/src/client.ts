@@ -25,6 +25,7 @@ export type VerifyReport = Schemas["VerifyReport"];
 export type SchemaDescription = Schemas["SchemaDescription"];
 
 export type SessionInfo = Schemas["SessionInfo"];
+export type SessionGraphEntry = Schemas["SessionGraphEntry"];
 export type MemoryIndexEntry = Schemas["MemoryIndexEntry"];
 export type MemoryGraphView = Schemas["MemoryGraphView"];
 export type GraphNode = Schemas["GraphNode"];

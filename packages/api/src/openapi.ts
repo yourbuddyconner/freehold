@@ -98,6 +98,14 @@ const PolicyBody = z
   })
   .openapi("PolicyBody");
 
+const SessionGraphEntry = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    kind: z.enum(["memory", "repo"]),
+  })
+  .openapi("SessionGraphEntry");
+
 const SessionInfo = z
   .object({
     defaultAgent: z.string().nullable().openapi({ description: "Default MCP agent name, if set" }),
@@ -106,6 +114,10 @@ const SessionInfo = z
     owner: z
       .string()
       .openapi({ description: "The graph's owner principal; console edits sign as this name" }),
+    graphs: z
+      .array(SessionGraphEntry)
+      .openapi({ description: "Slim list of registered graphs (id, name, kind)" }),
+    defaultGraph: z.string().openapi({ description: "ID of the default graph" }),
   })
   .openapi("SessionInfo");
 
@@ -291,6 +303,7 @@ function buildRegistry(): OpenAPIRegistry {
   registry.register("RecallResult", RecallResult);
   registry.register("VerifyReport", VerifyReport);
   registry.register("SchemaDescription", SchemaDescription);
+  registry.register("SessionGraphEntry", SessionGraphEntry);
   registry.register("SessionInfo", SessionInfo);
   registry.register("GraphInfo", GraphInfo);
   registry.register("RegisterGraphBody", RegisterGraphBody);
