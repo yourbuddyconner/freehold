@@ -33,6 +33,14 @@ Decisions fixed during design:
 
 ## Sub-project 1: foundation — multi-graph daemon + key backends + wasm surface
 
+**Status: shipped 2026-08-05**
+
+**Deviations from design:**
+
+- `@allod/core` is declared as a `link:` dependency pointing at the local allod checkout (`link:../../../../allod/packages/core`). This is a LOCAL DEV ONLY configuration. Swap to a published release tarball before push or CI.
+- The `review` ontology is vendored in `packages/core/assets/review-ontology.yaml` with the `imports:` block stripped. The wasm `install_package` path does not process cross-package imports and requires the document to start with `ontology:`. The strip is applied at registration time by `GraphManager.registerRepo`.
+- Engine facts for SP3 (code viewer + Inbox): the wasm engine enforces node type resolution at commit time. The `code` and `eng` ontologies must be installed in a repo graph before creating nodes typed `code/SourceFile@1` or `eng/ChangeRequest@1`, and before creating `reviews` or `concerns` edges that reference those typed targets. The `review` ontology alone is not sufficient. Install code, then eng (in that order, because eng edge types reference code node types). Node endpoints must be committed and admitted before edges that reference them can be committed in a separate changeset.
+
 ### GraphManager (packages/core)
 
 A `graphs` registry persisted in freehold's PGlite:
