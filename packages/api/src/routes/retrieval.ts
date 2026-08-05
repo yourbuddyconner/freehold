@@ -1,4 +1,5 @@
 import {
+  changesetDirFor,
   getEntity,
   memoryGraph,
   memoryIndex,
@@ -65,7 +66,9 @@ retrievalRouter.get("/graph", async (c) => {
 retrievalRouter.get("/entities/:id", async (c) => {
   const id = c.req.param("id");
   const fh = c.get("freehold");
-  const entity = await getEntity(fh.graph, id);
+  const entity = await getEntity(fh.graph, id, {
+    changesetDir: changesetDirFor(fh.home, fh.graphName),
+  });
   if (!entity) {
     return apiError(c, 404, ERROR_CODES.NOT_FOUND, `Entity '${id}' not found`);
   }

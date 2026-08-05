@@ -9,9 +9,10 @@ import { getEntity, traverse } from "../src/retrieval.js";
 
 describe("retrieval", () => {
   let graph: AllodGraph;
+  let graphDir: string;
 
   beforeEach(async () => {
-    const graphDir = mkdtempSync(join(tmpdir(), "freehold-retrieval-test-"));
+    graphDir = mkdtempSync(join(tmpdir(), "freehold-retrieval-test-"));
     graph = await createGraph(graphDir, "owner");
     await graph.principal_add("agent", "agent", "owner");
   });
@@ -170,5 +171,28 @@ describe("retrieval", () => {
     const result2 = await traverse(graph, noteA.noteId, ["memory/relates_to@1"], "out", 1);
     const ids = result2.map((e) => e.id);
     expect(ids).toContain(noteB.noteId);
+  });
+});
+
+describe("revisions", () => {
+  test("list only the changesets that mutated the node", async () => {
+    const { updateEntity } = await import("../src/knowledge.js");
+    const graphDir = mkdtempSync(join(tmpdir(), "freehold-revisions-test-"));
+    const graph = await createGraph(graphDir, "owner");
+    await graph.principal_add("agent", "agent", "owner");
+
+    const a = await remember(graph, "agent", "first note");
+    const b = await remember(graph, "agent", "second note");
+    await updateEntity(graph, "agent", a.noteId, "memory/Note@1", {
+      content: "first note, edited",
+    });
+
+    const dir = join(graphDir, ".allod", "changesets");
+    const entA = await getEntity(graph, a.noteId, { changesetDir: dir });
+    const entB = await getEntity(graph, b.noteId, { changesetDir: dir });
+    // A: create + update, newest first; B: create only — never A's changesets
+    expect(entA?.revisions.length).toBe(2);
+    expect(entB?.revisions.length).toBe(1);
+    expect(entA?.revisions.map((r) => r.hash)).not.toContain(entB?.revisions[0]?.hash);
   });
 });

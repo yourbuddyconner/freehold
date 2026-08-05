@@ -62,7 +62,7 @@ export {
 export type { ApproveResult, RejectResult } from "./governance.js";
 
 // Retrieval operations
-export { getEntity, traverse, entitiesOfType } from "./retrieval.js";
+export { getEntity, traverse, entitiesOfType, changesetDirFor } from "./retrieval.js";
 // Graph log type extensions
 export type { RawLogEntry, LoggableGraph } from "./retrieval.js";
 

@@ -4,6 +4,8 @@
  * Entity lookup and graph traversal helpers.
  */
 
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import type { AllodGraph } from "@allod/core";
 import { withGraph } from "./lock.js";
 import type { EdgeView, EntityView, RevisionView } from "./types.js";
@@ -128,32 +130,48 @@ function getObject(graph: AllodGraph, kind: string, id: string): RawObject | nul
 }
 
 /**
- * Walk the saved changeset log (via allod-wasm log()) to find revision
- * entries for a given node ID. Because log() only returns ChangesetSummary
- * (hash, author, op_count, intent), we derive RevisionViews from changesets
- * whose intent mentions the node ID or intent matches create/update patterns.
+ * Walk the saved changeset log to find the changesets that mutated this
+ * node — ops whose payload id IS the node (create/update), not edges or
+ * classifications that merely reference it.
  *
- * This is a best-effort implementation — it returns the changeset hash as the
- * revision hash. A richer implementation would require per-op access from JS
- * (not currently exposed via log()).
+ * With `changesetDir`, each changeset file is scanned for a payload-id line;
+ * without it (no disk access), the fallback matches intents that name the
+ * node id (update intents do; create intents do not).
  *
- * Must be called from within a withGraph critical section.
+ * Returns newest first. Must be called from within a withGraph critical
+ * section.
  */
-function revisionsForNode(graph: AllodGraph, nodeId: string): RevisionView[] {
+function revisionsForNode(
+  graph: AllodGraph,
+  nodeId: string,
+  changesetDir?: string
+): RevisionView[] {
   try {
     const log = (graph as unknown as ExtendedGraph).log();
-    return log
-      .filter((entry) => {
-        // Match changesets that likely touched this node:
-        // intent contains the node ID, or is a Create/Update matching our node
-        return (
-          entry.intent.includes(nodeId) || entry.intent.toLowerCase().includes("scratch note") // broad fallback
-        );
-      })
-      .map((entry) => ({
-        hash: entry.hash,
-        author: entry.author,
-      }));
+    const touched: RevisionView[] = [];
+    // In op payloads the node's own id appears as `id: <uuid>`; references
+    // from edges and classifications carry the `node:` prefix and never match.
+    const idLine = new RegExp(`^\\s+id: ${nodeId}$`, "m");
+
+    for (const entry of log) {
+      let mutates = false;
+      if (changesetDir) {
+        const file = join(changesetDir, `${entry.hash.replace("sha256:", "")}.yaml`);
+        if (existsSync(file)) {
+          try {
+            mutates = idLine.test(readFileSync(file, "utf-8"));
+          } catch {
+            mutates = false;
+          }
+        }
+      } else {
+        mutates = entry.intent.includes(nodeId);
+      }
+      if (mutates) {
+        touched.push({ hash: entry.hash, author: entry.author });
+      }
+    }
+    return touched.reverse();
   } catch {
     return [];
   }
@@ -177,7 +195,11 @@ function entityContext(graph: AllodGraph, nodeId: string): RawEntityContext | nu
  * Build an EntityView from fold state. Must be called from within a withGraph
  * critical section — does NOT acquire the lock itself.
  */
-function buildEntityView(graph: AllodGraph, nodeId: string): EntityView | null {
+function buildEntityView(
+  graph: AllodGraph,
+  nodeId: string,
+  changesetDir?: string
+): EntityView | null {
   const obj = getObject(graph, "node", nodeId);
   if (!obj || obj.deleted) return null;
 
@@ -212,8 +234,8 @@ function buildEntityView(graph: AllodGraph, nodeId: string): EntityView | null {
       ]
     : [];
 
-  // Revisions: from log entries that touched this node
-  const revisions: RevisionView[] = revisionsForNode(graph, nodeId);
+  // Revisions: the changesets that mutated this node
+  const revisions: RevisionView[] = revisionsForNode(graph, nodeId, changesetDir);
 
   return {
     id: nodeId,
@@ -238,8 +260,17 @@ function buildEntityView(graph: AllodGraph, nodeId: string): EntityView | null {
  *
  * Returns null if the node is not found in the current fold state.
  */
-export async function getEntity(graph: AllodGraph, nodeId: string): Promise<EntityView | null> {
-  return withGraph(graph, () => buildEntityView(graph, nodeId));
+export async function getEntity(
+  graph: AllodGraph,
+  nodeId: string,
+  opts?: { changesetDir?: string }
+): Promise<EntityView | null> {
+  return withGraph(graph, () => buildEntityView(graph, nodeId, opts?.changesetDir));
+}
+
+/** The on-disk changeset directory for a graph home. */
+export function changesetDirFor(home: string, graphName: string): string {
+  return join(home, "graphs", graphName, ".allod", "changesets");
 }
 
 /**
