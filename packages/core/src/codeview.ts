@@ -10,6 +10,8 @@
  * from git_checklist per path.
  */
 
+import { access, readFile, stat } from "node:fs/promises";
+import { join, normalize, sep } from "node:path";
 import type { Freehold } from "./graphs.js";
 import { withGraph } from "./lock.js";
 
@@ -58,6 +60,14 @@ export interface RegionRule {
   region?: string;
   reviewers: unknown;
   paths: string[];
+}
+
+export interface CodeSource {
+  path: string;
+  content: string;
+  truncated: boolean;
+  binary: boolean;
+  size: number;
 }
 
 // ── Internal helpers ──────────────────────────────────────────────────────────
@@ -523,4 +533,61 @@ export async function codeRegions(fh: Freehold, repoName = "repo"): Promise<Regi
 
   regionsCache.set(fh.graphId, { key: cacheKey, rules: result });
   return result;
+}
+
+// ── codeSource ────────────────────────────────────────────────────────────────
+
+const MAX_BYTES = 512 * 1024; // 512 KB
+const BINARY_PROBE = 8 * 1024; // 8 KB
+
+/**
+ * Read the working-tree content of a file relative to the checkout directory.
+ *
+ * Returns null when the file does not exist (caller → 404).
+ * Rejects with an Error for path traversal attempts.
+ */
+export async function codeSource(fh: Freehold, path: string): Promise<CodeSource | null> {
+  // Guard: reject absolute paths and paths containing ".."
+  if (path.startsWith("/") || path.includes("..")) {
+    throw new Error("path traversal rejected");
+  }
+
+  const resolved = normalize(join(fh.graphDir, path));
+
+  // Guard: resolved path must be a strict descendant of graphDir
+  const base = fh.graphDir.endsWith(sep) ? fh.graphDir : fh.graphDir + sep;
+  if (!resolved.startsWith(base)) {
+    throw new Error("path traversal rejected");
+  }
+
+  // Check existence without throwing
+  try {
+    await access(resolved);
+  } catch {
+    return null;
+  }
+
+  const info = await stat(resolved);
+  const size = info.size;
+
+  // Read file and detect truncation
+  const buf = await readFile(resolved);
+  const truncated = buf.length > MAX_BYTES;
+  const slice = truncated ? buf.subarray(0, MAX_BYTES) : buf;
+
+  // Binary detection: NUL byte in first BINARY_PROBE bytes
+  const probe = slice.subarray(0, BINARY_PROBE);
+  const binary = probe.includes(0);
+
+  if (binary) {
+    return { path, content: "", truncated: false, binary: true, size };
+  }
+
+  return {
+    path,
+    content: slice.toString("utf-8"),
+    truncated,
+    binary: false,
+    size,
+  };
 }
