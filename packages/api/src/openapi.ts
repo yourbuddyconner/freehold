@@ -1058,7 +1058,7 @@ function buildRegistry(): OpenAPIRegistry {
       z.object({
         outcome: z.enum(["approved", "rejected"]),
         pushed: z.boolean(),
-        pushSkipped: z.boolean().optional().openapi({ description: "True when push was skipped (auto-push off or no remote); not an error" }),
+        pushSkipped: z.boolean().optional().openapi({ description: "True when push was not attempted because auto-push is off or no remote is configured." }),
         pushError: z.string().optional(),
       }),
       z.object({

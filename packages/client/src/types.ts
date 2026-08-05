@@ -2347,7 +2347,7 @@ export interface components {
             /** @enum {string} */
             outcome: "approved" | "rejected";
             pushed: boolean;
-            /** @description True when push was skipped (auto-push off or no remote); not an error */
+            /** @description True when push was not attempted because auto-push is off or no remote is configured. */
             pushSkipped?: boolean;
             pushError?: string;
         } | {
