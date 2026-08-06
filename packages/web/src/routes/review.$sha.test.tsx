@@ -5,6 +5,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider, createMemoryHistory, createRouter } from "@tanstack/react-router";
 import { act, render, screen } from "@testing-library/react";
+import type React from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as hooks from "~/lib/hooks";
 import { routeTree } from "~/routes/../routeTree.gen";
@@ -44,7 +45,73 @@ vi.mock("~/lib/api", () => ({
 
 // Stub PierreDiff
 vi.mock("~/components/PierreDiff", () => ({
-  PierreDiff: () => <div data-testid="pierre-diff" />,
+  PierreDiff: () => <pre data-testid="pierre-diff" />,
+}));
+
+// Stub PierreTree — renders a button per path so tests can simulate tree-row clicks
+const mockScrollToPath = vi.fn();
+vi.mock("~/components/PierreTree", () => ({
+  PierreTree: ({
+    paths,
+    onSelect,
+    scrollToRef,
+  }: {
+    paths: string[];
+    onSelect: (path: string, kind: string) => void;
+    scrollToRef?: React.Ref<{ scrollToPath: (path: string) => void }>;
+  }) => {
+    // Expose scrollToPath handle via the ref so tests can verify it's wired
+    if (scrollToRef && typeof scrollToRef === "object" && "current" in scrollToRef) {
+      (scrollToRef as React.MutableRefObject<{ scrollToPath: (path: string) => void }>).current = {
+        scrollToPath: mockScrollToPath,
+      };
+    }
+    return (
+      <div data-testid="pierre-tree">
+        {paths.map((p) => (
+          <button
+            key={p}
+            type="button"
+            data-testid="tree-row"
+            data-path={p}
+            onClick={() => onSelect(p, "file")}
+          >
+            {p}
+          </button>
+        ))}
+      </div>
+    );
+  },
+}));
+
+// Stub CodeView from @pierre/diffs/react — renders one pre per item keyed by id
+const mockCodeViewScrollTo = vi.fn();
+vi.mock("@pierre/diffs/react", () => ({
+  CodeView: ({
+    items,
+    options,
+    ref,
+  }: {
+    items: Array<{ id: string; type: string }>;
+    options?: { diffStyle?: string };
+    ref?: React.Ref<{ scrollTo: (target: { type: string; id: string }) => void }>;
+  }) => {
+    if (ref && typeof ref === "object" && "current" in ref) {
+      (
+        ref as React.MutableRefObject<{ scrollTo: (target: { type: string; id: string }) => void }>
+      ).current = { scrollTo: mockCodeViewScrollTo };
+    }
+    return (
+      <div data-testid="code-view" data-diff-style={options?.diffStyle ?? "split"}>
+        {(items ?? []).map((i) => (
+          <pre key={i.id} data-testid="diff-file">
+            {i.id}
+          </pre>
+        ))}
+      </div>
+    );
+  },
+  FileDiff: () => <div data-testid="file-diff" />,
 }));
 
 const SHA = "deadbeef1234567890000000000000000000000";
@@ -66,7 +133,16 @@ const baseProposal = {
 };
 
 const baseDiff = {
-  files: [{ path: "src/lib.rs", verb: "M", patch: "@@ -1 +1 @@\n-old\n+new\n", binary: false }],
+  files: [
+    {
+      path: "src/lib.rs",
+      verb: "M",
+      binary: false,
+      oldContent: "fn old() {}\n",
+      newContent: "fn new() {}\n",
+      truncated: false,
+    },
+  ],
   truncated: false,
 };
 
@@ -145,9 +221,22 @@ async function renderReviewPage() {
   });
 }
 
+// happy-dom's localStorage lacks full API in this version; stub with a Map.
+const localStore = new Map<string, string>();
+
 describe("/review/$sha", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStore.clear();
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      value: {
+        getItem: (k: string) => localStore.get(k) ?? null,
+        setItem: (k: string, v: string) => localStore.set(k, String(v)),
+        removeItem: (k: string) => localStore.delete(k),
+        clear: () => localStore.clear(),
+      },
+    });
   });
 
   it("renders short sha, message, author, decided chip", async () => {
@@ -171,12 +260,21 @@ describe("/review/$sha", () => {
   it("renders binary caption for binary files", async () => {
     setupDefaults({
       diff: {
-        files: [{ path: "image.png", verb: "A", patch: "", binary: true }],
+        files: [
+          {
+            path: "image.png",
+            verb: "A",
+            binary: true,
+            oldContent: "",
+            newContent: "",
+            truncated: false,
+          },
+        ],
         truncated: false,
       },
     });
     await renderReviewPage();
-    expect(screen.getByText(/binary/i)).toBeInTheDocument();
+    expect(screen.getByText("Binary file.")).toBeInTheDocument();
   });
 
   it("renders review composer", async () => {
@@ -238,7 +336,7 @@ describe("/review/$sha", () => {
     expect(screen.getByText("lib")).toBeInTheDocument();
   });
 
-  it("truncated notice shows when diff is truncated", async () => {
+  it("truncated notice shows plain prose when envelope is truncated", async () => {
     setupDefaults({
       diff: {
         files: baseDiff.files,
@@ -247,6 +345,95 @@ describe("/review/$sha", () => {
     });
     await renderReviewPage();
     expect(screen.getByTestId("truncated-notice")).toBeInTheDocument();
-    expect(screen.getByTestId("truncated-notice")).toHaveTextContent(/truncated/i);
+    expect(screen.getByTestId("truncated-notice")).toHaveTextContent(
+      "Some files were too large to display."
+    );
+  });
+
+  it("renders one diff-file item per file in CodeView", async () => {
+    setupDefaults({
+      diff: {
+        files: [
+          {
+            path: "src/foo.rs",
+            verb: "M",
+            binary: false,
+            oldContent: "old\n",
+            newContent: "new\n",
+            truncated: false,
+          },
+          {
+            path: "src/bar.rs",
+            verb: "A",
+            binary: false,
+            oldContent: "",
+            newContent: "new\n",
+            truncated: false,
+          },
+        ],
+        truncated: false,
+      },
+    });
+    await renderReviewPage();
+    const diffItems = screen.getAllByTestId("diff-file");
+    expect(diffItems).toHaveLength(2);
+    expect(diffItems[0]).toHaveTextContent("src/foo.rs");
+    expect(diffItems[1]).toHaveTextContent("src/bar.rs");
+  });
+
+  it("split/unified toggle switches diffStyle and persists to localStorage", async () => {
+    setupDefaults();
+    await renderReviewPage();
+    // Default is split
+    const codeView = screen.getByTestId("code-view");
+    expect(codeView).toHaveAttribute("data-diff-style", "split");
+
+    // Click Unified
+    const unifiedBtn = screen.getByRole("button", { name: /unified/i });
+    await act(async () => {
+      unifiedBtn.click();
+    });
+    expect(screen.getByTestId("code-view")).toHaveAttribute("data-diff-style", "unified");
+    expect(localStorage.getItem("freehold-diff-view")).toBe("unified");
+
+    // Click Split
+    const splitBtn = screen.getByRole("button", { name: /split/i });
+    await act(async () => {
+      splitBtn.click();
+    });
+    expect(screen.getByTestId("code-view")).toHaveAttribute("data-diff-style", "split");
+    expect(localStorage.getItem("freehold-diff-view")).toBe("split");
+  });
+
+  it("per-file truncated renders 'File too large to display.'", async () => {
+    setupDefaults({
+      diff: {
+        files: [
+          {
+            path: "big.rs",
+            verb: "M",
+            binary: false,
+            oldContent: "",
+            newContent: "",
+            truncated: true,
+          },
+        ],
+        truncated: false,
+      },
+    });
+    await renderReviewPage();
+    expect(screen.getByText("File too large to display.")).toBeInTheDocument();
+  });
+
+  it("tree row click triggers CodeView scroll", async () => {
+    setupDefaults();
+    await renderReviewPage();
+    const treeRow = screen.getByTestId("tree-row");
+    await act(async () => {
+      treeRow.click();
+    });
+    expect(mockCodeViewScrollTo).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "item", id: "src/lib.rs" })
+    );
   });
 });

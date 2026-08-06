@@ -36,6 +36,7 @@ export function PierreDiff({
         fileDiff={fileDiff}
         options={{
           diffStyle: split ? "split" : "unified",
+          lineDiffType: "word-alt",
           disableFileHeader: true,
           overflow: "wrap",
           themeType: activeTheme(),

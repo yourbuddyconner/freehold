@@ -293,7 +293,6 @@ gitreviewRouter.get("/git/proposals/:sha/diff", async (c) => {
     return c.json({ error: "proposal not found" }, 404);
   }
 
-  // TODO(Task 2): wire new DiffFile shape through OpenAPI schema and client.
   const { files, truncated } = await commitDiff(fh.graphDir, sha);
 
   return c.json({ files, truncated });

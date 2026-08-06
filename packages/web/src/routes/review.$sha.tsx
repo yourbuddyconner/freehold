@@ -5,9 +5,13 @@
  * and the review composer. Only available for repo graphs.
  */
 
+import { parseDiffFromFile } from "@pierre/diffs";
+import { CodeView, type CodeViewHandle } from "@pierre/diffs/react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { createRoute } from "@tanstack/react-router";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { ChecklistRow, DecidedChip, PathRow, ReviewComposer } from "~/components/GitProposalCard";
+import { PierreTree } from "~/components/PierreTree";
 import { cn } from "~/lib/cn";
 import {
   useActiveGraph,
@@ -28,6 +32,30 @@ export const Route = createRoute({
 function ReviewRoute() {
   const { sha } = Route.useParams();
   return <ReviewPage sha={sha} />;
+}
+
+const DIFF_VIEW_KEY = "freehold-diff-view";
+
+function readDiffStyle(): "split" | "unified" {
+  try {
+    const v = localStorage.getItem(DIFF_VIEW_KEY);
+    if (v === "unified" || v === "split") return v;
+  } catch {
+    // ignore
+  }
+  return "split";
+}
+
+function activeTheme(): "dark" | "light" {
+  if (typeof document === "undefined") return "light";
+  return document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light";
+}
+
+function verbToStatus(verb: string): "added" | "modified" | "deleted" | "renamed" {
+  if (verb === "A") return "added";
+  if (verb === "D") return "deleted";
+  if (verb === "R") return "renamed";
+  return "modified";
 }
 
 // Exported for testing
@@ -52,6 +80,41 @@ export function ReviewPage({ sha }: { sha: string }) {
     retrying,
     handleRetry,
   } = useDecideProposal(sha, by);
+
+  // Diff view style — split (default) or unified; persisted
+  const [diffStyle, setDiffStyle] = useState<"split" | "unified">(readDiffStyle);
+
+  const updateDiffStyle = useCallback((style: "split" | "unified") => {
+    setDiffStyle(style);
+    try {
+      localStorage.setItem(DIFF_VIEW_KEY, style);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  // Refs for CodeView scrolling from tree selection
+  const codeViewRef = useRef<CodeViewHandle<undefined>>(null);
+
+  const scrollToFile = useCallback((path: string) => {
+    codeViewRef.current?.scrollTo({ type: "item", id: path });
+  }, []);
+
+  const files = diffData?.files ?? [];
+
+  // Build CodeView items for non-binary, non-truncated files
+  const codeViewItems = useMemo(() => {
+    return files
+      .filter((f) => !f.binary && !f.truncated)
+      .map((f) => ({
+        id: f.path,
+        type: "diff" as const,
+        fileDiff: parseDiffFromFile(
+          { name: f.oldPath ?? f.path, contents: f.oldContent },
+          { name: f.path, contents: f.newContent }
+        ),
+      }));
+  }, [files]);
 
   if (!isRepoGraph) {
     return (
@@ -258,8 +321,37 @@ export function ReviewPage({ sha }: { sha: string }) {
 
       {/* Per-file diffs */}
       <div className="space-y-4">
-        <div className="text-[10px] font-mono uppercase text-(--fg-muted) tracking-[0.08em]">
-          Diff
+        {/* Diffs section header with split/unified toggle */}
+        <div className="flex items-center justify-between">
+          <div className="text-[10px] font-mono uppercase text-(--fg-muted) tracking-[0.08em]">
+            Diff
+          </div>
+          <div className="flex gap-1">
+            <button
+              type="button"
+              onClick={() => updateDiffStyle("split")}
+              className={cn(
+                "border font-mono text-[11px] uppercase px-2 py-0.5 transition-colors",
+                diffStyle === "split"
+                  ? "border-(--border) text-(--fg) bg-(--bg-subtle)"
+                  : "border-(--border) text-(--fg-muted) hover:text-(--fg)"
+              )}
+            >
+              Split
+            </button>
+            <button
+              type="button"
+              onClick={() => updateDiffStyle("unified")}
+              className={cn(
+                "border font-mono text-[11px] uppercase px-2 py-0.5 transition-colors",
+                diffStyle === "unified"
+                  ? "border-(--border) text-(--fg) bg-(--bg-subtle)"
+                  : "border-(--border) text-(--fg-muted) hover:text-(--fg)"
+              )}
+            >
+              Unified
+            </button>
+          </div>
         </div>
 
         {diffLoading && <p className="text-sm text-(--fg-muted)">Loading diff…</p>}
@@ -269,35 +361,59 @@ export function ReviewPage({ sha }: { sha: string }) {
             data-testid="truncated-notice"
             className="border border-amber-300 bg-amber-50 dark:bg-amber-950 px-3 py-2 text-xs text-amber-700"
           >
-            Diff truncated — total patch exceeds 1 MB. Clone and diff locally for the full output.
+            Some files were too large to display.
           </div>
         )}
 
-        {!diffLoading &&
-          diffData?.files.map((file) => (
-            <div key={file.path} className="border border-(--border)" data-testid="diff-file">
-              <div className="px-3 py-1.5 border-b border-(--border) bg-(--bg-subtle) font-mono text-[11px] text-(--fg-muted) flex items-center gap-2">
-                <span
-                  className={cn(
-                    "text-[10px] uppercase shrink-0 w-4",
-                    file.verb === "A" && "text-green-600",
-                    file.verb === "D" && "text-red-500",
-                    file.verb === "M" && "text-(--fg-muted)"
-                  )}
-                >
-                  {file.verb}
-                </span>
-                <span className="text-(--fg) break-all">{file.path}</span>
-              </div>
-              {file.binary ? (
-                <div className="px-3 py-2 text-xs text-(--fg-muted) font-mono italic">binary</div>
-              ) : (
-                <pre className="text-xs overflow-x-auto p-3 bg-(--bg) text-(--fg) font-mono leading-relaxed whitespace-pre">
-                  {file.newContent}
-                </pre>
+        {!diffLoading && files.length > 0 && (
+          <div className="flex gap-4">
+            {/* Changed-files tree sidebar */}
+            <aside className="w-[280px] shrink-0">
+              <PierreTree
+                paths={files.map((f) => f.path)}
+                gitStatus={files.map((f) => ({ path: f.path, status: verbToStatus(f.verb) }))}
+                onSelect={(path) => scrollToFile(path)}
+                initialExpansion="open"
+                scrollToRef={undefined}
+              />
+            </aside>
+
+            {/* Diff content area */}
+            <div className="min-w-0 flex-1 space-y-3">
+              {/* Binary / truncated file captions (rendered outside CodeView) */}
+              {files
+                .filter((f) => f.binary || f.truncated)
+                .map((f) => (
+                  <div
+                    key={f.path}
+                    id={f.path}
+                    className="border border-(--border) px-3 py-2 text-xs font-mono text-(--fg-muted)"
+                    data-testid="diff-file"
+                  >
+                    <span className="text-(--fg) break-all">{f.path}</span>
+                    <span className="ml-2">
+                      {f.binary ? "Binary file." : "File too large to display."}
+                    </span>
+                  </div>
+                ))}
+
+              {/* CodeView for text diffs */}
+              {codeViewItems.length > 0 && (
+                <CodeView
+                  ref={codeViewRef}
+                  items={codeViewItems}
+                  options={{
+                    diffStyle,
+                    lineDiffType: "word-alt",
+                    stickyHeaders: true,
+                    overflow: "wrap",
+                    themeType: activeTheme(),
+                  }}
+                />
               )}
             </div>
-          ))}
+          </div>
+        )}
       </div>
     </div>
   );
