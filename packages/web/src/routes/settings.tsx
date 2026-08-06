@@ -54,8 +54,12 @@ function parsePrincipals(raw: unknown): Principal[] {
 // API token display
 // ---------------------------------------------------------------------------
 
+/** Fixed-length mask string shown when the token is hidden. */
+const TOKEN_MASK = "••••••••••••••••••••••••";
+
 function ApiTokenSection() {
   const token = readBearerToken();
+  const [visible, setVisible] = useState(false);
   const [copied, setCopied] = useState(false);
 
   function handleCopy() {
@@ -75,24 +79,37 @@ function ApiTokenSection() {
       {token ? (
         <div className="relative">
           <code
-            className="block border border-(--border) bg-(--bg-subtle) px-3 py-2 font-mono text-xs text-(--fg) overflow-auto break-all pr-16"
-            data-testid="api-token"
+            className="block border border-(--border) bg-(--bg-subtle) px-3 py-2 font-mono text-xs text-(--fg) overflow-auto break-all pr-28"
+            data-testid="api-token-display"
+            aria-label={visible ? "API bearer token (visible)" : "API bearer token (hidden)"}
           >
-            {token}
+            {visible ? token : TOKEN_MASK}
           </code>
-          <button
-            type="button"
-            onClick={handleCopy}
-            aria-label="Copy API token"
-            className="absolute top-1.5 right-2 flex items-center gap-1 border border-(--border) bg-white dark:bg-neutral-900 px-2 py-1 text-[10px] text-(--fg-muted) hover:text-(--fg) transition-colors"
-          >
-            {copied ? (
-              <Check className="h-3 w-3 text-green-600" aria-hidden />
-            ) : (
-              <Copy className="h-3 w-3" aria-hidden />
-            )}
-            {copied ? "Copied!" : "Copy"}
-          </button>
+          <div className="absolute top-1.5 right-2 flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setVisible((v) => !v)}
+              data-testid="token-visibility-toggle"
+              aria-label={visible ? "Hide API token" : "View API token"}
+              className="flex items-center border border-(--border) bg-white dark:bg-neutral-900 px-2 py-1 text-[10px] text-(--fg-muted) hover:text-(--fg) transition-colors"
+            >
+              {visible ? "Hide" : "View"}
+            </button>
+            <button
+              type="button"
+              onClick={handleCopy}
+              aria-label="Copy API token"
+              data-testid="token-copy-btn"
+              className="flex items-center gap-1 border border-(--border) bg-white dark:bg-neutral-900 px-2 py-1 text-[10px] text-(--fg-muted) hover:text-(--fg) transition-colors"
+            >
+              {copied ? (
+                <Check className="h-3 w-3 text-green-600" aria-hidden />
+              ) : (
+                <Copy className="h-3 w-3" aria-hidden />
+              )}
+              {copied ? "Copied!" : "Copy"}
+            </button>
+          </div>
         </div>
       ) : (
         <p className="text-xs text-(--fg-muted) italic">
