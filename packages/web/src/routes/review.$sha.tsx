@@ -370,7 +370,7 @@ export function ReviewPage({ sha }: { sha: string }) {
   }
 
   return (
-    <div className="max-w-4xl mx-auto p-6 space-y-6">
+    <div className="p-6 space-y-6">
       {/* Header */}
       <div className="space-y-1">
         <div className="flex items-center gap-2 flex-wrap">
@@ -657,7 +657,9 @@ export function ReviewPage({ sha }: { sha: string }) {
               {/* CodeView for text diffs */}
               {codeViewItems.length > 0 && (
                 <CodeView
+                  key={diffStyle}
                   ref={codeViewRef}
+                  className="w-full"
                   items={codeViewItems}
                   renderAnnotation={renderAnnotation}
                   onSelectedLinesChange={(selection) => {
