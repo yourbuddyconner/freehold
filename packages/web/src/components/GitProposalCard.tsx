@@ -181,7 +181,7 @@ export function ReviewComposer({
 
   return (
     <div className="border border-(--border) bg-(--bg-subtle) p-3 space-y-3">
-      <div className="flex gap-1" aria-label="Verdict">
+      <div className="flex gap-1" role="group" aria-label="Verdict">
         {(
           [
             { value: "approve", label: "Approve" },
