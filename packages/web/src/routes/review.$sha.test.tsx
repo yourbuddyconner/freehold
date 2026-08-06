@@ -21,7 +21,6 @@ vi.mock("~/lib/hooks", () => ({
   useGraphs: vi.fn(),
   useReviewsForSha: vi.fn(),
   useListGraphs: vi.fn(),
-  useActiveGraphPrincipal: vi.fn().mockReturnValue("alice"),
   // AppShell uses these:
   usePending: vi.fn().mockReturnValue({ data: { proposals: [] }, isLoading: false }),
   useGitProposals: vi.fn().mockReturnValue({ data: { proposals: [] }, isLoading: false }),
@@ -990,7 +989,9 @@ describe("/review/$sha", () => {
         });
       });
       const toggle = screen.getByTestId("suggest-toggle");
-      await act(async () => { toggle.click(); });
+      await act(async () => {
+        toggle.click();
+      });
       expect(screen.getByTestId("suggestion-editor-area")).toBeInTheDocument();
       // The File mock renders a textarea seeded with the initial contents
       const editorTextarea = screen.getByTestId("pierre-file-editor");
@@ -1020,13 +1021,17 @@ describe("/review/$sha", () => {
           range: { start: 1, end: 1, side: "additions" },
         });
       });
-      await act(async () => { screen.getByTestId("suggest-toggle").click(); });
+      await act(async () => {
+        screen.getByTestId("suggest-toggle").click();
+      });
       // Simulate editor change via File mock textarea
       const editorTextarea = screen.getByTestId("pierre-file-editor");
       fireEvent.change(editorTextarea, { target: { value: "fn replaced() {}" } });
       // Add prose in the comment textarea
       fireEvent.change(screen.getByLabelText("Comment body"), { target: { value: "use this" } });
-      await act(async () => { screen.getByRole("button", { name: /save draft/i }).click(); });
+      await act(async () => {
+        screen.getByRole("button", { name: /save draft/i }).click();
+      });
       // Load drafts from localStorage
       const { loadDrafts } = await import("~/lib/reviewDrafts");
       const saved = loadDrafts(SHA);
@@ -1047,12 +1052,14 @@ describe("/review/$sha", () => {
     it("draft annotation with suggestion body renders nested pierre-diff", async () => {
       localStore.set(
         `freehold:review-drafts:${SHA}`,
-        JSON.stringify([{
-          path: "src/lib.rs",
-          span: "L1",
-          body: "replace this",
-          suggestion: "fn replaced() {}",
-        }])
+        JSON.stringify([
+          {
+            path: "src/lib.rs",
+            span: "L1",
+            body: "replace this",
+            suggestion: "fn replaced() {}",
+          },
+        ])
       );
       setupDefaults();
       await renderReviewPage();
@@ -1147,12 +1154,14 @@ describe("/review/$sha", () => {
     it("draft suggestion annotation does NOT have copy-suggestion button", async () => {
       localStore.set(
         `freehold:review-drafts:${SHA}`,
-        JSON.stringify([{
-          path: "src/lib.rs",
-          span: "L1",
-          body: "",
-          suggestion: "fn replaced() {}",
-        }])
+        JSON.stringify([
+          {
+            path: "src/lib.rs",
+            span: "L1",
+            body: "",
+            suggestion: "fn replaced() {}",
+          },
+        ])
       );
       setupDefaults();
       await renderReviewPage();
@@ -1164,12 +1173,14 @@ describe("/review/$sha", () => {
     it("submit with suggestion draft sends fenced body to postGitReview", async () => {
       localStore.set(
         `freehold:review-drafts:${SHA}`,
-        JSON.stringify([{
-          path: "src/lib.rs",
-          span: "L1",
-          body: "use this instead",
-          suggestion: "fn replaced() {}",
-        }])
+        JSON.stringify([
+          {
+            path: "src/lib.rs",
+            span: "L1",
+            body: "use this instead",
+            suggestion: "fn replaced() {}",
+          },
+        ])
       );
       const mutate = vi.fn();
       setupDefaults({
@@ -1181,11 +1192,15 @@ describe("/review/$sha", () => {
       const { apiClient } = await import("~/lib/api");
 
       const approveBtn = screen.getByRole("button", { name: /^approve$/i });
-      await act(async () => { approveBtn.click(); });
+      await act(async () => {
+        approveBtn.click();
+      });
       const confirmBtn = screen
         .getAllByRole("button", { name: /^approve$/i })
         .find((b) => b.closest("[role=dialog]"));
-      await act(async () => { confirmBtn?.click(); });
+      await act(async () => {
+        confirmBtn?.click();
+      });
 
       await waitFor(() => {
         expect(apiClient.postGitReview).toHaveBeenCalledWith(
@@ -1212,11 +1227,15 @@ describe("/review/$sha", () => {
       const { apiClient } = await import("~/lib/api");
 
       const approveBtn = screen.getByRole("button", { name: /^approve$/i });
-      await act(async () => { approveBtn.click(); });
+      await act(async () => {
+        approveBtn.click();
+      });
       const confirmBtn = screen
         .getAllByRole("button", { name: /^approve$/i })
         .find((b) => b.closest("[role=dialog]"));
-      await act(async () => { confirmBtn?.click(); });
+      await act(async () => {
+        confirmBtn?.click();
+      });
 
       await waitFor(() => {
         expect(apiClient.postGitReview).toHaveBeenCalledWith(

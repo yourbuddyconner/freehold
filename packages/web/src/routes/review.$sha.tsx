@@ -7,7 +7,7 @@
 
 import { parseDiffFromFile } from "@pierre/diffs";
 import { Editor, type EditorOptions } from "@pierre/diffs/edit";
-import { CodeView, EditProvider, File, type DiffLineAnnotation } from "@pierre/diffs/react";
+import { CodeView, type DiffLineAnnotation, EditProvider, File } from "@pierre/diffs/react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { useQueryClient } from "@tanstack/react-query";
 import { createRoute } from "@tanstack/react-router";
@@ -28,7 +28,14 @@ import {
   useListGraphs,
   useReviewsForSha,
 } from "~/lib/hooks";
-import { type CommentDraft, clearDrafts, loadDrafts, parseSuggestionBody, saveDrafts, serializeSuggestionBody } from "~/lib/reviewDrafts";
+import {
+  type CommentDraft,
+  clearDrafts,
+  loadDrafts,
+  parseSuggestionBody,
+  saveDrafts,
+  serializeSuggestionBody,
+} from "~/lib/reviewDrafts";
 import { Route as RootRoute } from "./__root";
 
 export const Route = createRoute({
@@ -201,7 +208,9 @@ export function ReviewPage({ sha }: { sha: string }) {
     window.scrollBy({ top: -STICKY_HEADER_OFFSET, behavior: "instant" });
   }, []);
 
-  const suggestionFileRef = useRef<{ name: string; contents: string; cacheKey: string } | null>(null);
+  const suggestionFileRef = useRef<{ name: string; contents: string; cacheKey: string } | null>(
+    null
+  );
   const debouncedSuggestionText = useDebouncedValue(suggestionText, 150);
 
   const files = diffData?.files ?? [];
@@ -321,9 +330,7 @@ export function ReviewPage({ sha }: { sha: string }) {
           verdict: apiVerdict,
           by,
           comments: drafts.map((d) => ({
-            body: d.suggestion
-              ? serializeSuggestionBody(d.body, d.suggestion)
-              : d.body,
+            body: d.suggestion ? serializeSuggestionBody(d.body, d.suggestion) : d.body,
             anchor: anchor(d.path),
             span: d.span,
           })),
@@ -348,9 +355,10 @@ export function ReviewPage({ sha }: { sha: string }) {
   ): React.ReactNode {
     const meta = ann.metadata;
     if (meta.kind === "draft") {
-      const { prose, suggestion } = meta.suggestion !== undefined
-        ? { prose: meta.body, suggestion: meta.suggestion }
-        : parseSuggestionBody(meta.body);
+      const { prose, suggestion } =
+        meta.suggestion !== undefined
+          ? { prose: meta.body, suggestion: meta.suggestion }
+          : parseSuggestionBody(meta.body);
       return (
         <div
           className="border border-(--border) bg-(--bg-subtle) p-2 text-xs space-y-1"
@@ -376,7 +384,9 @@ export function ReviewPage({ sha }: { sha: string }) {
               {prose && <div className="text-(--fg)">{prose}</div>}
               {suggestion !== null && (
                 <div data-testid="suggestion-diff" className="space-y-1">
-                  <div className="text-[10px] font-mono uppercase text-(--fg-muted)">Suggested change</div>
+                  <div className="text-[10px] font-mono uppercase text-(--fg-muted)">
+                    Suggested change
+                  </div>
                   <PierreDiff
                     oldText={(() => {
                       const f = files.find((f) => f.path === meta.path);
@@ -424,7 +434,9 @@ export function ReviewPage({ sha }: { sha: string }) {
               {prose && <div className="text-(--fg)">{prose}</div>}
               {suggestion !== null && (
                 <div data-testid="suggestion-diff" className="space-y-1">
-                  <div className="text-[10px] font-mono uppercase text-(--fg-muted)">Suggested change</div>
+                  <div className="text-[10px] font-mono uppercase text-(--fg-muted)">
+                    Suggested change
+                  </div>
                   <PierreDiff
                     oldText={(() => {
                       const f = files.find((f) => f.path === meta.path);
@@ -885,7 +897,9 @@ export function ReviewPage({ sha }: { sha: string }) {
                   />
                 </EditProvider>
               </div>
-              <div className="text-[10px] font-mono uppercase text-(--fg-muted)">Suggested change</div>
+              <div className="text-[10px] font-mono uppercase text-(--fg-muted)">
+                Suggested change
+              </div>
               <PierreDiff
                 oldText={composerSpanLines}
                 newText={debouncedSuggestionText}

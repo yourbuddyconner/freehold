@@ -3,9 +3,9 @@ import {
   type CommentDraft,
   clearDrafts,
   loadDrafts,
+  parseSuggestionBody,
   saveDrafts,
   serializeSuggestionBody,
-  parseSuggestionBody,
 } from "./reviewDrafts";
 
 // Stub localStorage with a Map — happy-dom's impl may not be available in unit context
