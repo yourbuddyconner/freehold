@@ -111,7 +111,7 @@ function SourcePanel({ isLoading, binary, truncated, content, name = "" }: Sourc
           options={{
             themeType: activeTheme(),
             disableFileHeader: true,
-            overflow: "scroll",
+            overflow: "wrap",
           }}
         />
       </div>
@@ -159,7 +159,7 @@ export function CodeFilePage({ filePath }: { filePath?: string }) {
   const items: CodeItem[] = data?.items ?? [];
 
   return (
-    <article className="max-w-3xl space-y-6">
+    <article className="space-y-6">
       <header className="space-y-1">
         <div className="flex items-center gap-1.5">
           <span
