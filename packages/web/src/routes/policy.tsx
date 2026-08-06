@@ -293,6 +293,11 @@ function PolicyRuleEditor({ rule, definition, isStaged }: PolicyRuleEditorProps)
       kind: "policy",
       label: `policy: edit rule ${rule.name}`,
       payload: nextDefinition,
+      preview: {
+        name: "policy.json",
+        before: JSON.stringify(definition, null, 2),
+        after: JSON.stringify(nextDefinition, null, 2),
+      },
     });
     setEditing(false);
   }
@@ -306,6 +311,11 @@ function PolicyRuleEditor({ rule, definition, isStaged }: PolicyRuleEditorProps)
       kind: "policy",
       label: `policy: delete rule ${rule.name}`,
       payload: nextDefinition,
+      preview: {
+        name: "policy.json",
+        before: JSON.stringify(definition, null, 2),
+        after: JSON.stringify(nextDefinition, null, 2),
+      },
     });
     setConfirmDelete(false);
   }
@@ -587,6 +597,11 @@ function AddRuleCard({ definition }: { definition: PolicyDefinition }) {
       kind: "policy",
       label: `policy: add rule ${name}`,
       payload: nextDefinition,
+      preview: {
+        name: "policy.json",
+        before: JSON.stringify(definition, null, 2),
+        after: JSON.stringify(nextDefinition, null, 2),
+      },
     });
     setOpen(false);
     setName("");

@@ -1,6 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { X } from "lucide-react";
 import { useState } from "react";
+import { PierreDiff } from "~/components/PierreDiff";
 import { apiClient } from "~/lib/api";
 import { useChangeset } from "~/lib/changeset";
 import type { ChangesetEntry } from "~/lib/changeset";
@@ -17,6 +18,7 @@ export function ChangesetTray(): React.JSX.Element | null {
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   if (success) {
     return (
@@ -72,10 +74,12 @@ export function ChangesetTray(): React.JSX.Element | null {
     setError(null);
   }
 
+  const anyExpanded = expandedId !== null;
+
   return (
     <div
       data-testid="changeset-tray"
-      className="fixed bottom-4 right-4 z-50 w-80 border border-(--border) bg-(--bg) shadow-lg"
+      className={`fixed bottom-4 right-4 z-50 border border-(--border) bg-(--bg) shadow-lg ${anyExpanded ? "w-[520px]" : "w-80"}`}
     >
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-2.5 border-b border-(--border)">
@@ -86,25 +90,51 @@ export function ChangesetTray(): React.JSX.Element | null {
 
       {/* Entry list */}
       <ul className="divide-y divide-(--border) max-h-48 overflow-y-auto">
-        {entries.map((entry, i) => (
-          <li key={entry.id} className="flex items-start gap-2 px-4 py-2">
-            <span className="flex-1 text-xs text-(--fg) truncate leading-relaxed">
-              {entry.label}
-              {entry.detail && (
-                <span className="block text-[10px] text-(--fg-muted) truncate">{entry.detail}</span>
+        {entries.map((entry, i) => {
+          const isExpanded = expandedId === entry.id;
+          return (
+            <li key={entry.id} className="px-4 py-2">
+              <div className="flex items-start gap-2">
+                <span className="flex-1 text-xs text-(--fg) truncate leading-relaxed">
+                  {entry.label}
+                  {entry.detail && (
+                    <span className="block text-[10px] text-(--fg-muted) truncate">{entry.detail}</span>
+                  )}
+                </span>
+                <button
+                  type="button"
+                  data-testid={`toggle-preview-${i}`}
+                  onClick={() => setExpandedId(isExpanded ? null : entry.id)}
+                  className="shrink-0 text-[10px] text-(--fg-muted) hover:text-(--fg) underline underline-offset-2 mt-0.5"
+                >
+                  {isExpanded ? "Hide diff" : "View diff"}
+                </button>
+                <button
+                  type="button"
+                  data-testid={`unstage-${i}`}
+                  onClick={() => unstage(entry.id)}
+                  aria-label={`Remove ${entry.label}`}
+                  className="shrink-0 text-(--fg-muted) hover:text-(--fg) mt-0.5"
+                >
+                  <X className="h-3 w-3" aria-hidden />
+                </button>
+              </div>
+              {isExpanded && (
+                <div className="mt-2 max-h-64 overflow-y-auto">
+                  {entry.preview ? (
+                    <PierreDiff
+                      oldText={entry.preview.before}
+                      newText={entry.preview.after}
+                      name={entry.preview.name}
+                    />
+                  ) : (
+                    <p className="text-xs text-(--fg-muted)">No preview for this change.</p>
+                  )}
+                </div>
               )}
-            </span>
-            <button
-              type="button"
-              data-testid={`unstage-${i}`}
-              onClick={() => unstage(entry.id)}
-              aria-label={`Remove ${entry.label}`}
-              className="shrink-0 text-(--fg-muted) hover:text-(--fg) mt-0.5"
-            >
-              <X className="h-3 w-3" aria-hidden />
-            </button>
-          </li>
-        ))}
+            </li>
+          );
+        })}
       </ul>
 
       {/* Intent input */}

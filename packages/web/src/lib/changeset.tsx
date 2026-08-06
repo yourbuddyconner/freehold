@@ -7,6 +7,7 @@ export interface ChangesetEntry {
   label: string;
   detail?: string;
   payload: unknown;
+  preview?: { name: string; before: string; after: string };
 }
 
 interface ChangesetStore {
@@ -37,12 +38,24 @@ function loadFromStorage(graphId: string): ChangesetEntry[] {
   }
 }
 
+const PREVIEW_SIZE_CAP = 100 * 1024; // 100KB
+
+function stripLargePreview(entry: ChangesetEntry): ChangesetEntry {
+  if (!entry.preview) return entry;
+  const { before, after } = entry.preview;
+  if (before.length > PREVIEW_SIZE_CAP || after.length > PREVIEW_SIZE_CAP) {
+    const { preview: _preview, ...rest } = entry;
+    return rest;
+  }
+  return entry;
+}
+
 function saveToStorage(graphId: string, entries: ChangesetEntry[]): void {
   try {
     if (entries.length === 0) {
       localStorage.removeItem(storageKey(graphId));
     } else {
-      localStorage.setItem(storageKey(graphId), JSON.stringify(entries));
+      localStorage.setItem(storageKey(graphId), JSON.stringify(entries.map(stripLargePreview)));
     }
   } catch {
     // localStorage unavailable — silently skip

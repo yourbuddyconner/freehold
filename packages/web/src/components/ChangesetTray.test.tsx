@@ -12,6 +12,12 @@ vi.mock("~/lib/api", () => ({
   },
 }));
 
+vi.mock("~/components/PierreDiff", () => ({
+  PierreDiff: ({ oldText, newText }: { oldText: string; newText: string }) => (
+    <pre data-testid="pierre-diff">{`${oldText}\n---\n${newText}`}</pre>
+  ),
+}));
+
 const GRAPH_ID = "g1";
 const store = new Map<string, string>();
 
@@ -38,7 +44,7 @@ function renderTray(initialEntries?: { kind: string; label: string; payload: unk
 }
 
 // Helper to stage entries via the context before rendering the tray.
-function renderTrayWithEntries(entries: Array<{ kind: string; label: string; payload: unknown }>) {
+function renderTrayWithEntries(entries: Array<{ kind: string; label: string; payload: unknown; preview?: { name: string; before: string; after: string } }>) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
   // Use a wrapper component that exposes stage via a test button
@@ -185,5 +191,55 @@ describe("ChangesetTray", () => {
 
     // Original tray should not be visible (entries cleared)
     expect(screen.queryByTestId("changeset-tray")).not.toBeInTheDocument();
+  });
+
+  it("shows 'View diff' toggle on entries that have preview", () => {
+    renderTrayWithEntries([
+      {
+        kind: "policy",
+        label: "policy: edit rule foo",
+        payload: { rules: [] },
+        preview: { name: "policy.json", before: '{"rules":[]}', after: '{"rules":[{"name":"foo"}]}' },
+      },
+    ]);
+    expect(screen.getByTestId("toggle-preview-0")).toHaveTextContent("View diff");
+  });
+
+  it("clicking View diff renders PierreDiff with correct before/after", () => {
+    const before = '{"rules":[]}';
+    const after = '{"rules":[{"name":"foo"}]}';
+    renderTrayWithEntries([
+      {
+        kind: "policy",
+        label: "policy: edit rule foo",
+        payload: { rules: [] },
+        preview: { name: "policy.json", before, after },
+      },
+    ]);
+
+    act(() => {
+      fireEvent.click(screen.getByTestId("toggle-preview-0"));
+    });
+
+    const diff = screen.getByTestId("pierre-diff");
+    expect(diff).toBeInTheDocument();
+    expect(diff.textContent).toContain(before);
+    expect(diff.textContent).toContain(after);
+
+    // Toggle label flips to Hide diff
+    expect(screen.getByTestId("toggle-preview-0")).toHaveTextContent("Hide diff");
+  });
+
+  it("shows 'No preview for this change.' for entries without preview", () => {
+    renderTrayWithEntries([
+      { kind: "policy", label: "policy: edit rule foo", payload: { rules: [] } },
+    ]);
+
+    act(() => {
+      fireEvent.click(screen.getByTestId("toggle-preview-0"));
+    });
+
+    expect(screen.getByText("No preview for this change.")).toBeInTheDocument();
+    expect(screen.queryByTestId("pierre-diff")).not.toBeInTheDocument();
   });
 });

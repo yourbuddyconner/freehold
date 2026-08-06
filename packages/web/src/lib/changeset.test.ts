@@ -107,4 +107,41 @@ describe("changeset store", () => {
     });
     expect(result.current.intent).toBe("Tighten scratch region rules");
   });
+
+  it("persists preview to localStorage when under size cap", () => {
+    const { result } = renderHook(() => useChangeset(), { wrapper });
+    const preview = { name: "policy.json", before: '{"rules":[]}', after: '{"rules":[{"name":"new"}]}' };
+    act(() => {
+      result.current.stage({
+        kind: "policy",
+        label: "policy: edit rule foo",
+        payload: { rules: [] },
+        preview,
+      });
+    });
+    const raw = localStorage.getItem(STORAGE_KEY);
+    expect(raw).not.toBeNull();
+    const parsed = JSON.parse(raw ?? "");
+    expect(parsed[0].preview).toBeDefined();
+    expect(parsed[0].preview.name).toBe("policy.json");
+    expect(parsed[0].preview.before).toBe('{"rules":[]}');
+  });
+
+  it("strips preview from localStorage when over size cap (100KB per side)", () => {
+    const { result } = renderHook(() => useChangeset(), { wrapper });
+    const largeString = "x".repeat(101 * 1024);
+    const preview = { name: "policy.json", before: largeString, after: '{"rules":[]}' };
+    act(() => {
+      result.current.stage({
+        kind: "policy",
+        label: "policy: edit rule bar",
+        payload: { rules: [] },
+        preview,
+      });
+    });
+    const raw = localStorage.getItem(STORAGE_KEY);
+    expect(raw).not.toBeNull();
+    const parsed = JSON.parse(raw ?? "");
+    expect(parsed[0].preview).toBeUndefined();
+  });
 });

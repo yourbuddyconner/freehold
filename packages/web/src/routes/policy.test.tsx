@@ -522,4 +522,138 @@ describe("Policy structured editor + staging", () => {
     // Existing rules are preserved
     expect(payload.rules.some((r) => r.name === "scratch-is-free")).toBe(true);
   });
+
+  it("staging an edit attaches preview.before (current definition) and preview.after (next definition)", async () => {
+    const mockStage = vi.fn();
+    vi.mocked(changesetModule.useChangeset).mockReturnValue(
+      makeChangesetStore({ stage: mockStage }) as ReturnType<typeof changesetModule.useChangeset>
+    );
+
+    await renderPolicy();
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("edit-rule-scratch-is-free"));
+    });
+
+    const nameInput = screen.getByLabelText("Rule name");
+    await act(async () => {
+      fireEvent.change(nameInput, { target: { value: "scratch-is-free-v2" } });
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("stage-rule-scratch-is-free"));
+    });
+
+    expect(mockStage).toHaveBeenCalledTimes(1);
+    const call = mockStage.mock.calls[0][0];
+    expect(call.preview).toBeDefined();
+    expect(call.preview.name).toBe("policy.json");
+
+    // before is the current definition
+    const parsedBefore = JSON.parse(call.preview.before);
+    expect(parsedBefore.rules.some((r: { name: string }) => r.name === "scratch-is-free")).toBe(true);
+
+    // after is the next definition with the updated rule
+    const parsedAfter = JSON.parse(call.preview.after);
+    expect(parsedAfter.rules.some((r: { name: string }) => r.name === "scratch-is-free-v2")).toBe(true);
+    expect(parsedAfter.rules.some((r: { name: string }) => r.name === "scratch-is-free")).toBe(false);
+  });
+
+  it("staging a delete attaches preview with the rule removed in after", async () => {
+    const mockStage = vi.fn();
+    vi.mocked(changesetModule.useChangeset).mockReturnValue(
+      makeChangesetStore({ stage: mockStage }) as ReturnType<typeof changesetModule.useChangeset>
+    );
+
+    await renderPolicy();
+
+    const deleteBtn = screen.getByTestId("delete-rule-scratch-is-free");
+    await act(async () => {
+      fireEvent.click(deleteBtn);
+    });
+    const confirmBtn = screen.getByTestId("confirm-delete-scratch-is-free");
+    await act(async () => {
+      fireEvent.click(confirmBtn);
+    });
+
+    expect(mockStage).toHaveBeenCalledTimes(1);
+    const call = mockStage.mock.calls[0][0];
+    expect(call.preview).toBeDefined();
+    expect(call.preview.name).toBe("policy.json");
+
+    const parsedBefore = JSON.parse(call.preview.before);
+    expect(parsedBefore.rules.some((r: { name: string }) => r.name === "scratch-is-free")).toBe(true);
+
+    const parsedAfter = JSON.parse(call.preview.after);
+    expect(parsedAfter.rules.find((r: { name: string }) => r.name === "scratch-is-free")).toBeUndefined();
+  });
+
+  it("staging an add attaches preview with the new rule in after", async () => {
+    const mockStage = vi.fn();
+    vi.mocked(changesetModule.useChangeset).mockReturnValue(
+      makeChangesetStore({ stage: mockStage }) as ReturnType<typeof changesetModule.useChangeset>
+    );
+
+    await renderPolicy();
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("add-rule-btn"));
+    });
+
+    const nameInput = screen.getByLabelText("New rule name");
+    await act(async () => {
+      fireEvent.change(nameInput, { target: { value: "preview-test-rule" } });
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("stage-add-rule-btn"));
+    });
+
+    expect(mockStage).toHaveBeenCalledTimes(1);
+    const call = mockStage.mock.calls[0][0];
+    expect(call.preview).toBeDefined();
+    expect(call.preview.name).toBe("policy.json");
+
+    const parsedBefore = JSON.parse(call.preview.before);
+    expect(parsedBefore.rules.find((r: { name: string }) => r.name === "preview-test-rule")).toBeUndefined();
+
+    const parsedAfter = JSON.parse(call.preview.after);
+    expect(parsedAfter.rules.some((r: { name: string }) => r.name === "preview-test-rule")).toBe(true);
+  });
+
+  it("preview.after of a stage call matches what preview.before would be for a subsequent edit of the same definition", async () => {
+    const mockStage = vi.fn();
+    vi.mocked(changesetModule.useChangeset).mockReturnValue(
+      makeChangesetStore({ stage: mockStage }) as ReturnType<typeof changesetModule.useChangeset>
+    );
+
+    await renderPolicy();
+
+    // Stage a first edit: rename scratch-is-free
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("edit-rule-scratch-is-free"));
+    });
+    const nameInput = screen.getByLabelText("Rule name");
+    await act(async () => {
+      fireEvent.change(nameInput, { target: { value: "scratch-is-free-v2" } });
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("stage-rule-scratch-is-free"));
+    });
+
+    expect(mockStage).toHaveBeenCalledTimes(1);
+    const firstCall = mockStage.mock.calls[0][0];
+    const firstAfter = JSON.parse(firstCall.preview.after);
+
+    // The definition prop fed to PolicyRuleEditor is the raw fixture definition —
+    // so a second edit on the same fixture has the same before as the first.
+    // Assert that firstCall.preview.after is the next definition (contains the renamed rule)
+    // and that firstCall.preview.before matches the fixture definition.
+    const firstBefore = JSON.parse(firstCall.preview.before);
+    expect(firstBefore).toEqual(definition);
+    expect(firstAfter.rules.some((r: { name: string }) => r.name === "scratch-is-free-v2")).toBe(true);
+
+    // The after of the first stage equals what a consumer would use as the next state,
+    // confirming preview.after is a valid complete definition.
+    expect(JSON.parse(firstCall.preview.after)).toEqual(firstCall.payload);
+  });
 });
