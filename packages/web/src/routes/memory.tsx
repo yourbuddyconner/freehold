@@ -215,6 +215,7 @@ function MemoryLayout() {
               initialExpansion={initialExpansion}
               initialExpandedPaths={initialExpandedPaths}
               onExpansionChange={handleExpansionChange}
+              height="calc(100vh - 260px)"
             />
           ) : null}
         </aside>
