@@ -589,6 +589,202 @@ export async function decideGit(
   return { outcome, pushed: false, pushSkipped: true };
 }
 
+// ── signedCommit — two-phase host-seam commit ─────────────────────────────────
+//
+// Performs a signed changeset commit through the two-phase host seam:
+//   1. commit_payload(author, intent, ops) → { changeset, hash }
+//   2. keys.resolveKey → keys.signPayload   (signing happens on the host)
+//   3. commit_signed(changeset, signature, []) → admission result
+//
+// This is the ONLY correct path for committing changesets that require a
+// signed envelope. Calling graph.commit(…, sign=true) with the 5th arg causes
+// the wasm module to attempt in-process signing, which fails at runtime because
+// the key material lives on the host filesystem — not inside the wasm sandbox.
+//
+// Shared between decideGit and postReview so both use the same mechanic.
+
+interface CommitPayloadResult {
+  changeset: unknown;
+  hash: string;
+}
+
+function wasmCommitPayload(
+  graph: unknown,
+  author: string,
+  intent: string,
+  ops: unknown[]
+): CommitPayloadResult {
+  return (
+    graph as {
+      commit_payload(author: string, intent: string, ops: unknown[]): CommitPayloadResult;
+    }
+  ).commit_payload(author, intent, ops);
+}
+
+async function wasmCommitSigned(
+  graph: unknown,
+  changeset: unknown,
+  signature: string,
+  envelopes: unknown[]
+): Promise<unknown> {
+  return (
+    graph as {
+      commit_signed(changeset: unknown, signature: string, envelopes: unknown[]): Promise<unknown>;
+    }
+  ).commit_signed(changeset, signature, envelopes);
+}
+
+/**
+ * Commit `ops` as a signed changeset through the two-phase host seam.
+ *
+ * @param fh       - Freehold instance (graph + graphDir)
+ * @param author   - principal name (bare, without "principal:" prefix)
+ * @param intent   - human-readable commit message
+ * @param ops      - changeset operations
+ * @param entry    - { allodGraphId } for key resolution
+ * @returns the raw wasm admission result ({ Admitted: … } | { Held: … })
+ * @throws KeyMissingError if the key for `author` cannot be found
+ */
+async function signedCommit(
+  fh: Freehold,
+  author: string,
+  intent: string,
+  ops: unknown[],
+  entry: { allodGraphId: string }
+): Promise<unknown> {
+  // Phase 1: build unsigned changeset and get the payload hash to sign
+  const { changeset, hash } = await withGraph(fh.graph, () =>
+    wasmCommitPayload(fh.graph, author, intent, ops)
+  );
+
+  // Resolve key — wrap plain Error from resolveKey into KeyMissingError
+  let resolvedKey: Awaited<ReturnType<typeof keys.resolveKey>>;
+  try {
+    resolvedKey = await keys.resolveKey(entry.allodGraphId, author, {
+      repoDir: fh.graphDir,
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new KeyMissingError(msg);
+  }
+
+  // Sign the payload hash (host-side)
+  const signature = await keys.signPayload(resolvedKey, hash, entry.allodGraphId, {
+    repoDir: fh.graphDir,
+  });
+
+  // Phase 2: submit the signed changeset
+  const result = await withGraph(fh.graph, () =>
+    wasmCommitSigned(fh.graph, changeset, signature, [])
+  );
+
+  return result;
+}
+
+// ── PostReviewInput ───────────────────────────────────────────────────────────
+
+export interface PostReviewComment {
+  body: string;
+  anchor?: string;
+  span?: string;
+}
+
+export interface PostReviewInput {
+  sha: string;
+  verdict: string;
+  body?: string;
+  by: string;
+  comments?: PostReviewComment[];
+  allodGraphId: string;
+}
+
+export interface PostReviewResult {
+  reviewId: string;
+  commentIds: string[];
+  status: "saved" | "pending";
+}
+
+// ── postReview ────────────────────────────────────────────────────────────────
+
+/**
+ * Create a review artifact (Review node + per-comment ReviewComment + part_of
+ * edges) through the two-phase signed host seam.
+ *
+ * Each changeset is signed by the host using keys.resolveKey / keys.signPayload
+ * (mirrors decideGit's signing mechanic). Calling graph.commit(…, sign=true)
+ * directly cannot work because the wasm module has no access to host key files.
+ *
+ * @throws KeyMissingError if the key for `by` cannot be resolved
+ */
+export async function postReview(fh: Freehold, input: PostReviewInput): Promise<PostReviewResult> {
+  const { sha, verdict, body: reviewBody, by, comments = [], allodGraphId } = input;
+  const repoName = basename(fh.graphDir);
+  const commitRef = `git:${repoName}#${sha}`;
+  const entry = { allodGraphId };
+
+  const reviewId = crypto.randomUUID();
+
+  // Commit 1: Review node
+  const reviewOp = {
+    create: {
+      kind: "node",
+      id: reviewId,
+      type: "review/Review@1",
+      attributes: {
+        verdict,
+        ...(reviewBody !== undefined ? { body: reviewBody } : {}),
+        commit: commitRef,
+      },
+    },
+  };
+
+  const reviewAdmission = await signedCommit(fh, by, `Review ${sha}`, [reviewOp], entry);
+
+  let status: "saved" | "pending" = "pending";
+  if (reviewAdmission && typeof reviewAdmission === "object" && "Admitted" in reviewAdmission) {
+    status = "saved";
+  }
+
+  // Commit 2+: ReviewComment node + part_of edge (endpoints before edges)
+  const commentIds: string[] = [];
+
+  for (const comment of comments) {
+    const commentId = crypto.randomUUID();
+    commentIds.push(commentId);
+
+    const commentOp = {
+      create: {
+        kind: "node",
+        id: commentId,
+        type: "review/ReviewComment@1",
+        attributes: {
+          body: comment.body,
+          ...(comment.anchor !== undefined ? { anchor: comment.anchor } : {}),
+          ...(comment.span !== undefined ? { span: comment.span } : {}),
+          status: "open",
+        },
+      },
+    };
+
+    await signedCommit(fh, by, `ReviewComment for ${sha}`, [commentOp], entry);
+
+    const edgeId = crypto.randomUUID();
+    const edgeOp = {
+      create: {
+        kind: "edge",
+        id: edgeId,
+        type: "review/part_of@1",
+        from: `node:${commentId}`,
+        to: `node:${reviewId}`,
+      },
+    };
+
+    await signedCommit(fh, by, `part_of edge for comment ${commentId}`, [edgeOp], entry);
+  }
+
+  return { reviewId, commentIds, status };
+}
+
 // ── ReviewEntry + listReviewsForSha ──────────────────────────────────────────
 
 export interface ReviewCommentEntry {

@@ -194,6 +194,9 @@ beforeAll(async () => {
   mkdirSync(join(keysDir, graphComp), { recursive: true });
   writeFileSync(join(keysDir, graphComp, "reviewer.yaml"), reviewerKeyYaml);
 
+  // NOTE: keyless-api-reviewer is intentionally not added. Using a principal
+  // that does not exist in the graph at all tests the error-response shape.
+
   // Install git-substrate policy binding reviewer role
   const policyYaml = `policy: gitreview-api-test-policy
 version: 1
@@ -533,6 +536,64 @@ describe("POST /api/v1/graphs/:id/git/proposals/:sha/reviews", () => {
       { verdict: "approve", body: "review for unknown sha", by: "reviewer" }
     );
     expect(status).toBe(404);
+  });
+
+  test("returns JSON error (not bare text/plain) when principal has no host key", async () => {
+    // Use a principal unknown to the graph. The wasm commit_payload will throw a
+    // non-Error value. The route must catch it and return JSON (never bare text/plain).
+    // This is the exact bug this fix addresses — before the fix, ANY error produced
+    // a bare text/plain 500 response.
+    const { status, body } = await req(
+      "POST",
+      `/api/v1/graphs/${repoGraphId}/git/proposals/${mainSha}/reviews`,
+      { verdict: "approve", body: "review from unknown principal", by: "no-such-principal-xyz" }
+    );
+    // Must be a 4xx or 5xx JSON error — never a bare text/plain 500
+    expect(status).toBeGreaterThanOrEqual(400);
+    expect(body).not.toBeNull(); // JSON parsed successfully
+    const b = body as Record<string, unknown>;
+    expect(typeof b.error).toBe("string"); // has an error field
+  });
+
+  test("returns 409 with code key-missing when signing key is absent for the principal", async () => {
+    // Add a principal to the graph, then point ALLOD_KEYS_DIR at an empty dir so
+    // resolveKey cannot find a key anywhere → KeyMissingError → 409.
+    const fh = await manager.get(repoGraphId);
+    await fh.graph.principal_add("api-key-missing-principal", "agent", "owner");
+
+    // Point ALLOD_KEYS_DIR at a completely empty directory
+    const emptyKeysDir = mkdtempSync(join(tmpdir(), "freehold-empty-keys-"));
+    const savedKeysDir = process.env.ALLOD_KEYS_DIR;
+    process.env.ALLOD_KEYS_DIR = emptyKeysDir;
+
+    // Also delete the legacy .allod/keys/ file so the fallback path fails too.
+    // We must do this AFTER the persist callback fires (principal_add already persisted).
+    // Then immediately override ALLOD_KEYS_DIR so the next resolveKey call checks the
+    // empty dir. The legacy path lookup uses repoDir which has the key written by
+    // principal_add + fsBackend.persist. Override repoDir matching by deleting the file.
+    try {
+      rmSync(join(repoDir, ".allod", "keys", "api-key-missing-principal.yaml"));
+    } catch {
+      // Already absent
+    }
+
+    let result: { status: number; body: unknown };
+    try {
+      result = await req("POST", `/api/v1/graphs/${repoGraphId}/git/proposals/${mainSha}/reviews`, {
+        verdict: "approve",
+        body: "review from keyless principal",
+        by: "api-key-missing-principal",
+      });
+    } finally {
+      // Restore ALLOD_KEYS_DIR regardless of outcome
+      process.env.ALLOD_KEYS_DIR = savedKeysDir;
+      rmSync(emptyKeysDir, { recursive: true, force: true });
+    }
+
+    expect(result.status).toBe(409);
+    const b = result.body as { error: string; code: string };
+    expect(b.code).toBe("key-missing");
+    expect(typeof b.error).toBe("string");
   });
 });
 
