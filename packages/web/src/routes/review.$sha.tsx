@@ -834,6 +834,7 @@ export function ReviewPage({ sha }: { sha: string }) {
                       stickyHeaders: true,
                       overflow: "wrap",
                       themeType: activeTheme(),
+                      enableLineSelection: true,
                     }}
                   />
                 </div>
