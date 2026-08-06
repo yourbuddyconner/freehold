@@ -232,6 +232,7 @@ function SourcePanel({
               themeType: activeTheme(),
               disableFileHeader: true,
               overflow: "wrap",
+              lineHoverHighlight: "line",
               onLineEnter,
               onLineLeave,
               ...(onLineNumberClick ? { onLineNumberClick: handleLineNumberClick } : {}),

@@ -1,5 +1,5 @@
 /**
- * Tests for code.file.tsx comment functionality.
+ * Tests for code.file.tsx comment and hover functionality.
  *
  * Tests:
  *   - Clicking a line number opens the comment composer with span prefilled
@@ -8,27 +8,30 @@
  *   - Existing comments render via renderAnnotation (body, author)
  *   - "posted against an older revision" caption when currentHead = false
  *   - Comment count chip in file metadata header
+ *   - Hovering over a line of an indexed item shows the hover card
+ *   - Hover card clears when leaving the line
+ *   - lineHoverHighlight is enabled in options so the library wires the gate
  */
 
-import type { LineAnnotation } from "@pierre/diffs";
+import type { LineAnnotation, OnLineClickProps, OnLineEnterLeaveProps } from "@pierre/diffs";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as hooks from "~/lib/hooks";
 import { CodeFilePage } from "./code.file";
 
 // ── Pierre File mock ─────────────────────────────────────────────────────────
-// Capture props so tests can trigger onLineNumberClick and inspect renderAnnotation.
+// Capture options so tests can trigger callbacks and verify option values.
+
+interface CapturedFileOptions {
+  onLineEnter?: (props: OnLineEnterLeaveProps) => void;
+  onLineLeave?: (props: OnLineEnterLeaveProps) => void;
+  onLineNumberClick?: (props: OnLineClickProps) => void;
+  lineHoverHighlight?: string;
+}
 
 interface CapturedFileProps<LAnnotation> {
-  onLineNumberClick?: (props: {
-    lineNumber: number;
-    type: "line";
-    lineElement: HTMLElement;
-    numberElement: HTMLElement;
-    numberColumn: boolean;
-    event: PointerEvent;
-  }) => void;
+  options?: CapturedFileOptions;
   lineAnnotations?: LineAnnotation<LAnnotation>[];
   renderAnnotation?: (ann: LineAnnotation<LAnnotation>) => React.ReactNode;
 }
@@ -45,13 +48,12 @@ vi.mock("@pierre/diffs/react", () => ({
     renderAnnotation,
   }: {
     file: { name: string; contents: string };
-    options?: CapturedFileProps<unknown>;
+    options?: CapturedFileOptions;
     lineAnnotations?: LineAnnotation<unknown>[];
     renderAnnotation?: (ann: LineAnnotation<unknown>) => React.ReactNode;
   }) => {
     capturedFileProps.current = {
-      onLineNumberClick:
-        options?.onLineNumberClick as CapturedFileProps<unknown>["onLineNumberClick"],
+      options,
       lineAnnotations,
       renderAnnotation,
     };
@@ -108,15 +110,6 @@ vi.mock("@tanstack/react-router", async () => {
 
 // ── Sample data ───────────────────────────────────────────────────────────────
 
-const sampleFileView = {
-  path: "src/lib.rs",
-  language: "rust",
-  nodeId: "node-file-1",
-  blobRef: undefined,
-  terms: [],
-  items: [],
-};
-
 const sampleSource = {
   path: "src/lib.rs",
   content: "// library code\nfn hello() {}",
@@ -124,8 +117,6 @@ const sampleSource = {
   binary: false,
   size: 30,
 };
-
-const emptyQuery = { isLoading: false, isError: false, error: null };
 
 // ── Render helper ─────────────────────────────────────────────────────────────
 
@@ -142,12 +133,29 @@ function renderFilePage(
       currentHead: boolean;
     }>;
     postMutate?: ReturnType<typeof vi.fn>;
+    items?: Array<{
+      nodeId: string;
+      type: string;
+      name: string;
+      signature?: string;
+      span?: string;
+      terms: string[];
+    }>;
   } = {}
 ) {
   const postMutate = overrides.postMutate ?? vi.fn();
 
+  const fileView = {
+    path: "src/lib.rs",
+    language: "rust",
+    nodeId: "node-file-1",
+    blobRef: undefined,
+    terms: [],
+    items: overrides.items ?? [],
+  };
+
   vi.mocked(hooks.useCodeFile).mockReturnValue({
-    data: sampleFileView,
+    data: fileView,
     isLoading: false,
     isError: false,
     error: null,
@@ -202,7 +210,7 @@ describe("CodeFilePage — comment composer", () => {
 
     // Simulate line number click
     await act(async () => {
-      capturedFileProps.current.onLineNumberClick?.({
+      capturedFileProps.current.options?.onLineNumberClick?.({
         lineNumber: 5,
         type: "line",
         lineElement: document.createElement("div"),
@@ -226,7 +234,7 @@ describe("CodeFilePage — comment composer", () => {
 
     // Open composer for line 3
     await act(async () => {
-      capturedFileProps.current.onLineNumberClick?.({
+      capturedFileProps.current.options?.onLineNumberClick?.({
         lineNumber: 3,
         type: "line",
         lineElement: document.createElement("div"),
@@ -264,7 +272,7 @@ describe("CodeFilePage — comment composer", () => {
 
     // Open composer
     await act(async () => {
-      capturedFileProps.current.onLineNumberClick?.({
+      capturedFileProps.current.options?.onLineNumberClick?.({
         lineNumber: 7,
         type: "line",
         lineElement: document.createElement("div"),
@@ -394,5 +402,127 @@ describe("CodeFilePage — comment count chip", () => {
     renderFilePage("src/lib.rs", { comments: [] });
 
     expect(screen.queryByTestId("comment-count-chip")).not.toBeInTheDocument();
+  });
+});
+
+describe("CodeFilePage — hover card", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+    capturedFileProps.current = {};
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const indexedItems = [
+    {
+      nodeId: "n-hello",
+      type: "fn",
+      name: "hello",
+      span: "2:0-2:14",
+      terms: ["greeting@v1"],
+    },
+  ];
+
+  it("onLineEnter is wired in PierreFile options and lineHoverHighlight is enabled", () => {
+    renderFilePage("src/lib.rs", { items: indexedItems });
+    expect(capturedFileProps.current.options?.onLineEnter).toBeTypeOf("function");
+    expect(capturedFileProps.current.options?.onLineLeave).toBeTypeOf("function");
+    expect(capturedFileProps.current.options?.lineHoverHighlight).toBe("line");
+  });
+
+  it("hovering over a line of an indexed item shows the hover card after debounce", async () => {
+    renderFilePage("src/lib.rs", { items: indexedItems });
+
+    // Simulate Pierre calling onLineEnter for line 2 (within hello's span 2:0-2:14)
+    await act(async () => {
+      capturedFileProps.current.options?.onLineEnter?.({
+        lineNumber: 2,
+        type: "line",
+        lineElement: document.createElement("div"),
+        numberElement: document.createElement("div"),
+        numberColumn: false,
+        event: new PointerEvent("pointermove"),
+      });
+    });
+
+    // Card is not yet visible — debounce hasn't fired
+    expect(screen.queryByTestId("hover-card")).not.toBeInTheDocument();
+
+    // Advance past the 100 ms debounce
+    await act(async () => {
+      vi.advanceTimersByTime(150);
+    });
+
+    const card = screen.getByTestId("hover-card");
+    expect(card).toBeInTheDocument();
+    expect(card).toHaveTextContent("hello");
+    expect(card).toHaveTextContent("fn");
+  });
+
+  it("hovering over a line with no indexed item shows no hover card", async () => {
+    renderFilePage("src/lib.rs", { items: indexedItems });
+
+    await act(async () => {
+      // Line 1 is not within the hello span (which starts at line 2)
+      capturedFileProps.current.options?.onLineEnter?.({
+        lineNumber: 1,
+        type: "line",
+        lineElement: document.createElement("div"),
+        numberElement: document.createElement("div"),
+        numberColumn: false,
+        event: new PointerEvent("pointermove"),
+      });
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(150);
+    });
+
+    expect(screen.queryByTestId("hover-card")).not.toBeInTheDocument();
+  });
+
+  it("onLineLeave clears the hover card after debounce", async () => {
+    renderFilePage("src/lib.rs", { items: indexedItems });
+
+    // Enter line 2 and wait for card
+    await act(async () => {
+      capturedFileProps.current.options?.onLineEnter?.({
+        lineNumber: 2,
+        type: "line",
+        lineElement: document.createElement("div"),
+        numberElement: document.createElement("div"),
+        numberColumn: false,
+        event: new PointerEvent("pointermove"),
+      });
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(150);
+    });
+    expect(screen.getByTestId("hover-card")).toBeInTheDocument();
+
+    // Leave the line
+    await act(async () => {
+      capturedFileProps.current.options?.onLineLeave?.({
+        lineNumber: 2,
+        type: "line",
+        lineElement: document.createElement("div"),
+        numberElement: document.createElement("div"),
+        numberColumn: false,
+        event: new PointerEvent("pointermove"),
+      });
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(150);
+    });
+
+    expect(screen.queryByTestId("hover-card")).not.toBeInTheDocument();
+  });
+
+  it("onLineNumberClick is wired in PierreFile options", () => {
+    renderFilePage("src/lib.rs");
+    expect(capturedFileProps.current.options?.onLineNumberClick).toBeTypeOf("function");
   });
 });
