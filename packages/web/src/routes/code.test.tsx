@@ -1,16 +1,50 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider, createMemoryHistory, createRouter } from "@tanstack/react-router";
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as hooks from "~/lib/hooks";
 import { routeTree } from "~/routes/../routeTree.gen";
+
+// Capture options passed to PierreFile so hover-card tests can trigger callbacks.
+const fileOptionsRef = vi.hoisted(() => ({
+  current: {} as {
+    onLineEnter?: (p: {
+      lineNumber: number;
+      type: "line";
+      lineElement: HTMLElement;
+      numberElement: HTMLElement;
+      numberColumn: boolean;
+      event: PointerEvent;
+    }) => void;
+    onLineLeave?: (p: {
+      lineNumber: number;
+      type: "line";
+      lineElement: HTMLElement;
+      numberElement: HTMLElement;
+      numberColumn: boolean;
+      event: PointerEvent;
+    }) => void;
+  },
+}));
+
+// Capture props passed to PierreTree so we can assert on initialExpansion.
+const treePropsRef = vi.hoisted(() => ({
+  current: { initialExpansion: undefined as string | undefined },
+}));
 
 // Mock @pierre/diffs/react File component — renders contents as a <pre> so tests can
 // assert on source content without the web-component shadow DOM.
 vi.mock("@pierre/diffs/react", () => ({
-  File: ({ file }: { file: { name: string; contents: string } }) => (
-    <pre data-testid="pierre-file">{file.contents}</pre>
-  ),
+  File: ({
+    file,
+    options,
+  }: {
+    file: { name: string; contents: string };
+    options?: typeof fileOptionsRef.current;
+  }) => {
+    fileOptionsRef.current = (options ?? {}) as typeof fileOptionsRef.current;
+    return <pre data-testid="pierre-file">{file.contents}</pre>;
+  },
 }));
 
 // Route-level mock for PierreTree — renders a flat button per path so tests can
@@ -19,23 +53,34 @@ vi.mock("~/components/PierreTree", () => ({
   PierreTree: ({
     paths,
     onSelect,
+    initialExpansion,
   }: {
     paths: string[];
     onSelect: (path: string, kind: "file" | "directory") => void;
-  }) => (
-    <div data-testid="pierre-tree-root">
-      {paths.map((p) => (
-        <button
-          key={p}
-          type="button"
-          data-testid="tree-row"
-          data-path={p}
-          onClick={() => onSelect(p, "file")}
-        >
-          {p}
-        </button>
-      ))}
-    </div>
+    initialExpansion?: string;
+  }) => {
+    treePropsRef.current = { initialExpansion };
+    return (
+      <div data-testid="pierre-tree-root">
+        {paths.map((p) => (
+          <button
+            key={p}
+            type="button"
+            data-testid="tree-row"
+            data-path={p}
+            onClick={() => onSelect(p, "file")}
+          >
+            {p}
+          </button>
+        ))}
+      </div>
+    );
+  },
+}));
+
+vi.mock("~/components/MarkdownView", () => ({
+  MarkdownView: ({ children }: { children: string }) => (
+    <div data-testid="markdown-view">{children}</div>
   ),
 }));
 
@@ -104,6 +149,24 @@ const sampleTree = [
   },
 ];
 
+const treeWithReadme = [
+  { name: "README.md", path: "README.md", kind: "file" as const },
+  {
+    name: "src",
+    path: "src",
+    kind: "dir" as const,
+    children: [
+      {
+        name: "main.ts",
+        path: "src/main.ts",
+        kind: "file" as const,
+        language: "typescript",
+        terms: [],
+      },
+    ],
+  },
+];
+
 const sampleRegions = [
   {
     rule: "policy/auth-review",
@@ -152,6 +215,14 @@ const sampleSource = {
   truncated: false,
   binary: false,
   size: 44,
+};
+
+const markdownSource = {
+  path: "README.md",
+  content: "# Hello\n\nThis is markdown.",
+  truncated: false,
+  binary: false,
+  size: 30,
 };
 
 const binarySource = {
@@ -312,6 +383,8 @@ describe("Code workspace", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     store.clear();
+    fileOptionsRef.current = {};
+    treePropsRef.current = { initialExpansion: undefined };
     Object.defineProperty(window, "localStorage", {
       configurable: true,
       value: {
@@ -525,6 +598,191 @@ describe("Code workspace", () => {
       // The file page heading for src/main.ts is now displayed (resting state gone)
       expect(screen.queryByText(/select a file/i)).not.toBeInTheDocument();
       expect(screen.getAllByText("src/main.ts").length).toBeGreaterThan(0);
+    });
+  });
+
+  describe("Markdown toggle", () => {
+    it("Raw | Rendered toggle is shown for .md files", async () => {
+      await renderCode({ source: markdownSource }, "/code/file?path=README.md");
+      expect(screen.getByTestId("md-toggle-raw")).toBeInTheDocument();
+      expect(screen.getByTestId("md-toggle-rendered")).toBeInTheDocument();
+    });
+
+    it("defaults to Rendered view for .md files", async () => {
+      await renderCode({ source: markdownSource }, "/code/file?path=README.md");
+      expect(screen.getByTestId("markdown-view")).toBeInTheDocument();
+      expect(screen.queryByTestId("pierre-file")).not.toBeInTheDocument();
+    });
+
+    it("toggle switches to Raw view", async () => {
+      await renderCode({ source: markdownSource }, "/code/file?path=README.md");
+      await act(async () => {
+        fireEvent.click(screen.getByTestId("md-toggle-raw"));
+      });
+      expect(screen.getByTestId("pierre-file")).toBeInTheDocument();
+      expect(screen.queryByTestId("markdown-view")).not.toBeInTheDocument();
+    });
+
+    it("persists Raw choice to localStorage", async () => {
+      await renderCode({ source: markdownSource }, "/code/file?path=README.md");
+      await act(async () => {
+        fireEvent.click(screen.getByTestId("md-toggle-raw"));
+      });
+      expect(store.get("freehold-md-view")).toBe("raw");
+    });
+
+    it("restores Raw from localStorage on mount", async () => {
+      store.set("freehold-md-view", "raw");
+      await renderCode({ source: markdownSource }, "/code/file?path=README.md");
+      expect(screen.getByTestId("pierre-file")).toBeInTheDocument();
+      expect(screen.queryByTestId("markdown-view")).not.toBeInTheDocument();
+    });
+
+    it("does not show toggle for non-markdown files", async () => {
+      await renderCode({}, "/code/file?path=src%2Fmain.ts");
+      expect(screen.queryByTestId("md-toggle-raw")).not.toBeInTheDocument();
+    });
+  });
+
+  describe("Tree defaults", () => {
+    it("PierreTree receives initialExpansion=closed", async () => {
+      await renderCode();
+      expect(treePropsRef.current.initialExpansion).toBe("closed");
+    });
+
+    it("shows ReadmePreview when tree has a root README and no path selected", async () => {
+      await renderCode({ tree: treeWithReadme, source: markdownSource });
+      // README caption should be visible
+      expect(screen.getByText("README")).toBeInTheDocument();
+      // MarkdownView should render the content
+      expect(screen.getByTestId("markdown-view")).toBeInTheDocument();
+    });
+
+    it("does not show ReadmePreview when a path is already selected", async () => {
+      await renderCode(
+        { tree: treeWithReadme, source: markdownSource },
+        "/code/file?path=README.md"
+      );
+      // On the file route, we're not on isExact path, so ReadmePreview won't show
+      expect(screen.queryByText("README")).not.toBeInTheDocument();
+    });
+
+    it("shows resting state when no README in tree root", async () => {
+      await renderCode({ tree: sampleTree });
+      expect(screen.getByText(/select a file/i)).toBeInTheDocument();
+    });
+  });
+
+  describe("Hover context cards", () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("no hover card shown initially", async () => {
+      await renderCode({}, "/code/file?path=src%2Fmain.ts");
+      expect(screen.queryByTestId("hover-card")).not.toBeInTheDocument();
+    });
+
+    it("hover card appears when onLineEnter fires for a line within an item span", async () => {
+      await renderCode({}, "/code/file?path=src%2Fmain.ts");
+      await act(async () => {
+        fileOptionsRef.current.onLineEnter?.({
+          lineNumber: 1,
+          type: "line",
+          lineElement: document.createElement("div"),
+          numberElement: document.createElement("div"),
+          numberColumn: false,
+          event: new PointerEvent("pointerenter"),
+        });
+        vi.advanceTimersByTime(150);
+      });
+      expect(screen.getByTestId("hover-card")).toBeInTheDocument();
+      expect(screen.getByTestId("hover-card")).toHaveTextContent("main");
+    });
+
+    it("hover card dismisses when onLineLeave fires", async () => {
+      await renderCode({}, "/code/file?path=src%2Fmain.ts");
+      // First show the card
+      await act(async () => {
+        fileOptionsRef.current.onLineEnter?.({
+          lineNumber: 1,
+          type: "line",
+          lineElement: document.createElement("div"),
+          numberElement: document.createElement("div"),
+          numberColumn: false,
+          event: new PointerEvent("pointerenter"),
+        });
+        vi.advanceTimersByTime(150);
+      });
+      expect(screen.getByTestId("hover-card")).toBeInTheDocument();
+      // Then dismiss it
+      await act(async () => {
+        fileOptionsRef.current.onLineLeave?.({
+          lineNumber: 1,
+          type: "line",
+          lineElement: document.createElement("div"),
+          numberElement: document.createElement("div"),
+          numberColumn: false,
+          event: new PointerEvent("pointerleave"),
+        });
+        vi.advanceTimersByTime(150);
+      });
+      expect(screen.queryByTestId("hover-card")).not.toBeInTheDocument();
+    });
+
+    it("hover card links to item detail page", async () => {
+      await renderCode({}, "/code/file?path=src%2Fmain.ts");
+      await act(async () => {
+        fileOptionsRef.current.onLineEnter?.({
+          lineNumber: 1,
+          type: "line",
+          lineElement: document.createElement("div"),
+          numberElement: document.createElement("div"),
+          numberColumn: false,
+          event: new PointerEvent("pointerenter"),
+        });
+        vi.advanceTimersByTime(150);
+      });
+      const card = screen.getByTestId("hover-card");
+      const link = within(card).getByRole("link");
+      expect(link).toHaveAttribute("href", expect.stringContaining("nodeId=node-item-1"));
+    });
+
+    it("hover card shows correct item for line 12 (helper function)", async () => {
+      await renderCode({}, "/code/file?path=src%2Fmain.ts");
+      await act(async () => {
+        fileOptionsRef.current.onLineEnter?.({
+          lineNumber: 12,
+          type: "line",
+          lineElement: document.createElement("div"),
+          numberElement: document.createElement("div"),
+          numberColumn: false,
+          event: new PointerEvent("pointerenter"),
+        });
+        vi.advanceTimersByTime(150);
+      });
+      const card = screen.getByTestId("hover-card");
+      expect(card).toHaveTextContent("helper");
+    });
+
+    it("no hover card when line has no matching item", async () => {
+      await renderCode({}, "/code/file?path=src%2Fmain.ts");
+      await act(async () => {
+        fileOptionsRef.current.onLineEnter?.({
+          lineNumber: 11, // gap between spans
+          type: "line",
+          lineElement: document.createElement("div"),
+          numberElement: document.createElement("div"),
+          numberColumn: false,
+          event: new PointerEvent("pointerenter"),
+        });
+        vi.advanceTimersByTime(150);
+      });
+      expect(screen.queryByTestId("hover-card")).not.toBeInTheDocument();
     });
   });
 });

@@ -1,6 +1,7 @@
 import { Link, Outlet, createRoute, useNavigate, useRouterState } from "@tanstack/react-router";
+import { MarkdownView } from "~/components/MarkdownView";
 import { PierreTree } from "~/components/PierreTree";
-import { useCodeRegions, useCodeTree } from "~/lib/hooks";
+import { useCodeRegions, useCodeSource, useCodeTree } from "~/lib/hooks";
 import { Route as RootRoute } from "./__root";
 
 export const Route = createRoute({
@@ -37,6 +38,11 @@ function flattenTree(nodes: CodeTreeNode[]): string[] {
     }
   }
   return result;
+}
+
+/** Find a root-level README file node (case-insensitive). */
+function findRootReadme(nodes: CodeTreeNode[]): CodeTreeNode | undefined {
+  return nodes.find((node) => node.kind === "file" && node.name.toLowerCase().startsWith("readme"));
 }
 
 function RegionsPanel({ rules }: { rules: RegionRule[] }) {
@@ -101,6 +107,18 @@ function RegionsPanel({ rules }: { rules: RegionRule[] }) {
   );
 }
 
+function ReadmePreview({ path }: { path: string }) {
+  const { data: sourceData, isLoading } = useCodeSource(path);
+  if (isLoading) return <p className="text-xs text-(--fg-muted)">Loading…</p>;
+  if (!sourceData) return null;
+  return (
+    <div className="space-y-2">
+      <p className="font-mono text-[10px] text-(--fg-muted) uppercase tracking-[0.08em]">README</p>
+      <MarkdownView>{sourceData.content}</MarkdownView>
+    </div>
+  );
+}
+
 /**
  * Two-pane code workspace. Left pane: file tree + governed-paths panel.
  * Right pane: file or item detail via child routes.
@@ -119,6 +137,8 @@ function CodeLayout() {
   const paths = flattenTree(tree);
 
   const activePath = new URLSearchParams(location.search).get("path") ?? undefined;
+
+  const readmeNode = isExact ? findRootReadme(tree) : undefined;
 
   return (
     <div>
@@ -152,6 +172,7 @@ function CodeLayout() {
                 selectedPath={activePath}
                 search
                 height="calc(100vh - 160px)"
+                initialExpansion="closed"
                 onSelect={(path, kind) => {
                   if (kind === "file") {
                     void navigate({ to: "/code/file", search: { path } });
@@ -163,8 +184,18 @@ function CodeLayout() {
           </div>
         </aside>
 
-        {/* Right pane: child route or resting state */}
-        <div className="flex-1 min-w-0">{isExact ? <RestingState /> : <Outlet />}</div>
+        {/* Right pane: child route or resting/readme state */}
+        <div className="flex-1 min-w-0">
+          {isExact ? (
+            readmeNode ? (
+              <ReadmePreview path={readmeNode.path} />
+            ) : (
+              <RestingState />
+            )
+          ) : (
+            <Outlet />
+          )}
+        </div>
       </div>
     </div>
   );
