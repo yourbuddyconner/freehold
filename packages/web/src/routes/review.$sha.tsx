@@ -6,7 +6,7 @@
  */
 
 import { parseDiffFromFile } from "@pierre/diffs";
-import { CodeView, type CodeViewHandle, type DiffLineAnnotation } from "@pierre/diffs/react";
+import { CodeView, type DiffLineAnnotation } from "@pierre/diffs/react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { useQueryClient } from "@tanstack/react-query";
 import { createRoute } from "@tanstack/react-router";
@@ -148,11 +148,24 @@ export function ReviewPage({ sha }: { sha: string }) {
     }
   }, []);
 
-  // Refs for CodeView scrolling from tree selection
-  const codeViewRef = useRef<CodeViewHandle<AnnotationMeta>>(null);
+  // Per-file wrapper div refs — keyed by path, used for DOM-based scrolling.
+  // binary/truncated captions use id={f.path}; text diffs use data-path wrapper divs.
+  const fileWrapperRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
+  // One scrollToFile that works for all three cases: text diff, binary, truncated.
+  // Finds the wrapper by data-path (text diffs) or id (binary/truncated captions),
+  // then calls scrollIntoView with a small window.scrollBy to compensate for the
+  // sticky page header so the file header is not obscured.
+  const STICKY_HEADER_OFFSET = 56; // px — matches the app shell sticky header height
   const scrollToFile = useCallback((path: string) => {
-    codeViewRef.current?.scrollTo({ type: "item", id: path });
+    // Prefer the wrapper div registered in fileWrapperRefs (text diffs)
+    let el: Element | null = fileWrapperRefs.current.get(path) ?? null;
+    // Fall back to id-based lookup (binary/truncated captions)
+    if (!el) el = document.getElementById(path);
+    if (!el) return;
+    el.scrollIntoView({ block: "start" });
+    // Compensate for sticky header — scroll up by the header height
+    window.scrollBy({ top: -STICKY_HEADER_OFFSET, behavior: "instant" });
   }, []);
 
   const files = diffData?.files ?? [];
@@ -660,33 +673,42 @@ export function ReviewPage({ sha }: { sha: string }) {
                   </div>
                 ))}
 
-              {/* CodeView for text diffs */}
-              {codeViewItems.length > 0 && (
-                <CodeView
-                  key={diffStyle}
-                  ref={codeViewRef}
-                  className="w-full"
-                  items={codeViewItems}
-                  renderAnnotation={renderAnnotation}
-                  onSelectedLinesChange={(selection) => {
-                    if (!selection) return;
-                    const { id: path, range } = selection;
-                    const side = range.side === "deletions" ? "old:" : "";
-                    const span =
-                      range.start === range.end
-                        ? `${side}L${range.start}`
-                        : `${side}L${range.start}-L${range.end}`;
-                    setComposerOpen({ path, span });
+              {/* CodeView for text diffs — one wrapper div per file so scrollToFile
+                  can target each file independently via fileWrapperRefs. */}
+              {codeViewItems.map((item) => (
+                <div
+                  key={item.id}
+                  data-path={item.id}
+                  ref={(node) => {
+                    if (node) fileWrapperRefs.current.set(item.id, node);
+                    else fileWrapperRefs.current.delete(item.id);
                   }}
-                  options={{
-                    diffStyle,
-                    lineDiffType: "word-alt",
-                    stickyHeaders: true,
-                    overflow: "wrap",
-                    themeType: activeTheme(),
-                  }}
-                />
-              )}
+                >
+                  <CodeView
+                    key={diffStyle}
+                    className="w-full"
+                    items={[item]}
+                    renderAnnotation={renderAnnotation}
+                    onSelectedLinesChange={(selection) => {
+                      if (!selection) return;
+                      const { id: path, range } = selection;
+                      const side = range.side === "deletions" ? "old:" : "";
+                      const span =
+                        range.start === range.end
+                          ? `${side}L${range.start}`
+                          : `${side}L${range.start}-L${range.end}`;
+                      setComposerOpen({ path, span });
+                    }}
+                    options={{
+                      diffStyle,
+                      lineDiffType: "word-alt",
+                      stickyHeaders: true,
+                      overflow: "wrap",
+                      themeType: activeTheme(),
+                    }}
+                  />
+                </div>
+              ))}
             </div>
           </div>
         )}

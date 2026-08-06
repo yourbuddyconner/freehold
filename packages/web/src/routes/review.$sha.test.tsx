@@ -20,6 +20,7 @@ vi.mock("~/lib/hooks", () => ({
   useGraphs: vi.fn(),
   useReviewsForSha: vi.fn(),
   useListGraphs: vi.fn(),
+  useActiveGraphPrincipal: vi.fn().mockReturnValue("alice"),
   // AppShell uses these:
   usePending: vi.fn().mockReturnValue({ data: { proposals: [] }, isLoading: false }),
   useGitProposals: vi.fn().mockReturnValue({ data: { proposals: [] }, isLoading: false }),
@@ -88,8 +89,8 @@ vi.mock("~/components/PierreTree", () => ({
 }));
 
 // Stub CodeView from @pierre/diffs/react — renders one pre per item keyed by id,
-// and supports renderAnnotation to surface annotation content in tests
-const mockCodeViewScrollTo = vi.fn();
+// and supports renderAnnotation to surface annotation content in tests.
+// No ref needed: scrolling is now done via scrollIntoView on per-file wrapper divs.
 let mockOnSelectedLinesChange:
   | ((
       sel: {
@@ -102,7 +103,6 @@ vi.mock("@pierre/diffs/react", () => ({
   CodeView: ({
     items,
     options,
-    ref,
     renderAnnotation,
     onSelectedLinesChange,
   }: {
@@ -116,7 +116,6 @@ vi.mock("@pierre/diffs/react", () => ({
       }>;
     }>;
     options?: { diffStyle?: string };
-    ref?: React.Ref<{ scrollTo: (target: { type: string; id: string }) => void }>;
     renderAnnotation?: (
       ann: { side: string; lineNumber: number; metadata: Record<string, unknown> },
       item: { id: string }
@@ -129,11 +128,6 @@ vi.mock("@pierre/diffs/react", () => ({
     ) => void;
   }) => {
     mockOnSelectedLinesChange = onSelectedLinesChange;
-    if (ref && typeof ref === "object" && "current" in ref) {
-      (
-        ref as React.MutableRefObject<{ scrollTo: (target: { type: string; id: string }) => void }>
-      ).current = { scrollTo: mockCodeViewScrollTo };
-    }
     return (
       <div data-testid="code-view" data-diff-style={options?.diffStyle ?? "split"}>
         {(items ?? []).map((i) => (
@@ -496,16 +490,66 @@ describe("/review/$sha", () => {
     expect(screen.getByText("File too large to display.")).toBeInTheDocument();
   });
 
-  it("tree row click triggers CodeView scroll", async () => {
+  it("tree row click scrolls to the file wrapper via scrollIntoView", async () => {
+    // Spy on Element.prototype.scrollIntoView — happy-dom supports this
+    const scrollIntoViewSpy = vi
+      .spyOn(Element.prototype, "scrollIntoView")
+      .mockImplementation(() => {});
+    // Also stub window.scrollBy so the header-offset call is a no-op
+    const scrollBySpy = vi.spyOn(window, "scrollBy").mockImplementation(() => {});
+
     setupDefaults();
     await renderReviewPage();
+
     const treeRow = screen.getByTestId("tree-row");
     await act(async () => {
       treeRow.click();
     });
-    expect(mockCodeViewScrollTo).toHaveBeenCalledWith(
-      expect.objectContaining({ type: "item", id: "src/lib.rs" })
-    );
+
+    // scrollIntoView should have been called with block: "start"
+    expect(scrollIntoViewSpy).toHaveBeenCalledWith(expect.objectContaining({ block: "start" }));
+    // The wrapper div for src/lib.rs should exist in the DOM
+    const wrapperEl = document.querySelector('[data-path="src/lib.rs"]');
+    expect(wrapperEl).not.toBeNull();
+
+    scrollIntoViewSpy.mockRestore();
+    scrollBySpy.mockRestore();
+  });
+
+  it("tree row click for binary file scrolls via scrollIntoView on id-based caption", async () => {
+    const scrollIntoViewSpy = vi
+      .spyOn(Element.prototype, "scrollIntoView")
+      .mockImplementation(() => {});
+    const scrollBySpy = vi.spyOn(window, "scrollBy").mockImplementation(() => {});
+
+    setupDefaults({
+      diff: {
+        files: [
+          {
+            path: "image.png",
+            verb: "A",
+            binary: true,
+            oldContent: "",
+            newContent: "",
+            truncated: false,
+          },
+        ],
+        truncated: false,
+      },
+    });
+    await renderReviewPage();
+
+    const treeRow = screen.getByTestId("tree-row");
+    await act(async () => {
+      treeRow.click();
+    });
+
+    expect(scrollIntoViewSpy).toHaveBeenCalledWith(expect.objectContaining({ block: "start" }));
+    const captionEl = document.getElementById("image.png");
+    expect(captionEl).not.toBeNull();
+
+    scrollIntoViewSpy.mockRestore();
+    scrollBySpy.mockRestore();
   });
 
   // ---- New tests: saved review comments as annotations ----
