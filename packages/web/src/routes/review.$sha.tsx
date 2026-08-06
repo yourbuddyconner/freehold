@@ -699,8 +699,13 @@ export function ReviewPage({ sha }: { sha: string }) {
       <div className="space-y-4">
         {/* Diffs section header with split/unified toggle */}
         <div className="flex items-center justify-between">
-          <div className="text-[10px] font-mono uppercase text-(--fg-muted) tracking-[0.08em]">
-            Diff
+          <div className="flex items-baseline gap-3">
+            <div className="text-[10px] font-mono uppercase text-(--fg-muted) tracking-[0.08em]">
+              Diff
+            </div>
+            <span className="text-[11px] text-(--fg-muted)">
+              Click and drag over line numbers to comment or suggest a change.
+            </span>
           </div>
           <div className="flex gap-1">
             <button
