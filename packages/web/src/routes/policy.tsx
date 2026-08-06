@@ -601,9 +601,9 @@ function AddRuleCard({ definition }: { definition: PolicyDefinition }) {
   return (
     <div className="border border-(--border) bg-(--bg) p-4 space-y-3" data-testid="add-rule-form">
       <div className="space-y-1">
-        <label className="block font-mono text-[10px] uppercase tracking-[0.08em] text-(--fg-muted)">
+        <span className="block font-mono text-[10px] uppercase tracking-[0.08em] text-(--fg-muted)">
           Rule name
-        </label>
+        </span>
         <input
           type="text"
           aria-label="New rule name"
@@ -613,9 +613,9 @@ function AddRuleCard({ definition }: { definition: PolicyDefinition }) {
         />
       </div>
       <div className="space-y-1">
-        <label className="block font-mono text-[10px] uppercase tracking-[0.08em] text-(--fg-muted)">
+        <span className="block font-mono text-[10px] uppercase tracking-[0.08em] text-(--fg-muted)">
           Requirement
-        </label>
+        </span>
         <select
           value={requireKind}
           onChange={(e) => setRequireKind(e.target.value as RequireKind)}
@@ -629,7 +629,7 @@ function AddRuleCard({ definition }: { definition: PolicyDefinition }) {
       {requireKind === "review" && (
         <div className="flex gap-3">
           <div className="space-y-0.5">
-            <label className="block font-mono text-[10px] uppercase text-(--fg-muted)">Role</label>
+            <span className="block font-mono text-[10px] uppercase text-(--fg-muted)">Role</span>
             <input
               type="text"
               value={role}
@@ -638,9 +638,7 @@ function AddRuleCard({ definition }: { definition: PolicyDefinition }) {
             />
           </div>
           <div className="space-y-0.5">
-            <label className="block font-mono text-[10px] uppercase text-(--fg-muted)">
-              Quorum
-            </label>
+            <span className="block font-mono text-[10px] uppercase text-(--fg-muted)">Quorum</span>
             <input
               type="number"
               min={1}
@@ -653,9 +651,9 @@ function AddRuleCard({ definition }: { definition: PolicyDefinition }) {
       )}
       {requireKind === "attestation" && (
         <div className="space-y-0.5">
-          <label className="block font-mono text-[10px] uppercase text-(--fg-muted)">
+          <span className="block font-mono text-[10px] uppercase text-(--fg-muted)">
             Attester class
-          </label>
+          </span>
           <input
             type="text"
             value={attesterClass}

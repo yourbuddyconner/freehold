@@ -45,7 +45,13 @@ function renderTrayWithEntries(entries: Array<{ kind: string; label: string; pay
   function TestHarness() {
     const { stage } = useChangeset();
     return (
-      <button data-testid="stage-btn" onClick={() => entries.forEach((e) => stage(e))}>
+      <button
+        type="button"
+        data-testid="stage-btn"
+        onClick={() => {
+          for (const e of entries) stage(e);
+        }}
+      >
         stage
       </button>
     );

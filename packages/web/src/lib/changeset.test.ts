@@ -83,7 +83,7 @@ describe("changeset store", () => {
     });
     const raw = localStorage.getItem(STORAGE_KEY);
     expect(raw).not.toBeNull();
-    const parsed = JSON.parse(raw!);
+    const parsed = JSON.parse(raw ?? "");
     expect(parsed).toHaveLength(1);
     expect(parsed[0].label).toBe("edit A");
     expect(parsed[0].payload).toEqual({ rules: [] });
