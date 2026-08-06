@@ -17,7 +17,10 @@ vi.mock("@tanstack/react-router", async (importOriginal) => {
       className,
       ...rest
     }: React.HTMLAttributes<HTMLAnchorElement> & { to?: string; params?: unknown }) => (
-      <a className={className as string} {...(rest as React.AnchorHTMLAttributes<HTMLAnchorElement>)}>
+      <a
+        className={className as string}
+        {...(rest as React.AnchorHTMLAttributes<HTMLAnchorElement>)}
+      >
         {children}
       </a>
     ),

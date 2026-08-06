@@ -13,7 +13,13 @@ import { useQueryClient } from "@tanstack/react-query";
 import { createRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
-import { ChecklistRow, DecidedChip, PathRow, PriorDecisionChip, ReviewComposer } from "~/components/GitProposalCard";
+import {
+  ChecklistRow,
+  DecidedChip,
+  PathRow,
+  PriorDecisionChip,
+  ReviewComposer,
+} from "~/components/GitProposalCard";
 import { PierreDiff } from "~/components/PierreDiff";
 import { PierreTree } from "~/components/PierreTree";
 import { apiClient } from "~/lib/api";
@@ -709,7 +715,8 @@ export function ReviewPage({ sha }: { sha: string }) {
     );
   }
 
-  const { message, author, timestamp, checklist, unmet, decided, paths, ref, priorDecision } = proposal;
+  const { message, author, timestamp, checklist, unmet, decided, paths, ref, priorDecision } =
+    proposal;
   const shortSha = sha.slice(0, 7);
 
   const actionsDisabled = !!keyMissingReason || decided !== "undecided";
@@ -736,9 +743,7 @@ export function ReviewPage({ sha }: { sha: string }) {
             {ref.replace("refs/heads/", "")}
           </span>
           <DecidedChip decided={decided} />
-          {priorDecision && (
-            <PriorDecisionChip priorDecision={priorDecision} />
-          )}
+          {priorDecision && <PriorDecisionChip priorDecision={priorDecision} />}
         </div>
         <h1 className="text-xl font-semibold text-(--fg)">{message}</h1>
       </div>

@@ -415,9 +415,7 @@ export function GitProposalCard({
               </span>
             )}
             <DecidedChip decided={decided} />
-            {proposal.priorDecision && (
-              <PriorDecisionChip priorDecision={proposal.priorDecision} />
-            )}
+            {proposal.priorDecision && <PriorDecisionChip priorDecision={proposal.priorDecision} />}
           </div>
           <p className="text-sm text-(--fg) mt-1 leading-snug">{message}</p>
         </div>

@@ -10,9 +10,7 @@ import { ReviewPage } from "./review.$sha";
 
 // Mock Pierre components (shadow DOM, cannot render in happy-dom)
 vi.mock("~/components/PierreDiff", () => ({
-  PierreDiff: ({ name }: { name: string }) => (
-    <pre data-testid="pierre-diff" data-name={name} />
-  ),
+  PierreDiff: ({ name }: { name: string }) => <pre data-testid="pierre-diff" data-name={name} />,
 }));
 vi.mock("~/components/PierreTree", () => ({
   PierreTree: ({ paths }: { paths: string[] }) => (
@@ -92,8 +90,15 @@ vi.mock("~/lib/hooks", () => ({
 vi.mock("~/lib/api", () => ({
   GRAPH_STORAGE_KEY: "freehold-graph",
   setActiveGraph: vi.fn(),
-  apiClient: { decideGitProposal: vi.fn(), pushGitNotes: vi.fn(), postGitReview: vi.fn(), applyGitSuggestion: vi.fn() },
-  ApiError: class ApiError extends Error { code?: string; },
+  apiClient: {
+    decideGitProposal: vi.fn(),
+    pushGitNotes: vi.fn(),
+    postGitReview: vi.fn(),
+    applyGitSuggestion: vi.fn(),
+  },
+  ApiError: class ApiError extends Error {
+    code?: string;
+  },
 }));
 
 vi.mock("~/lib/reviewDrafts", () => ({
@@ -120,7 +125,9 @@ describe("ReviewPage — carry-forward chip", () => {
     const proposal = mockProposal({
       priorDecision: { sha: "def5678901234567890123456789012345678901", verdict: "approve" },
     });
-    vi.mocked(useGitProposal).mockReturnValue({ data: proposal, isLoading: false } as ReturnType<typeof useGitProposal>);
+    vi.mocked(useGitProposal).mockReturnValue({ data: proposal, isLoading: false } as ReturnType<
+      typeof useGitProposal
+    >);
 
     renderReview("abc1234567890000000000000000000000000000");
     const chip = screen.getByTestId("prior-decision-chip");
@@ -132,7 +139,9 @@ describe("ReviewPage — carry-forward chip", () => {
     const proposal = mockProposal({
       priorDecision: { sha: "def5678901234567890123456789012345678901", verdict: "approve" },
     });
-    vi.mocked(useGitProposal).mockReturnValue({ data: proposal, isLoading: false } as ReturnType<typeof useGitProposal>);
+    vi.mocked(useGitProposal).mockReturnValue({ data: proposal, isLoading: false } as ReturnType<
+      typeof useGitProposal
+    >);
 
     renderReview("abc1234567890000000000000000000000000000");
     const approveBtn = screen.getByRole("button", { name: /approve again/i });
