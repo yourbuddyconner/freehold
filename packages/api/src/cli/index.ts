@@ -24,6 +24,7 @@ import { runRecall } from "./commands/recall.js";
 import { runReindex } from "./commands/reindex.js";
 import { runReject } from "./commands/reject.js";
 import { runRemember } from "./commands/remember.js";
+import { runRepo } from "./commands/repo.js";
 import { runServe } from "./commands/serve.js";
 import { runStatus } from "./commands/status.js";
 import { runVerify } from "./commands/verify.js";
@@ -50,6 +51,12 @@ Commands:
   reject <hash>               Reject a pending proposal
   verify                      Verify graph integrity
   reindex                     Rebuild the search index
+  repo add <path>             Register a repository
+    --name <n>                Display name
+    --id <id>                 Registry slug id
+    --principal <p>           Signing principal (default: owner)
+    --no-index                Skip initial git index
+    --branch <b>              Default branch for git index (default: main)
   mcp setup [claude-code]     Configure MCP integration
     --print                   Print config instead of writing
 
@@ -162,6 +169,12 @@ async function main() {
     case "reindex":
       await runReindex({ baseUrl, token, json: jsonMode });
       break;
+
+    case "repo": {
+      const subcommand = rest[0] ?? "--help";
+      await runRepo({ baseUrl, token, json: jsonMode }, subcommand, rest.slice(1));
+      break;
+    }
 
     case "mcp": {
       const subcommand = rest[0] ?? "setup";
