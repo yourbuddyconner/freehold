@@ -1,7 +1,6 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Link, createRoute } from "@tanstack/react-router";
+import { createRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { apiClient } from "~/lib/api";
+import { useChangeset } from "~/lib/changeset";
 import { usePolicy } from "~/lib/hooks";
 import { Route as RootRoute } from "./__root";
 
@@ -171,64 +170,156 @@ const CHIP_STYLES: Record<RequirementView["chipTone"], string> = {
 };
 
 // ---------------------------------------------------------------------------
-// Rule card with drill-down and inline editing
+// Structured rule editor — stages into changeset tray
 // ---------------------------------------------------------------------------
 
-interface RuleCardProps {
+interface PolicyRuleEditorProps {
   rule: PolicyRule;
   definition: PolicyDefinition;
+  isStaged: boolean;
 }
 
-function PolicyRuleCard({ rule, definition }: RuleCardProps) {
-  const qc = useQueryClient();
-  const [showDefinition, setShowDefinition] = useState(false);
+/** Requirement type for the structured editor dropdown. */
+type RequireKind = "saves" | "review" | "attestation";
+
+function requireKindFromRule(rule: PolicyRule): RequireKind {
+  if (!rule.require) return "saves";
+  if ("reviewers" in rule.require) return "review";
+  if ("attestation_required" in rule.require) return "attestation";
+  return "saves";
+}
+
+function buildRequireFromKind(
+  kind: RequireKind,
+  quorum: number,
+  role: string,
+  attesterClass: string
+): Record<string, unknown> | undefined {
+  if (kind === "saves") return undefined;
+  if (kind === "review") {
+    return { reviewers: { quorum, role } };
+  }
+  return { attestation_required: { attester_class: attesterClass } };
+}
+
+/** Derive path pattern chips from a selector (region values). */
+function pathsFromSelector(sel: Selector | undefined): string[] {
+  if (!sel) return [];
+  const paths: string[] = [];
+  function walk(s: Selector) {
+    for (const [key, val] of Object.entries(s)) {
+      if (key === "region" && typeof val === "string") paths.push(val);
+      else if ((key === "all" || key === "any") && Array.isArray(val)) {
+        for (const sub of val as Selector[]) walk(sub);
+      } else if (key === "not" && val && typeof val === "object") {
+        walk(val as Selector);
+      }
+    }
+  }
+  walk(sel);
+  return paths;
+}
+
+function PolicyRuleEditor({ rule, definition, isStaged }: PolicyRuleEditorProps) {
+  const { stage } = useChangeset();
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState("");
-  const [submitError, setSubmitError] = useState<string | null>(null);
-  const [proposedHash, setProposedHash] = useState<string | null>(null);
+  const [showDefinition, setShowDefinition] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  // Editable draft state
+  const [draftName, setDraftName] = useState(rule.name);
+  const [requireKind, setRequireKind] = useState<RequireKind>(() => requireKindFromRule(rule));
+  const [quorum, setQuorum] = useState<number>(
+    (rule.require as { reviewers?: { quorum?: number } } | undefined)?.reviewers?.quorum ?? 1
+  );
+  const [role, setRole] = useState<string>(
+    (rule.require as { reviewers?: { role?: string } } | undefined)?.reviewers?.role ?? "owner"
+  );
+  const [attesterClass, setAttesterClass] = useState<string>(
+    (rule.require as { attestation_required?: { attester_class?: string } } | undefined)
+      ?.attestation_required?.attester_class ?? "indexer"
+  );
+  const [paths, setPaths] = useState<string[]>(() => pathsFromSelector(rule.select));
+  const [newPath, setNewPath] = useState("");
 
   const req = describeRequirement(rule.require);
   const when = rule.select ? describeSelector(rule.select) : "every write";
 
-  const submit = useMutation({
-    mutationFn: () => {
-      const edited = JSON.parse(draft) as PolicyRule;
-      const nextDefinition: PolicyDefinition = {
-        ...definition,
-        rules: (definition.rules ?? []).map((r) => (r.name === rule.name ? edited : r)),
-      };
-      // YAML is a superset of JSON, so the definition serializes directly
-      return apiClient.proposePolicy({
-        policy_yaml: JSON.stringify(nextDefinition, null, 2),
-      }) as Promise<{
-        status?: string;
-        hash?: string;
-      }>;
-    },
-    onSuccess: (result) => {
-      qc.invalidateQueries({ queryKey: ["policy"] });
-      qc.invalidateQueries({ queryKey: ["proposals"] });
-      setEditing(false);
-      setProposedHash(result?.hash ?? "");
-    },
-    onError: (err: unknown) => {
-      setSubmitError(err instanceof Error ? err.message : "Submission failed");
-    },
-  });
-
   function startEditing() {
-    setDraft(JSON.stringify(rule, null, 2));
-    setSubmitError(null);
+    setDraftName(rule.name);
+    setRequireKind(requireKindFromRule(rule));
+    const reviewers = (
+      rule.require as { reviewers?: { quorum?: number; role?: string } } | undefined
+    )?.reviewers;
+    setQuorum(reviewers?.quorum ?? 1);
+    setRole(reviewers?.role ?? "owner");
+    setAttesterClass(
+      (rule.require as { attestation_required?: { attester_class?: string } } | undefined)
+        ?.attestation_required?.attester_class ?? "indexer"
+    );
+    setPaths(pathsFromSelector(rule.select));
+    setNewPath("");
     setEditing(true);
   }
 
-  let draftValid = true;
-  if (editing) {
-    try {
-      JSON.parse(draft);
-    } catch {
-      draftValid = false;
+  function cancelEditing() {
+    setEditing(false);
+    setConfirmDelete(false);
+  }
+
+  function buildUpdatedRule(): PolicyRule {
+    const updatedRequire = buildRequireFromKind(requireKind, quorum, role, attesterClass);
+    // Rebuild selector from paths: if one path → { region: path }, multiple → { all: [{region}…] }
+    let select: Selector | undefined;
+    if (paths.length === 1) {
+      select = { region: paths[0] };
+    } else if (paths.length > 1) {
+      select = { all: paths.map((p) => ({ region: p })) };
     }
+    return {
+      name: draftName,
+      ...(select ? { select } : {}),
+      ...(updatedRequire ? { require: updatedRequire } : {}),
+    };
+  }
+
+  function handleStage() {
+    const updatedRule = buildUpdatedRule();
+    const nextDefinition: PolicyDefinition = {
+      ...definition,
+      rules: (definition.rules ?? []).map((r) => (r.name === rule.name ? updatedRule : r)),
+    };
+    stage({
+      kind: "policy",
+      label: `policy: edit rule ${rule.name}`,
+      payload: nextDefinition,
+    });
+    setEditing(false);
+  }
+
+  function handleDeleteConfirm() {
+    const nextDefinition: PolicyDefinition = {
+      ...definition,
+      rules: (definition.rules ?? []).filter((r) => r.name !== rule.name),
+    };
+    stage({
+      kind: "policy",
+      label: `policy: delete rule ${rule.name}`,
+      payload: nextDefinition,
+    });
+    setConfirmDelete(false);
+  }
+
+  function addPath() {
+    const trimmed = newPath.trim();
+    if (trimmed && !paths.includes(trimmed)) {
+      setPaths((p) => [...p, trimmed]);
+    }
+    setNewPath("");
+  }
+
+  function removePath(p: string) {
+    setPaths((prev) => prev.filter((x) => x !== p));
   }
 
   return (
@@ -236,13 +327,21 @@ function PolicyRuleCard({ rule, definition }: RuleCardProps) {
       className="border border-(--border) bg-(--bg) p-4 space-y-2.5"
       data-testid={`rule-${rule.name}`}
     >
+      {/* Header row */}
       <div className="flex items-start justify-between gap-3">
         <h3 className="font-mono text-[12px] text-(--fg) truncate">{rule.name}</h3>
-        <span
-          className={`shrink-0 inline-flex items-center border px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide ${CHIP_STYLES[req.chipTone]}`}
-        >
-          {req.chip}
-        </span>
+        <div className="flex items-center gap-2 shrink-0">
+          {isStaged && (
+            <span className="inline-flex items-center border px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide border-(--border) bg-(--bg-subtle) text-(--fg-muted)">
+              staged
+            </span>
+          )}
+          <span
+            className={`inline-flex items-center border px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide ${CHIP_STYLES[req.chipTone]}`}
+          >
+            {req.chip}
+          </span>
+        </div>
       </div>
 
       {!editing && (
@@ -251,35 +350,143 @@ function PolicyRuleCard({ rule, definition }: RuleCardProps) {
         </p>
       )}
 
+      {/* Structured editor */}
       {editing ? (
-        <div className="space-y-2">
-          <textarea
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            rows={Math.min(16, draft.split("\n").length + 1)}
-            spellCheck={false}
-            aria-label={`Edit rule ${rule.name}`}
-            className="w-full border border-(--border) bg-(--bg-subtle) p-2.5 font-mono text-[11px] text-(--fg) resize-y focus:outline-none focus:ring-1 focus:ring-(--border)"
-          />
-          {!draftValid && <p className="text-xs text-(--fg-muted)">Not valid JSON yet.</p>}
-          {submitError && (
-            <p className="text-xs text-[var(--color-status-rejected)]" role="alert">
-              {submitError}
-            </p>
+        <div className="space-y-3">
+          {/* Name */}
+          <div className="space-y-1">
+            <span className="block font-mono text-[10px] uppercase tracking-[0.08em] text-(--fg-muted)">
+              Rule name
+            </span>
+            <input
+              type="text"
+              aria-label="Rule name"
+              value={draftName}
+              onChange={(e) => setDraftName(e.target.value)}
+              className="w-full border border-(--border) bg-(--bg-subtle) px-2.5 py-1.5 font-mono text-[11px] text-(--fg) focus:outline-none focus:ring-1 focus:ring-(--border)"
+            />
+          </div>
+
+          {/* Path patterns */}
+          <div className="space-y-1">
+            <span className="block font-mono text-[10px] uppercase tracking-[0.08em] text-(--fg-muted)">
+              Path patterns (regions)
+            </span>
+            <div className="flex flex-wrap gap-1.5">
+              {paths.map((p) => (
+                <span
+                  key={p}
+                  className="inline-flex items-center gap-1 border border-(--border) bg-(--bg-subtle) px-2 py-0.5 font-mono text-[10px] text-(--fg)"
+                >
+                  {p}
+                  <button
+                    type="button"
+                    onClick={() => removePath(p)}
+                    aria-label={`Remove path ${p}`}
+                    className="text-(--fg-muted) hover:text-(--fg)"
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+            <div className="flex gap-1.5">
+              <input
+                type="text"
+                placeholder="workspace/scratch"
+                value={newPath}
+                onChange={(e) => setNewPath(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && addPath()}
+                className="flex-1 border border-(--border) bg-(--bg-subtle) px-2.5 py-1 font-mono text-[10px] text-(--fg) placeholder:text-(--fg-muted) focus:outline-none focus:ring-1 focus:ring-(--border)"
+              />
+              <button
+                type="button"
+                onClick={addPath}
+                className="border border-(--border) px-2 py-1 font-mono text-[10px] text-(--fg-muted) hover:text-(--fg)"
+              >
+                Add
+              </button>
+            </div>
+          </div>
+
+          {/* Requirement type */}
+          <div className="space-y-1">
+            <span className="block font-mono text-[10px] uppercase tracking-[0.08em] text-(--fg-muted)">
+              Requirement
+            </span>
+            <select
+              aria-label="Requirement"
+              value={requireKind}
+              onChange={(e) => setRequireKind(e.target.value as RequireKind)}
+              className="border border-(--border) bg-(--bg-subtle) px-2.5 py-1 font-mono text-[10px] text-(--fg) focus:outline-none focus:ring-1 focus:ring-(--border)"
+            >
+              <option value="saves">Saves instantly (schema_valid)</option>
+              <option value="review">Goes to Inbox (reviewers)</option>
+              <option value="attestation">Needs proof (attestation_required)</option>
+            </select>
+          </div>
+
+          {/* Reviewer details */}
+          {requireKind === "review" && (
+            <div className="flex items-center gap-3">
+              <div className="space-y-0.5">
+                <span className="block font-mono text-[10px] uppercase tracking-[0.08em] text-(--fg-muted)">
+                  Role
+                </span>
+                <input
+                  type="text"
+                  aria-label="Role"
+                  value={role}
+                  onChange={(e) => setRole(e.target.value)}
+                  className="border border-(--border) bg-(--bg-subtle) px-2 py-1 font-mono text-[10px] text-(--fg) w-24 focus:outline-none focus:ring-1 focus:ring-(--border)"
+                />
+              </div>
+              <div className="space-y-0.5">
+                <span className="block font-mono text-[10px] uppercase tracking-[0.08em] text-(--fg-muted)">
+                  Quorum
+                </span>
+                <input
+                  type="number"
+                  aria-label="Quorum"
+                  min={1}
+                  value={quorum}
+                  onChange={(e) => setQuorum(Number(e.target.value))}
+                  className="border border-(--border) bg-(--bg-subtle) px-2 py-1 font-mono text-[10px] text-(--fg) w-16 focus:outline-none focus:ring-1 focus:ring-(--border)"
+                />
+              </div>
+            </div>
           )}
-          <div className="flex items-center gap-2">
+
+          {/* Attestation details */}
+          {requireKind === "attestation" && (
+            <div className="space-y-0.5">
+              <span className="block font-mono text-[10px] uppercase tracking-[0.08em] text-(--fg-muted)">
+                Attester class
+              </span>
+              <input
+                type="text"
+                aria-label="Attester class"
+                value={attesterClass}
+                onChange={(e) => setAttesterClass(e.target.value)}
+                className="border border-(--border) bg-(--bg-subtle) px-2 py-1 font-mono text-[10px] text-(--fg) w-40 focus:outline-none focus:ring-1 focus:ring-(--border)"
+              />
+            </div>
+          )}
+
+          {/* Actions */}
+          <div className="flex items-center gap-2 pt-1">
             <button
               type="button"
-              onClick={() => submit.mutate()}
-              disabled={!draftValid || submit.isPending}
-              data-testid={`save-rule-${rule.name}`}
+              onClick={handleStage}
+              data-testid={`stage-rule-${rule.name}`}
+              disabled={!draftName.trim()}
               className="border border-[var(--color-accent)] bg-[var(--color-accent)] px-3 py-1 font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-accent-fg)] disabled:opacity-50"
             >
-              {submit.isPending ? "Proposing…" : "Propose change"}
+              Stage change
             </button>
             <button
               type="button"
-              onClick={() => setEditing(false)}
+              onClick={cancelEditing}
               className="border border-(--border) px-3 py-1 font-mono text-[10px] uppercase tracking-[0.08em] text-(--fg-muted) hover:text-(--fg)"
             >
               Cancel
@@ -287,7 +494,7 @@ function PolicyRuleCard({ rule, definition }: RuleCardProps) {
           </div>
         </div>
       ) : (
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           <button
             type="button"
             onClick={() => setShowDefinition((v) => !v)}
@@ -304,23 +511,43 @@ function PolicyRuleCard({ rule, definition }: RuleCardProps) {
           >
             Edit
           </button>
+          {!confirmDelete ? (
+            <button
+              type="button"
+              data-testid={`delete-rule-${rule.name}`}
+              onClick={() => setConfirmDelete(true)}
+              className="text-[11px] text-[var(--color-status-rejected)] underline underline-offset-2 hover:opacity-75"
+            >
+              Delete
+            </button>
+          ) : (
+            <span className="flex items-center gap-2">
+              <span className="text-[11px] text-(--fg-muted)">Remove this rule?</span>
+              <button
+                type="button"
+                data-testid={`confirm-delete-${rule.name}`}
+                onClick={handleDeleteConfirm}
+                className="text-[11px] text-[var(--color-status-rejected)] underline underline-offset-2"
+              >
+                Yes, delete
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmDelete(false)}
+                className="text-[11px] text-(--fg-muted) underline underline-offset-2"
+              >
+                Keep
+              </button>
+            </span>
+          )}
         </div>
       )}
 
+      {/* Raw JSON toggle (read-only) */}
       {showDefinition && !editing && (
         <pre className="border border-(--border) bg-(--bg-subtle) p-2.5 font-mono text-[11px] text-(--fg) overflow-x-auto">
           {JSON.stringify(rule, null, 2)}
         </pre>
-      )}
-
-      {proposedHash !== null && (
-        <p className="border border-[var(--color-status-pending)] bg-(--bg-subtle) p-2 text-xs text-(--fg)">
-          Policy change proposed — it is pending in the{" "}
-          <Link to="/inbox" className="underline">
-            Inbox
-          </Link>
-          . The active policy stays unchanged until you approve it.
-        </p>
       )}
     </article>
   );
@@ -332,9 +559,14 @@ function PolicyRuleCard({ rule, definition }: RuleCardProps) {
 
 function PolicyPage() {
   const { data, isLoading } = usePolicy();
+  const { entries } = useChangeset();
   const definition = parseDefinition(data);
   const rules = definition?.rules ?? [];
   const policyName = (data as { name?: string } | undefined)?.name ?? definition?.policy ?? "";
+
+  function isRuleStaged(ruleName: string): boolean {
+    return entries.some((e) => e.kind === "policy" && e.label.includes(ruleName));
+  }
 
   return (
     <div className="space-y-4">
@@ -394,8 +626,8 @@ function PolicyPage() {
           </div>
 
           <p className="text-xs text-(--fg-muted)">
-            Editing a rule proposes a policy change; the new policy takes effect only after you
-            approve it in the Inbox.
+            Edits stage into the changeset tray and take effect after you commit and approve the
+            proposal in the Inbox.
           </p>
 
           {OUTCOME_SECTIONS.map((section) => {
@@ -412,7 +644,11 @@ function PolicyPage() {
                 <ul className="space-y-3">
                   {sectionRules.map((rule) => (
                     <li key={rule.name}>
-                      <PolicyRuleCard rule={rule} definition={definition ?? {}} />
+                      <PolicyRuleEditor
+                        rule={rule}
+                        definition={definition ?? {}}
+                        isStaged={isRuleStaged(rule.name)}
+                      />
                     </li>
                   ))}
                 </ul>

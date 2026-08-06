@@ -417,3 +417,19 @@ export type {
   PostReviewResult,
   ReviewEntry,
 } from "@freehold/client";
+
+/** Mutation to propose a policy change via POST /policy. */
+export function useProposePolicy() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (policyYaml: string) =>
+      apiClient.proposePolicy({ policy_yaml: policyYaml }) as Promise<{
+        status?: string;
+        hash?: string;
+      }>,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["policy"] });
+      qc.invalidateQueries({ queryKey: ["proposals"] });
+    },
+  });
+}
