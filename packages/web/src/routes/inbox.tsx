@@ -3,7 +3,13 @@ import { createRoute } from "@tanstack/react-router";
 import { GitProposalCard } from "~/components/GitProposalCard";
 import { ProposalCard } from "~/components/ProposalCard";
 import { apiClient } from "~/lib/api";
-import { useActiveGraph, useGitProposals, useGraphs, usePending, useSession } from "~/lib/hooks";
+import {
+  useActiveGraph,
+  useActiveGraphPrincipal,
+  useGitProposals,
+  useGraphs,
+  usePending,
+} from "~/lib/hooks";
 import { Route as RootRoute } from "./__root";
 
 export const Route = createRoute({
@@ -25,8 +31,7 @@ function InboxPage() {
   const { data: gitData, isLoading: gitLoading } = useGitProposals(isRepoGraph);
   const gitProposals = gitData?.proposals ?? [];
 
-  const { data: sessionData } = useSession();
-  const by = sessionData?.owner ?? "owner";
+  const by = useActiveGraphPrincipal();
 
   const approveMut = useMutation({
     mutationFn: (hash: string) => apiClient.approve(hash),

@@ -109,6 +109,7 @@ export function ReviewComposer({ sha, paths, by, onDone }: ReviewComposerProps) 
   const [body, setBody] = useState("");
   const [comments, setComments] = useState<{ path: string; anchor: string; body: string }[]>([]);
   const [status, setStatus] = useState<null | "saved" | "pending" | "error">(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
 
   const qc = useQueryClient();
@@ -136,8 +137,11 @@ export function ReviewComposer({ sha, paths, by, onDone }: ReviewComposerProps) 
         onDone();
       }, 1500);
     },
-    onError: () => {
+    onError: (err) => {
       setStatus("error");
+      if (err instanceof ApiError) {
+        setErrorMessage(err.message);
+      }
     },
   });
 
@@ -269,7 +273,7 @@ export function ReviewComposer({ sha, paths, by, onDone }: ReviewComposerProps) 
         )}
         {status === "error" && (
           <span data-testid="review-status" className="text-xs text-red-600 font-mono">
-            error submitting review
+            {errorMessage ?? "error submitting review"}
           </span>
         )}
       </div>
