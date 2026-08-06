@@ -25,6 +25,7 @@ import { runRecall } from "./commands/recall.js";
 import { runReindex } from "./commands/reindex.js";
 import { runReject } from "./commands/reject.js";
 import { runRemember } from "./commands/remember.js";
+import { runRepo } from "./commands/repo.js";
 import { runServe } from "./commands/serve.js";
 import { runStatus } from "./commands/status.js";
 import { runVerify } from "./commands/verify.js";
@@ -54,6 +55,12 @@ Commands:
   principal add <name>        Register a new principal in the active graph
     --kind <kind>             Principal kind: user, agent, or service (default: user)
     --role <role>             Optional role hint (informational; policy roles require a policy amendment)
+  repo add <path>             Register a repository
+    --name <n>                Display name
+    --id <id>                 Registry slug id
+    --principal <p>           Signing principal (default: owner)
+    --no-index                Skip initial git index
+    --branch <b>              Default branch for git index (default: main)
   mcp setup [claude-code]     Configure MCP integration
     --print                   Print config instead of writing
 
@@ -199,6 +206,12 @@ async function main() {
         );
         process.exit(1);
       }
+      break;
+    }
+
+    case "repo": {
+      const subcommand = rest[0] ?? "--help";
+      await runRepo({ baseUrl, token, json: jsonMode }, subcommand, rest.slice(1));
       break;
     }
 

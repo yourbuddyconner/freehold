@@ -18,6 +18,7 @@ import {
   postCommitStatus,
   postReview,
   pushNotes,
+  queueAutoIndex,
 } from "@freehold/core";
 import { Hono } from "hono";
 import { z } from "zod";
@@ -45,10 +46,16 @@ gitreviewRouter.get("/git/proposals", async (c) => {
   if (!repoOnly(fh)) {
     return c.json({ error: REPO_ONLY_ERROR }, 400);
   }
+  // Auto-index: resolve allodBin and signingPrincipal for unindexed-path callback
   const manager = c.get("manager");
+  const config = c.get("config");
   const entry = await manager.getEntry(fh.graphId);
   const ignoreBranches = entry?.ignoreBranches ?? [];
-  const proposals = await listGitProposals(fh, ignoreBranches);
+  const allodBin = config.allodBin ?? "allod";
+  const signingPrincipal = entry?.signingPrincipal ?? "owner";
+  const proposals = await listGitProposals(fh, ignoreBranches, (graphDir, sha) => {
+    queueAutoIndex(graphDir, sha, signingPrincipal, allodBin);
+  });
   return c.json({ proposals });
 });
 

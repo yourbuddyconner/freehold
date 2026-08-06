@@ -17,6 +17,7 @@ import { healthRouter } from "./routes/health.js";
 import { knowledgeRouter } from "./routes/knowledge.js";
 import { logRouter } from "./routes/log.js";
 import { policyRouter } from "./routes/policy.js";
+import { reposRouter } from "./routes/repos.js";
 import { retrievalRouter } from "./routes/retrieval.js";
 import { schemaRouter } from "./routes/schema.js";
 import { sessionRouter } from "./routes/session.js";
@@ -87,6 +88,8 @@ export function createApp(
   api.route("/", buildApiRoutes());
   // Graphs registry routes (unscoped — operate on the manager, not a single graph)
   api.route("/", graphsRouter);
+  // Repo onboarding (unscoped — operates on the manager, allodBin, and filesystem)
+  api.route("/", reposRouter);
 
   app.route("/api/v1", api);
 

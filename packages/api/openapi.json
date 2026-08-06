@@ -146,23 +146,6 @@
         },
         "required": ["name"]
       },
-      "AddPrincipalBody": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "kind": {
-            "type": "string",
-            "enum": ["user", "agent", "service"],
-            "default": "user"
-          },
-          "role": {
-            "type": "string"
-          }
-        },
-        "required": ["name"]
-      },
       "ProposeOntologyBody": {
         "type": "object",
         "properties": {
@@ -502,13 +485,6 @@
           "signingPrincipal": {
             "type": "string",
             "description": "The principal name whose key signs decide/review operations on this graph"
-          },
-          "ignoreBranches": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "Glob patterns matched against bare branch names (no refs/heads/ prefix). Matching branches are excluded from proposal listings. Default: []."
           }
         },
         "required": [
@@ -520,8 +496,7 @@
           "embedder",
           "allodGraphId",
           "originRemote",
-          "signingPrincipal",
-          "ignoreBranches"
+          "signingPrincipal"
         ]
       },
       "RegisterGraphBody": {
@@ -558,81 +533,79 @@
           "embedder": {
             "type": "string",
             "enum": ["hash", "semantic"]
-          },
-          "ignoreBranches": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "Glob patterns to exclude from proposal listings (matched against bare branch names). Placeholder: worktree-*."
           }
         }
       },
-      "CodeComment": {
+      "OnboardStep": {
         "type": "object",
         "properties": {
-          "commentId": {
-            "type": "string"
-          },
-          "body": {
-            "type": "string"
-          },
-          "span": {
-            "type": "string"
+          "step": {
+            "type": "string",
+            "description": "Step name, e.g. 'allod init'"
           },
           "status": {
             "type": "string",
-            "enum": ["open"]
+            "enum": ["ok", "skipped", "failed"]
           },
-          "author": {
-            "type": "string"
-          },
-          "anchorSha": {
-            "type": "string"
-          },
-          "currentHead": {
-            "type": "boolean"
+          "detail": {
+            "type": "string",
+            "description": "Error or skip reason"
           }
         },
-        "required": ["commentId", "body", "span", "status", "author", "anchorSha", "currentHead"]
+        "required": ["step", "status"]
       },
-      "PostCodeCommentBody": {
+      "OnboardRepoBody": {
         "type": "object",
         "properties": {
           "path": {
             "type": "string",
-            "description": "Repo-relative file path being commented on"
+            "description": "Absolute path to the repository checkout"
           },
-          "span": {
+          "name": {
             "type": "string",
-            "description": "Line span, e.g. L5 or L5-L9"
+            "description": "Display name; defaults to basename of path"
           },
-          "body": {
+          "id": {
             "type": "string",
-            "description": "Comment body text"
+            "description": "Registry slug id; defaults to basename of path"
           },
-          "by": {
+          "principal": {
             "type": "string",
-            "description": "Author principal"
+            "description": "Signing principal; defaults to 'owner'"
           },
-          "allodGraphId": {
-            "type": "string"
+          "noIndex": {
+            "type": "boolean",
+            "description": "Skip the initial git index step"
+          },
+          "defaultBranch": {
+            "type": "string",
+            "description": "Default branch for git index; defaults to 'main'"
           }
         },
-        "required": ["path", "span", "body", "by"]
+        "required": ["path"]
       },
-      "PostCodeCommentResult": {
+      "OnboardRepoResult": {
         "type": "object",
         "properties": {
-          "commentId": {
-            "type": "string"
+          "steps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OnboardStep"
+            }
           },
-          "status": {
+          "entry": {
+            "$ref": "#/components/schemas/GraphInfo"
+          },
+          "keyPath": {
             "type": "string",
-            "enum": ["saved", "pending"]
+            "description": "Absolute path to the generated key file"
+          },
+          "principal": {
+            "type": "string",
+            "description": "Principal whose key was generated or verified"
           }
         },
-        "required": ["commentId", "status"]
+        "required": ["steps", "entry", "keyPath", "principal"]
       },
       "CodeItem": {
         "type": "object",
@@ -915,6 +888,72 @@
         },
         "required": ["events", "errors", "unchanged"]
       },
+      "CodeComment": {
+        "type": "object",
+        "properties": {
+          "commentId": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string"
+          },
+          "span": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["open"]
+          },
+          "author": {
+            "type": "string"
+          },
+          "anchorSha": {
+            "type": "string"
+          },
+          "currentHead": {
+            "type": "boolean"
+          }
+        },
+        "required": ["commentId", "body", "span", "status", "author", "anchorSha", "currentHead"]
+      },
+      "PostCodeCommentBody": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Repo-relative file path"
+          },
+          "span": {
+            "type": "string",
+            "description": "Line span, e.g. L10 or L10-L20"
+          },
+          "body": {
+            "type": "string",
+            "description": "Comment text"
+          },
+          "by": {
+            "type": "string",
+            "description": "Principal name signing the comment"
+          }
+        },
+        "required": ["path", "span", "body", "by"]
+      },
+      "PostCodeCommentResult": {
+        "type": "object",
+        "properties": {
+          "commentId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["saved", "pending"]
+          },
+          "anchorSha": {
+            "type": "string"
+          }
+        },
+        "required": ["commentId", "status", "anchorSha"]
+      },
       "GitProposalPath": {
         "type": "object",
         "properties": {
@@ -1051,14 +1090,6 @@
               },
               "pushError": {
                 "type": "string"
-              },
-              "statusPosted": {
-                "type": "boolean",
-                "description": "True when a GitHub commit status was successfully posted."
-              },
-              "statusError": {
-                "type": "string",
-                "description": "Present when statusPosted is false due to an error."
               }
             },
             "required": ["outcome", "pushed"]
@@ -1115,10 +1146,6 @@
             "items": {
               "$ref": "#/components/schemas/ReviewCommentInput"
             }
-          },
-          "decide": {
-            "type": "boolean",
-            "description": "When true (default), automatically call decide after committing the review. Verdict mapping: approve/approve-with-comments → approve; request-changes → reject."
           }
         },
         "required": ["verdict", "by"]
@@ -1138,56 +1165,6 @@
           "status": {
             "type": "string",
             "enum": ["saved", "pending"]
-          },
-          "alreadyDecided": {
-            "type": "boolean",
-            "description": "True when decide=true was requested but a decision already existed."
-          },
-          "decideResult": {
-            "anyOf": [
-              {
-                "type": "object",
-                "properties": {
-                  "outcome": {
-                    "type": "string",
-                    "enum": ["approved", "rejected"]
-                  },
-                  "pushed": {
-                    "type": "boolean"
-                  },
-                  "pushSkipped": {
-                    "type": "boolean"
-                  },
-                  "pushError": {
-                    "type": "string"
-                  },
-                  "statusPosted": {
-                    "type": "boolean"
-                  },
-                  "statusError": {
-                    "type": "string"
-                  }
-                },
-                "required": ["outcome", "pushed"]
-              },
-              {
-                "type": "object",
-                "properties": {
-                  "outcome": {
-                    "type": "string",
-                    "enum": ["incomplete"]
-                  },
-                  "unmet": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
-                  }
-                },
-                "required": ["outcome", "unmet"]
-              }
-            ],
-            "description": "Present when decide=true and the auto-decide ran."
           }
         },
         "required": ["reviewId", "commentIds", "status"]
@@ -2106,35 +2083,6 @@
             "description": "Unauthorized"
           }
         }
-      },
-      "post": {
-        "summary": "Add a principal",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AddPrincipalBody"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Principal added"
-          },
-          "400": {
-            "description": "Validation error"
-          },
-          "401": {
-            "description": "Unauthorized"
-          }
-        }
       }
     },
     "/api/v1/agents": {
@@ -2496,6 +2444,45 @@
         }
       }
     },
+    "/api/v1/repos/onboard": {
+      "post": {
+        "summary": "Onboard a repository",
+        "description": "Server-side repo onboarding: runs allod init if needed, generates a signing key, registers the graph, and optionally indexes. Returns a step list with per-step status.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OnboardRepoBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Onboarding complete — graph registered",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OnboardRepoResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Onboarding failed — step list included in body"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
     "/api/v1/code/tree": {
       "get": {
         "summary": "Code file tree",
@@ -2799,31 +2786,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "allOf": [
-                  {
-                    "$ref": "#/components/schemas/PostCodeCommentBody"
-                  },
-                  {
-                    "properties": {
-                      "path": {
-                        "type": "string",
-                        "description": "Repo-relative file path"
-                      },
-                      "span": {
-                        "type": "string",
-                        "description": "Line span, e.g. L10 or L10-L20"
-                      },
-                      "body": {
-                        "type": "string",
-                        "description": "Comment text"
-                      },
-                      "by": {
-                        "type": "string",
-                        "description": "Principal name signing the comment"
-                      }
-                    }
-                  }
-                ]
+                "$ref": "#/components/schemas/PostCodeCommentBody"
               }
             }
           }
@@ -2834,26 +2797,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/PostCodeCommentResult"
-                    },
-                    {
-                      "properties": {
-                        "commentId": {
-                          "type": "string"
-                        },
-                        "status": {
-                          "type": "string",
-                          "enum": ["saved", "pending"]
-                        },
-                        "anchorSha": {
-                          "type": "string"
-                        }
-                      },
-                      "required": ["commentId", "status", "anchorSha"]
-                    }
-                  ]
+                  "$ref": "#/components/schemas/PostCodeCommentResult"
                 }
               }
             }

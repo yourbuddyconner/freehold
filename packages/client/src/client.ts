@@ -43,6 +43,9 @@ export type InstallOntologyBody = Schemas["InstallOntologyBody"];
 export type GraphInfo = Schemas["GraphInfo"];
 export type RegisterGraphBody = Schemas["RegisterGraphBody"];
 export type UpdateGraphBody = Schemas["UpdateGraphBody"];
+export type OnboardRepoBody = Schemas["OnboardRepoBody"];
+export type OnboardRepoResult = Schemas["OnboardRepoResult"];
+export type OnboardStep = Schemas["OnboardStep"];
 export type CodeItem = Schemas["CodeItem"];
 export type CodeFileView = Schemas["CodeFileView"];
 export type CodeItemView = Schemas["CodeItemView"];
@@ -126,6 +129,7 @@ const GRAPH_AGNOSTIC_PREFIXES = [
   "/api/v1/agents",
   "/api/v1/openapi.json",
   "/api/v1/graphs",
+  "/api/v1/repos",
 ];
 
 export class FreeholdClient {
@@ -429,6 +433,16 @@ export class FreeholdClient {
   /** PATCH /api/v1/graphs/:id — update graph metadata */
   async updateGraph(id: string, body: UpdateGraphBody): Promise<GraphInfo> {
     return this.fetch<GraphInfo>("PATCH", `/api/v1/graphs/${id}`, { body });
+  }
+
+  /** DELETE /api/v1/graphs/:id — remove a graph from the registry */
+  async deleteGraph(id: string): Promise<void> {
+    return this.fetch<void>("DELETE", `/api/v1/graphs/${id}`);
+  }
+
+  /** POST /api/v1/repos/onboard — onboard a repository (server-side) */
+  async onboardRepo(body: OnboardRepoBody): Promise<OnboardRepoResult> {
+    return this.fetch<OnboardRepoResult>("POST", "/api/v1/repos/onboard", { body });
   }
 
   /** GET /api/v1/code/tree — file tree for the active graph (must be repo kind) */

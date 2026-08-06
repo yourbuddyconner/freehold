@@ -242,6 +242,20 @@ export function evictProposalCache(graphDir: string): void {
   }
 }
 
+/**
+ * Evict all cache entries for a specific (graphDir, sha) pair.
+ * Called by the auto-index runner on successful index completion so the next
+ * fetch shows indexed path chips.
+ */
+export function evictSha(graphDir: string, sha: string): void {
+  const prefix = `${graphDir}\0${sha}\0`;
+  for (const key of proposalCache.keys()) {
+    if (key.startsWith(prefix)) {
+      proposalCache.delete(key);
+    }
+  }
+}
+
 // ── fetchChecks — uncached DB lookup ─────────────────────────────────────────
 
 /**
@@ -277,13 +291,18 @@ async function fetchChecks(
  * the wasm/git evaluation result is cached; subsequent calls with the same sha+tip
  * return in <1ms for the expensive parts. The `checks` field is always fetched fresh
  * from the DB regardless of caching.
+ *
+ * `onUnindexedPaths` (optional) — called with (graphDir, sha) when any touched path
+ * is unindexed; used by the auto-index runner. Only fired once per evaluateSha call
+ * (even if multiple paths are unindexed) and only on a cache miss.
  */
 async function evaluateSha(
   fh: Freehold,
   sha: string,
   ref: string,
   repoName: string,
-  decisionsTipArg?: string
+  decisionsTipArg?: string,
+  onUnindexedPaths?: (graphDir: string, sha: string) => void
 ): Promise<GitProposal> {
   // ── Cache lookup (wasm+git core, not checks) ────────────────────────────────
   const cacheKey =
@@ -357,6 +376,7 @@ async function evaluateSha(
     // If codeRegions fails (e.g. no SourceFile nodes) — treat as empty
   }
 
+  let anyUnindexed = false;
   const paths = await Promise.all(
     ops.map(async ([verb, path]) => {
       // Region badges: which rules match this path
@@ -373,9 +393,16 @@ async function evaluateSha(
         // treat as not indexed
       }
 
+      if (!indexed) anyUnindexed = true;
+
       return { verb, path, regions: pathRegions, indexed };
     })
   );
+
+  // Fire the auto-index callback once if any path is unindexed
+  if (anyUnindexed && onUnindexedPaths) {
+    onUnindexedPaths(fh.graphDir, sha);
+  }
 
   const core: CachedCore = {
     sha,
@@ -449,10 +476,14 @@ function shouldIgnoreBranch(bareName: string, patterns: string[]): boolean {
  *
  * Branch filtering: branches whose bare name (without refs/heads/) matches any
  * pattern in `ignoreBranches` are excluded before evaluation.
+ *
+ * `onUnindexedPaths` (optional) — passed through to evaluateSha; fired once per
+ * sha where any touched path is unindexed. Used by the auto-index runner.
  */
 export async function listGitProposals(
   fh: Freehold,
-  ignoreBranches: string[] = []
+  ignoreBranches: string[] = [],
+  onUnindexedPaths?: (graphDir: string, sha: string) => void
 ): Promise<GitProposal[]> {
   const repoName = basename(fh.graphDir);
 
@@ -493,7 +524,7 @@ export async function listGitProposals(
   // won't run wasm calls concurrently — they queue automatically.
   // Non-wasm work (git subprocesses, DB queries) does run in parallel.
   const proposals = await Promise.all(
-    uniqueHeads.map(({ ref, sha }) => evaluateSha(fh, sha, ref, repoName, tip))
+    uniqueHeads.map(({ ref, sha }) => evaluateSha(fh, sha, ref, repoName, tip, onUnindexedPaths))
   );
 
   return proposals;

@@ -873,43 +873,7 @@ export interface paths {
             };
         };
         put?: never;
-        /** Add a principal */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": components["schemas"]["AddPrincipalBody"];
-                };
-            };
-            responses: {
-                /** @description Principal added */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-                /** @description Validation error */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-                /** @description Unauthorized */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-            };
-        };
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1459,6 +1423,63 @@ export interface paths {
         };
         trace?: never;
     };
+    "/api/v1/repos/onboard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Onboard a repository
+         * @description Server-side repo onboarding: runs allod init if needed, generates a signing key, registers the graph, and optionally indexes. Returns a step list with per-step status.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["OnboardRepoBody"];
+                };
+            };
+            responses: {
+                /** @description Onboarding complete — graph registered */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["OnboardRepoResult"];
+                    };
+                };
+                /** @description Onboarding failed — step list included in body */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/code/tree": {
         parameters: {
             query?: never;
@@ -1873,16 +1894,7 @@ export interface paths {
             };
             requestBody: {
                 content: {
-                    "application/json": components["schemas"]["PostCodeCommentBody"] & {
-                        /** @description Repo-relative file path */
-                        path?: string;
-                        /** @description Line span, e.g. L10 or L10-L20 */
-                        span?: string;
-                        /** @description Comment text */
-                        body?: string;
-                        /** @description Principal name signing the comment */
-                        by?: string;
-                    };
+                    "application/json": components["schemas"]["PostCodeCommentBody"];
                 };
             };
             responses: {
@@ -1892,12 +1904,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["PostCodeCommentResult"] & {
-                            commentId: string;
-                            /** @enum {string} */
-                            status: "saved" | "pending";
-                            anchorSha: string;
-                        };
+                        "application/json": components["schemas"]["PostCodeCommentResult"];
                     };
                 };
                 /** @description Not a repo graph or validation error */
@@ -2614,15 +2621,6 @@ export interface components {
         RegisterAgentBody: {
             name: string;
         };
-        AddPrincipalBody: {
-            name: string;
-            /**
-             * @default user
-             * @enum {string}
-             */
-            kind: "user" | "agent" | "service";
-            role?: string;
-        };
         ProposeOntologyBody: {
             agent: string;
             packageName: string;
@@ -2741,8 +2739,6 @@ export interface components {
             originRemote: string | null;
             /** @description The principal name whose key signs decide/review operations on this graph */
             signingPrincipal: string;
-            /** @description Glob patterns matched against bare branch names (no refs/heads/ prefix). Matching branches are excluded from proposal listings. Default: []. */
-            ignoreBranches: string[];
         };
         RegisterGraphBody: {
             /** @description Absolute path to the repo checkout */
@@ -2759,34 +2755,36 @@ export interface components {
             autoPushNotes?: boolean;
             /** @enum {string} */
             embedder?: "hash" | "semantic";
-            /** @description Glob patterns to exclude from proposal listings (matched against bare branch names). Placeholder: worktree-*. */
-            ignoreBranches?: string[];
         };
-        CodeComment: {
-            commentId: string;
-            body: string;
-            span: string;
+        OnboardStep: {
+            /** @description Step name, e.g. 'allod init' */
+            step: string;
             /** @enum {string} */
-            status: "open";
-            author: string;
-            anchorSha: string;
-            currentHead: boolean;
+            status: "ok" | "skipped" | "failed";
+            /** @description Error or skip reason */
+            detail?: string;
         };
-        PostCodeCommentBody: {
-            /** @description Repo-relative file path being commented on */
+        OnboardRepoBody: {
+            /** @description Absolute path to the repository checkout */
             path: string;
-            /** @description Line span, e.g. L5 or L5-L9 */
-            span: string;
-            /** @description Comment body text */
-            body: string;
-            /** @description Author principal */
-            by: string;
-            allodGraphId?: string;
+            /** @description Display name; defaults to basename of path */
+            name?: string;
+            /** @description Registry slug id; defaults to basename of path */
+            id?: string;
+            /** @description Signing principal; defaults to 'owner' */
+            principal?: string;
+            /** @description Skip the initial git index step */
+            noIndex?: boolean;
+            /** @description Default branch for git index; defaults to 'main' */
+            defaultBranch?: string;
         };
-        PostCodeCommentResult: {
-            commentId: string;
-            /** @enum {string} */
-            status: "saved" | "pending";
+        OnboardRepoResult: {
+            steps: components["schemas"]["OnboardStep"][];
+            entry: components["schemas"]["GraphInfo"];
+            /** @description Absolute path to the generated key file */
+            keyPath: string;
+            /** @description Principal whose key was generated or verified */
+            principal: string;
         };
         CodeItem: {
             nodeId: string;
@@ -2880,6 +2878,32 @@ export interface components {
             /** @description Number of items unchanged */
             unchanged: number;
         };
+        CodeComment: {
+            commentId: string;
+            body: string;
+            span: string;
+            /** @enum {string} */
+            status: "open";
+            author: string;
+            anchorSha: string;
+            currentHead: boolean;
+        };
+        PostCodeCommentBody: {
+            /** @description Repo-relative file path */
+            path: string;
+            /** @description Line span, e.g. L10 or L10-L20 */
+            span: string;
+            /** @description Comment text */
+            body: string;
+            /** @description Principal name signing the comment */
+            by: string;
+        };
+        PostCodeCommentResult: {
+            commentId: string;
+            /** @enum {string} */
+            status: "saved" | "pending";
+            anchorSha: string;
+        };
         GitProposalPath: {
             verb: string;
             path: string;
@@ -2919,10 +2943,6 @@ export interface components {
             /** @description True when push was not attempted because auto-push is off or no remote is configured. */
             pushSkipped?: boolean;
             pushError?: string;
-            /** @description True when a GitHub commit status was successfully posted. */
-            statusPosted?: boolean;
-            /** @description Present when statusPosted is false due to an error. */
-            statusError?: string;
         } | {
             /** @enum {string} */
             outcome: "incomplete";
@@ -2940,30 +2960,12 @@ export interface components {
             /** @description Author principal */
             by: string;
             comments?: components["schemas"]["ReviewCommentInput"][];
-            /** @description When true (default), automatically call decide after committing the review. Verdict mapping: approve/approve-with-comments → approve; request-changes → reject. */
-            decide?: boolean;
         };
         PostReviewResult: {
             reviewId: string;
             commentIds: string[];
             /** @enum {string} */
             status: "saved" | "pending";
-            /** @description True when decide=true was requested but a decision already existed. */
-            alreadyDecided?: boolean;
-            /** @description Present when decide=true and the auto-decide ran. */
-            decideResult?: {
-                /** @enum {string} */
-                outcome: "approved" | "rejected";
-                pushed: boolean;
-                pushSkipped?: boolean;
-                pushError?: string;
-                statusPosted?: boolean;
-                statusError?: string;
-            } | {
-                /** @enum {string} */
-                outcome: "incomplete";
-                unmet: string[];
-            };
         };
         ReviewComment: {
             commentId: string;

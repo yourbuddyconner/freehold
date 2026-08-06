@@ -103,4 +103,9 @@ export interface FreeholdConfig {
   port: number;
   /** Default agent principal name used by MCP tools when no `agent` param is provided. */
   defaultAgent?: string;
+  /**
+   * Path to the allod binary. Defaults to "allod" (resolved on PATH).
+   * Override via ~/.freehold/config.json: { "allodBin": "/path/to/allod" }
+   */
+  allodBin?: string;
 }

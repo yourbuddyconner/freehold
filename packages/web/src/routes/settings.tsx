@@ -973,6 +973,140 @@ function ConnectorSection() {
 }
 
 // ---------------------------------------------------------------------------
+// Repositories section
+// ---------------------------------------------------------------------------
+
+function RepositoriesSection() {
+  const qc = useQueryClient();
+  const { data: graphsData, isLoading } = useListGraphs();
+  const [path, setPath] = useState("");
+  const [name, setName] = useState("");
+  const [principal, setPrincipal] = useState("");
+  const [onboardResult, setOnboardResult] = useState<{
+    steps: Array<{ step: string; status: string; detail?: string }>;
+    entry: { id: string; path: string; name: string };
+    keyPath: string;
+    principal: string;
+  } | null>(null);
+
+  const repoGraphs = (graphsData?.graphs ?? []).filter((g) => g.kind === "repo");
+
+  const onboardMutation = useMutation({
+    mutationFn: () =>
+      apiClient.onboardRepo({
+        path: path.trim(),
+        name: name.trim() || undefined,
+        principal: principal.trim() || undefined,
+      }),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ["list-graphs"] });
+      setOnboardResult(data as typeof onboardResult);
+      setPath("");
+      setName("");
+      setPrincipal("");
+    },
+  });
+
+  return (
+    <section className="space-y-3" data-testid="repositories-section">
+      <h3 className="text-sm font-semibold text-(--fg)">Repositories</h3>
+      <p className="text-xs text-(--fg-muted)">
+        Register a local repository checkout for code review. The daemon must have read access to
+        the path.
+      </p>
+
+      {/* Registered repo graphs */}
+      {isLoading && <p className="text-xs text-(--fg-muted)">Loading repositories…</p>}
+      {!isLoading && repoGraphs.length > 0 && (
+        <ul className="space-y-1.5">
+          {repoGraphs.map((g) => (
+            <li
+              key={g.id}
+              className="flex items-center gap-2 border border-(--border) bg-(--bg-subtle) px-3 py-2"
+            >
+              <span className="font-mono text-xs text-(--fg) truncate flex-1">{g.path}</span>
+              <span className="text-xs text-(--fg-muted)">{g.id}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {!isLoading && repoGraphs.length === 0 && (
+        <p className="text-xs text-(--fg-muted)">No repositories registered.</p>
+      )}
+
+      {/* Onboard result */}
+      {onboardResult && (
+        <div className="space-y-2 border border-(--border) bg-(--bg-subtle) p-3">
+          <p className="text-xs font-medium text-(--fg)">
+            Registered: <span className="font-mono">{onboardResult.entry.id}</span>
+          </p>
+          <ul className="space-y-0.5">
+            {onboardResult.steps.map((s) => (
+              <li key={s.step} className="text-xs font-mono text-(--fg-muted)">
+                {s.status === "ok" ? "✓" : s.status === "skipped" ? "–" : "✗"} {s.step}
+                {s.detail ? ` (${s.detail})` : ""}
+              </li>
+            ))}
+          </ul>
+          <p className="text-xs text-(--fg-muted)">
+            Key: <span className="font-mono">{onboardResult.keyPath}</span>
+          </p>
+        </div>
+      )}
+
+      {/* Error display */}
+      {onboardMutation.isError && (
+        <p role="alert" className="text-xs text-red-600 dark:text-red-400">
+          {onboardMutation.error instanceof Error
+            ? onboardMutation.error.message
+            : "Onboarding failed."}
+        </p>
+      )}
+
+      {/* Add form */}
+      <div className="space-y-2 border-t border-(--border) pt-3">
+        <p className="text-xs font-medium text-(--fg)">Add repository</p>
+        <div className="space-y-1.5">
+          <input
+            type="text"
+            placeholder="/absolute/path/to/repo"
+            value={path}
+            onChange={(e) => setPath(e.target.value)}
+            data-testid="repo-path-input"
+            className="w-full border border-(--border) bg-(--bg) px-3 py-1.5 font-mono text-xs text-(--fg) placeholder-text-(--fg-muted) focus:outline-none focus:ring-1 focus:ring-(--color-accent)"
+          />
+          <div className="flex gap-1.5">
+            <input
+              type="text"
+              placeholder="Display name (optional)"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="flex-1 border border-(--border) bg-(--bg) px-3 py-1.5 text-xs text-(--fg) placeholder-text-(--fg-muted) focus:outline-none focus:ring-1 focus:ring-(--color-accent)"
+            />
+            <input
+              type="text"
+              placeholder="Principal (default: owner)"
+              value={principal}
+              onChange={(e) => setPrincipal(e.target.value)}
+              className="flex-1 border border-(--border) bg-(--bg) px-3 py-1.5 text-xs text-(--fg) placeholder-text-(--fg-muted) focus:outline-none focus:ring-1 focus:ring-(--color-accent)"
+            />
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => onboardMutation.mutate()}
+          disabled={!path.trim() || onboardMutation.isPending}
+          data-testid="onboard-repo-btn"
+          className="border border-(--border) px-3 py-1.5 text-xs font-medium text-(--fg-muted) hover:text-(--fg) disabled:opacity-50 transition-colors"
+        >
+          {onboardMutation.isPending ? "Registering…" : "Register"}
+        </button>
+      </div>
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 
@@ -1097,6 +1231,10 @@ function SettingsPage() {
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>
+
+      <div className="border-t border-(--border)" />
+
+      <RepositoriesSection />
 
       <div className="border-t border-(--border)" />
 
