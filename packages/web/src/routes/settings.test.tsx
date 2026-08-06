@@ -17,6 +17,9 @@ vi.mock("~/lib/hooks", () => ({
   usePrincipals: vi.fn(),
   useSession: vi.fn(),
   useGraphs: vi.fn().mockReturnValue({ graphs: [], defaultGraph: "main" }),
+  useListGraphs: vi
+    .fn()
+    .mockReturnValue({ data: { graphs: [] }, isLoading: false, isError: false, error: null }),
   useActiveGraph: vi.fn().mockReturnValue({ activeGraphId: "main", setActiveGraphId: vi.fn() }),
   useGitProposals: vi
     .fn()
@@ -57,6 +60,21 @@ vi.mock("~/lib/api", () => {
       putConnector: vi.fn(),
       pollConnector: vi.fn(),
       getConnectorManifest: vi.fn(),
+      onboardRepo: vi.fn().mockResolvedValue({
+        steps: [
+          { step: "allod init", status: "skipped", detail: ".allod/graph.yaml already exists" },
+          {
+            step: "generate key",
+            status: "ok",
+            detail: "/home/user/.local/share/allod/keys/owner.yaml",
+          },
+          { step: "register graph", status: "ok", detail: "id=myrepo" },
+          { step: "git index", status: "ok" },
+        ],
+        entry: { id: "myrepo", path: "/home/user/repos/myrepo", name: "myrepo" },
+        keyPath: "/home/user/.local/share/allod/keys/owner.yaml",
+        principal: "owner",
+      }),
     },
   };
 });
