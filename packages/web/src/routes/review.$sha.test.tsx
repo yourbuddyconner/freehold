@@ -4,7 +4,7 @@
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider, createMemoryHistory, createRouter } from "@tanstack/react-router";
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import React from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as hooks from "~/lib/hooks";
@@ -17,6 +17,7 @@ vi.mock("~/lib/hooks", () => ({
   useDecideProposal: vi.fn(),
   useSession: vi.fn(),
   useActiveGraph: vi.fn(),
+  useActiveGraphPrincipal: vi.fn().mockReturnValue("alice"),
   useGraphs: vi.fn(),
   useReviewsForSha: vi.fn(),
   useListGraphs: vi.fn(),
@@ -88,6 +89,10 @@ vi.mock("~/components/PierreTree", () => ({
   },
 }));
 
+vi.mock("@pierre/diffs/edit", () => ({
+  Editor: vi.fn().mockImplementation(() => ({})),
+}));
+
 // Stub CodeView from @pierre/diffs/react — renders one pre per item keyed by id,
 // and supports renderAnnotation to surface annotation content in tests.
 // No ref needed: scrolling is now done via scrollIntoView on per-file wrapper divs.
@@ -100,6 +105,20 @@ let mockOnSelectedLinesChange:
     ) => void)
   | undefined;
 vi.mock("@pierre/diffs/react", () => ({
+  EditProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  File: ({
+    file,
+    editorOptions,
+  }: {
+    file?: { contents: string };
+    editorOptions?: { onChange?: (f: { contents: string }) => void };
+  }) => (
+    <textarea
+      data-testid="pierre-file-editor"
+      defaultValue={file?.contents ?? ""}
+      onChange={(e) => editorOptions?.onChange?.({ contents: e.target.value })}
+    />
+  ),
   CodeView: ({
     items,
     options,
@@ -917,6 +936,297 @@ describe("/review/$sha", () => {
     // Diff files still render
     expect(screen.getByTestId("diff-file")).toBeInTheDocument();
     expect(screen.getByTestId("diff-file")).toHaveTextContent("src/lib.rs");
+  });
+
+  // ---- Suggested edits: composer ----
+
+  describe("Suggested edits — composer", () => {
+    it("suggest toggle does NOT appear for deletions-side (old:) span", async () => {
+      setupDefaults();
+      await renderReviewPage();
+      await act(async () => {
+        mockOnSelectedLinesChange?.({
+          id: "src/lib.rs",
+          range: { start: 3, end: 3, side: "deletions" },
+        });
+      });
+      expect(screen.getByTestId("line-composer")).toBeInTheDocument();
+      expect(screen.queryByTestId("suggest-toggle")).not.toBeInTheDocument();
+    });
+
+    it("suggest toggle appears for additions-side span", async () => {
+      setupDefaults();
+      await renderReviewPage();
+      await act(async () => {
+        mockOnSelectedLinesChange?.({
+          id: "src/lib.rs",
+          range: { start: 1, end: 1, side: "additions" },
+        });
+      });
+      expect(screen.getByTestId("suggest-toggle")).toBeInTheDocument();
+    });
+
+    it("clicking suggest toggle shows suggestion editor seeded with span lines", async () => {
+      setupDefaults({
+        diff: {
+          files: [
+            {
+              path: "src/lib.rs",
+              verb: "M",
+              binary: false,
+              oldContent: "fn old() {}\n",
+              newContent: "fn new() {}\nfn second() {}\n",
+              truncated: false,
+            },
+          ],
+          truncated: false,
+        },
+      });
+      await renderReviewPage();
+      await act(async () => {
+        mockOnSelectedLinesChange?.({
+          id: "src/lib.rs",
+          range: { start: 1, end: 1, side: "additions" },
+        });
+      });
+      const toggle = screen.getByTestId("suggest-toggle");
+      await act(async () => { toggle.click(); });
+      expect(screen.getByTestId("suggestion-editor-area")).toBeInTheDocument();
+      // The File mock renders a textarea seeded with the initial contents
+      const editorTextarea = screen.getByTestId("pierre-file-editor");
+      expect(editorTextarea).toHaveValue("fn new() {}");
+    });
+
+    it("saving draft with suggestion stores suggestion field", async () => {
+      setupDefaults({
+        diff: {
+          files: [
+            {
+              path: "src/lib.rs",
+              verb: "M",
+              binary: false,
+              oldContent: "fn old() {}\n",
+              newContent: "fn new() {}\n",
+              truncated: false,
+            },
+          ],
+          truncated: false,
+        },
+      });
+      await renderReviewPage();
+      await act(async () => {
+        mockOnSelectedLinesChange?.({
+          id: "src/lib.rs",
+          range: { start: 1, end: 1, side: "additions" },
+        });
+      });
+      await act(async () => { screen.getByTestId("suggest-toggle").click(); });
+      // Simulate editor change via File mock textarea
+      const editorTextarea = screen.getByTestId("pierre-file-editor");
+      fireEvent.change(editorTextarea, { target: { value: "fn replaced() {}" } });
+      // Add prose in the comment textarea
+      fireEvent.change(screen.getByLabelText("Comment body"), { target: { value: "use this" } });
+      await act(async () => { screen.getByRole("button", { name: /save draft/i }).click(); });
+      // Load drafts from localStorage
+      const { loadDrafts } = await import("~/lib/reviewDrafts");
+      const saved = loadDrafts(SHA);
+      expect(saved).toHaveLength(1);
+      expect(saved[0].suggestion).toBe("fn replaced() {}");
+      expect(saved[0].body).toBe("use this");
+    });
+  });
+
+  describe("Suggested edits — annotation rendering", () => {
+    beforeEach(() => {
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: { writeText: vi.fn().mockResolvedValue(undefined) },
+      });
+    });
+
+    it("draft annotation with suggestion body renders nested pierre-diff", async () => {
+      localStore.set(
+        `freehold:review-drafts:${SHA}`,
+        JSON.stringify([{
+          path: "src/lib.rs",
+          span: "L1",
+          body: "replace this",
+          suggestion: "fn replaced() {}",
+        }])
+      );
+      setupDefaults();
+      await renderReviewPage();
+      expect(screen.getByTestId("suggestion-diff")).toBeInTheDocument();
+      expect(screen.getByTestId("pierre-diff")).toBeInTheDocument();
+    });
+
+    it("saved annotation with suggestion fence renders nested pierre-diff", async () => {
+      setupDefaults({
+        reviews: {
+          reviews: [
+            {
+              reviewId: "rv-1",
+              verdict: "approve",
+              commit: `git:my-repo#${SHA}`,
+              author: "bob",
+              status: "saved",
+              comments: [
+                {
+                  commentId: "c-1",
+                  body: "fix it\n```suggestion\nfn replaced() {}\n```",
+                  anchor: `git:my-repo#${SHA}:src/lib.rs`,
+                  span: "L1",
+                  status: "saved",
+                },
+              ],
+            },
+          ],
+        },
+      });
+      await renderReviewPage();
+      expect(screen.getByTestId("suggestion-diff")).toBeInTheDocument();
+      expect(screen.getByTestId("pierre-diff")).toBeInTheDocument();
+    });
+
+    it("annotation without suggestion fence renders plain body (no suggestion-diff)", async () => {
+      setupDefaults({
+        reviews: {
+          reviews: [
+            {
+              reviewId: "rv-2",
+              verdict: "approve",
+              commit: `git:my-repo#${SHA}`,
+              author: "bob",
+              status: "saved",
+              comments: [
+                {
+                  commentId: "c-2",
+                  body: "just a comment",
+                  anchor: `git:my-repo#${SHA}:src/lib.rs`,
+                  span: "L1",
+                  status: "saved",
+                },
+              ],
+            },
+          ],
+        },
+      });
+      await renderReviewPage();
+      expect(screen.queryByTestId("suggestion-diff")).not.toBeInTheDocument();
+      expect(screen.getByTestId("annotation")).toHaveTextContent("just a comment");
+    });
+
+    it("saved suggestion annotation has copy-suggestion button", async () => {
+      setupDefaults({
+        reviews: {
+          reviews: [
+            {
+              reviewId: "rv-3",
+              verdict: "approve",
+              commit: `git:my-repo#${SHA}`,
+              author: "bob",
+              status: "saved",
+              comments: [
+                {
+                  commentId: "c-3",
+                  body: "```suggestion\nfn replaced() {}\n```",
+                  anchor: `git:my-repo#${SHA}:src/lib.rs`,
+                  span: "L1",
+                  status: "saved",
+                },
+              ],
+            },
+          ],
+        },
+      });
+      await renderReviewPage();
+      expect(screen.getByTestId("copy-suggestion-btn")).toBeInTheDocument();
+      expect(screen.getByTestId("copy-suggestion-btn")).toHaveTextContent("Copy suggestion");
+    });
+
+    it("draft suggestion annotation does NOT have copy-suggestion button", async () => {
+      localStore.set(
+        `freehold:review-drafts:${SHA}`,
+        JSON.stringify([{
+          path: "src/lib.rs",
+          span: "L1",
+          body: "",
+          suggestion: "fn replaced() {}",
+        }])
+      );
+      setupDefaults();
+      await renderReviewPage();
+      expect(screen.queryByTestId("copy-suggestion-btn")).not.toBeInTheDocument();
+    });
+  });
+
+  describe("Suggested edits — submit serialization", () => {
+    it("submit with suggestion draft sends fenced body to postGitReview", async () => {
+      localStore.set(
+        `freehold:review-drafts:${SHA}`,
+        JSON.stringify([{
+          path: "src/lib.rs",
+          span: "L1",
+          body: "use this instead",
+          suggestion: "fn replaced() {}",
+        }])
+      );
+      const mutate = vi.fn();
+      setupDefaults({
+        decide: {
+          decideMut: { mutate, isPending: false, variables: undefined } as never,
+        },
+      });
+      await renderReviewPage();
+      const { apiClient } = await import("~/lib/api");
+
+      const approveBtn = screen.getByRole("button", { name: /^approve$/i });
+      await act(async () => { approveBtn.click(); });
+      const confirmBtn = screen
+        .getAllByRole("button", { name: /^approve$/i })
+        .find((b) => b.closest("[role=dialog]"));
+      await act(async () => { confirmBtn?.click(); });
+
+      await waitFor(() => {
+        expect(apiClient.postGitReview).toHaveBeenCalledWith(
+          SHA,
+          expect.objectContaining({
+            comments: [
+              expect.objectContaining({
+                body: "use this instead\n```suggestion\nfn replaced() {}\n```",
+                span: "L1",
+              }),
+            ],
+          })
+        );
+      });
+    });
+
+    it("submit with plain-comment draft sends body as-is (no fence)", async () => {
+      localStore.set(
+        `freehold:review-drafts:${SHA}`,
+        JSON.stringify([{ path: "src/lib.rs", span: "L1", body: "plain comment" }])
+      );
+      setupDefaults();
+      await renderReviewPage();
+      const { apiClient } = await import("~/lib/api");
+
+      const approveBtn = screen.getByRole("button", { name: /^approve$/i });
+      await act(async () => { approveBtn.click(); });
+      const confirmBtn = screen
+        .getAllByRole("button", { name: /^approve$/i })
+        .find((b) => b.closest("[role=dialog]"));
+      await act(async () => { confirmBtn?.click(); });
+
+      await waitFor(() => {
+        expect(apiClient.postGitReview).toHaveBeenCalledWith(
+          SHA,
+          expect.objectContaining({
+            comments: [expect.objectContaining({ body: "plain comment" })],
+          })
+        );
+      });
+    });
   });
 
   it("Save-draft persists to localStorage after line selection", async () => {
