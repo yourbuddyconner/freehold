@@ -695,6 +695,7 @@ describe("/review/$sha", () => {
         expect.objectContaining({
           verdict: "approve-with-comments",
           by: "alice",
+          decide: true,
           comments: [
             expect.objectContaining({
               body: "test comment",
@@ -705,7 +706,8 @@ describe("/review/$sha", () => {
         })
       );
     });
-    expect(mutate).toHaveBeenCalledWith("approve");
+    // With decide:true on postGitReview, decideMut.mutate is NOT called separately.
+    expect(mutate).not.toHaveBeenCalled();
     // Drafts should be cleared from localStorage
     expect(localStore.get(`freehold:review-drafts:${SHA}`)).toBeUndefined();
   });
@@ -733,10 +735,11 @@ describe("/review/$sha", () => {
     await waitFor(() => {
       expect(apiClient.postGitReview).toHaveBeenCalledWith(
         SHA,
-        expect.objectContaining({ verdict: "request-changes" })
+        expect.objectContaining({ verdict: "request-changes", decide: true })
       );
     });
-    expect(mutate).toHaveBeenCalledWith("reject");
+    // With decide:true on postGitReview, decideMut.mutate is NOT called separately.
+    expect(mutate).not.toHaveBeenCalled();
   });
 
   it("zero drafts: approve calls only decide, not postGitReview", async () => {

@@ -2402,111 +2402,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/code/comments": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List code comments for a file
-         * @description List all standalone line-anchored code comments (review/ReviewComment@1) for the given file path. Returns both saved (admitted) and pending comments across all anchor shas.
-         */
-        get: {
-            parameters: {
-                query: {
-                    path: string;
-                };
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Code comments for the file */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            comments: components["schemas"]["CodeComment"][];
-                        };
-                    };
-                };
-                /** @description Not a repo graph or missing path parameter */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-                /** @description Unauthorized */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-            };
-        };
-        put?: never;
-        /**
-         * Post a code comment on a file line
-         * @description Creates a standalone review/ReviewComment@1 anchored to the current HEAD sha of the repo. No Review node or part_of edge.
-         */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": components["schemas"]["PostCodeCommentBody"];
-                };
-            };
-            responses: {
-                /** @description Created code comment */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["PostCodeCommentResult"];
-                    };
-                };
-                /** @description Not a repo graph or validation error */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-                /** @description Unauthorized */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-                /** @description Signing key not found for the specified principal */
-                409: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2682,6 +2577,8 @@ export interface components {
             originRemote: string | null;
             /** @description The principal name whose key signs decide/review operations on this graph */
             signingPrincipal: string;
+            /** @description Glob patterns matched against bare branch names (no refs/heads/ prefix). Matching branches are excluded from proposal listings. Default: []. */
+            ignoreBranches: string[];
         };
         RegisterGraphBody: {
             /** @description Absolute path to the repo checkout */
@@ -2698,6 +2595,34 @@ export interface components {
             autoPushNotes?: boolean;
             /** @enum {string} */
             embedder?: "hash" | "semantic";
+            /** @description Glob patterns to exclude from proposal listings (matched against bare branch names). Placeholder: worktree-*. */
+            ignoreBranches?: string[];
+        };
+        CodeComment: {
+            commentId: string;
+            body: string;
+            span: string;
+            /** @enum {string} */
+            status: "open";
+            author: string;
+            anchorSha: string;
+            currentHead: boolean;
+        };
+        PostCodeCommentBody: {
+            /** @description Repo-relative file path being commented on */
+            path: string;
+            /** @description Line span, e.g. L5 or L5-L9 */
+            span: string;
+            /** @description Comment body text */
+            body: string;
+            /** @description Author principal */
+            by: string;
+            allodGraphId?: string;
+        };
+        PostCodeCommentResult: {
+            commentId: string;
+            /** @enum {string} */
+            status: "saved" | "pending";
         };
         CodeItem: {
             nodeId: string;
@@ -2830,6 +2755,10 @@ export interface components {
             /** @description True when push was not attempted because auto-push is off or no remote is configured. */
             pushSkipped?: boolean;
             pushError?: string;
+            /** @description True when a GitHub commit status was successfully posted. */
+            statusPosted?: boolean;
+            /** @description Present when statusPosted is false due to an error. */
+            statusError?: string;
         } | {
             /** @enum {string} */
             outcome: "incomplete";
@@ -2847,12 +2776,30 @@ export interface components {
             /** @description Author principal */
             by: string;
             comments?: components["schemas"]["ReviewCommentInput"][];
+            /** @description When true (default), automatically call decide after committing the review. Verdict mapping: approve/approve-with-comments → approve; request-changes → reject. */
+            decide?: boolean;
         };
         PostReviewResult: {
             reviewId: string;
             commentIds: string[];
             /** @enum {string} */
             status: "saved" | "pending";
+            /** @description True when decide=true was requested but a decision already existed. */
+            alreadyDecided?: boolean;
+            /** @description Present when decide=true and the auto-decide ran. */
+            decideResult?: {
+                /** @enum {string} */
+                outcome: "approved" | "rejected";
+                pushed: boolean;
+                pushSkipped?: boolean;
+                pushError?: string;
+                statusPosted?: boolean;
+                statusError?: string;
+            } | {
+                /** @enum {string} */
+                outcome: "incomplete";
+                unmet: string[];
+            };
         };
         ReviewComment: {
             commentId: string;
@@ -2927,32 +2874,6 @@ export interface components {
             binary: boolean;
             /** @description File size in bytes (full file, not truncated) */
             size: number;
-        };
-        CodeComment: {
-            commentId: string;
-            body: string;
-            span: string;
-            /** @enum {string} */
-            status: "open";
-            author: string;
-            anchorSha: string;
-            currentHead: boolean;
-        };
-        PostCodeCommentBody: {
-            /** @description Repo-relative file path */
-            path: string;
-            /** @description Line span, e.g. L10 or L10-L20 */
-            span: string;
-            /** @description Comment text */
-            body: string;
-            /** @description Principal name signing the comment */
-            by: string;
-        };
-        PostCodeCommentResult: {
-            commentId: string;
-            /** @enum {string} */
-            status: "saved" | "pending";
-            anchorSha: string;
         };
     };
     responses: never;

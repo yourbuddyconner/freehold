@@ -134,6 +134,10 @@ const GraphInfo = z
     signingPrincipal: z.string().openapi({
       description: "The principal name whose key signs decide/review operations on this graph",
     }),
+    ignoreBranches: z.array(z.string()).openapi({
+      description:
+        "Glob patterns matched against bare branch names (no refs/heads/ prefix). Matching branches are excluded from proposal listings. Default: [].",
+    }),
   })
   .openapi("GraphInfo");
 
@@ -157,8 +161,43 @@ const UpdateGraphBody = z
     name: z.string().optional(),
     autoPushNotes: z.boolean().optional(),
     embedder: z.enum(["hash", "semantic"]).optional(),
+    ignoreBranches: z.array(z.string()).optional().openapi({
+      description:
+        "Glob patterns to exclude from proposal listings (matched against bare branch names). Placeholder: worktree-*.",
+    }),
   })
   .openapi("UpdateGraphBody");
+
+// ---- Code comment schemas ----
+
+const CodeComment = z
+  .object({
+    commentId: z.string(),
+    body: z.string(),
+    span: z.string(),
+    status: z.literal("open"),
+    author: z.string(),
+    anchorSha: z.string(),
+    currentHead: z.boolean(),
+  })
+  .openapi("CodeComment");
+
+const PostCodeCommentBody = z
+  .object({
+    path: z.string().openapi({ description: "Repo-relative file path being commented on" }),
+    span: z.string().openapi({ description: "Line span, e.g. L5 or L5-L9" }),
+    body: z.string().openapi({ description: "Comment body text" }),
+    by: z.string().openapi({ description: "Author principal" }),
+    allodGraphId: z.string().optional(),
+  })
+  .openapi("PostCodeCommentBody");
+
+const PostCodeCommentResult = z
+  .object({
+    commentId: z.string(),
+    status: z.enum(["saved", "pending"]),
+  })
+  .openapi("PostCodeCommentResult");
 
 // ---- Code view schemas ----
 
@@ -479,6 +518,9 @@ function buildRegistry(): OpenAPIRegistry {
   registry.register("GraphInfo", GraphInfo);
   registry.register("RegisterGraphBody", RegisterGraphBody);
   registry.register("UpdateGraphBody", UpdateGraphBody);
+  registry.register("CodeComment", CodeComment);
+  registry.register("PostCodeCommentBody", PostCodeCommentBody);
+  registry.register("PostCodeCommentResult", PostCodeCommentResult);
   registry.register("CodeItem", CodeItem);
   registry.register("CodeFileView", CodeFileView);
   registry.register("CodeItemView", CodeItemView);
@@ -1200,6 +1242,14 @@ function buildRegistry(): OpenAPIRegistry {
             "True when push was not attempted because auto-push is off or no remote is configured.",
         }),
         pushError: z.string().optional(),
+        statusPosted: z
+          .boolean()
+          .optional()
+          .openapi({ description: "True when a GitHub commit status was successfully posted." }),
+        statusError: z
+          .string()
+          .optional()
+          .openapi({ description: "Present when statusPosted is false due to an error." }),
       }),
       z.object({
         outcome: z.literal("incomplete"),
@@ -1222,6 +1272,10 @@ function buildRegistry(): OpenAPIRegistry {
       body: z.string().optional(),
       by: z.string().openapi({ description: "Author principal" }),
       comments: z.array(ReviewCommentInput).optional(),
+      decide: z.boolean().optional().openapi({
+        description:
+          "When true (default), automatically call decide after committing the review. Verdict mapping: approve/approve-with-comments → approve; request-changes → reject.",
+      }),
     })
     .openapi("PostReviewBody");
 
@@ -1230,6 +1284,23 @@ function buildRegistry(): OpenAPIRegistry {
       reviewId: z.string(),
       commentIds: z.array(z.string()),
       status: z.enum(["saved", "pending"]),
+      alreadyDecided: z.boolean().optional().openapi({
+        description: "True when decide=true was requested but a decision already existed.",
+      }),
+      decideResult: z
+        .union([
+          z.object({
+            outcome: z.enum(["approved", "rejected"]),
+            pushed: z.boolean(),
+            pushSkipped: z.boolean().optional(),
+            pushError: z.string().optional(),
+            statusPosted: z.boolean().optional(),
+            statusError: z.string().optional(),
+          }),
+          z.object({ outcome: z.literal("incomplete"), unmet: z.array(z.string()) }),
+        ])
+        .optional()
+        .openapi({ description: "Present when decide=true and the auto-decide ran." }),
     })
     .openapi("PostReviewResult");
 

@@ -485,6 +485,13 @@
           "signingPrincipal": {
             "type": "string",
             "description": "The principal name whose key signs decide/review operations on this graph"
+          },
+          "ignoreBranches": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Glob patterns matched against bare branch names (no refs/heads/ prefix). Matching branches are excluded from proposal listings. Default: []."
           }
         },
         "required": [
@@ -496,7 +503,8 @@
           "embedder",
           "allodGraphId",
           "originRemote",
-          "signingPrincipal"
+          "signingPrincipal",
+          "ignoreBranches"
         ]
       },
       "RegisterGraphBody": {
@@ -533,8 +541,81 @@
           "embedder": {
             "type": "string",
             "enum": ["hash", "semantic"]
+          },
+          "ignoreBranches": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Glob patterns to exclude from proposal listings (matched against bare branch names). Placeholder: worktree-*."
           }
         }
+      },
+      "CodeComment": {
+        "type": "object",
+        "properties": {
+          "commentId": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string"
+          },
+          "span": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["open"]
+          },
+          "author": {
+            "type": "string"
+          },
+          "anchorSha": {
+            "type": "string"
+          },
+          "currentHead": {
+            "type": "boolean"
+          }
+        },
+        "required": ["commentId", "body", "span", "status", "author", "anchorSha", "currentHead"]
+      },
+      "PostCodeCommentBody": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Repo-relative file path being commented on"
+          },
+          "span": {
+            "type": "string",
+            "description": "Line span, e.g. L5 or L5-L9"
+          },
+          "body": {
+            "type": "string",
+            "description": "Comment body text"
+          },
+          "by": {
+            "type": "string",
+            "description": "Author principal"
+          },
+          "allodGraphId": {
+            "type": "string"
+          }
+        },
+        "required": ["path", "span", "body", "by"]
+      },
+      "PostCodeCommentResult": {
+        "type": "object",
+        "properties": {
+          "commentId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["saved", "pending"]
+          }
+        },
+        "required": ["commentId", "status"]
       },
       "CodeItem": {
         "type": "object",
@@ -953,6 +1034,14 @@
               },
               "pushError": {
                 "type": "string"
+              },
+              "statusPosted": {
+                "type": "boolean",
+                "description": "True when a GitHub commit status was successfully posted."
+              },
+              "statusError": {
+                "type": "string",
+                "description": "Present when statusPosted is false due to an error."
               }
             },
             "required": ["outcome", "pushed"]
@@ -1009,6 +1098,10 @@
             "items": {
               "$ref": "#/components/schemas/ReviewCommentInput"
             }
+          },
+          "decide": {
+            "type": "boolean",
+            "description": "When true (default), automatically call decide after committing the review. Verdict mapping: approve/approve-with-comments → approve; request-changes → reject."
           }
         },
         "required": ["verdict", "by"]
@@ -1028,6 +1121,56 @@
           "status": {
             "type": "string",
             "enum": ["saved", "pending"]
+          },
+          "alreadyDecided": {
+            "type": "boolean",
+            "description": "True when decide=true was requested but a decision already existed."
+          },
+          "decideResult": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "outcome": {
+                    "type": "string",
+                    "enum": ["approved", "rejected"]
+                  },
+                  "pushed": {
+                    "type": "boolean"
+                  },
+                  "pushSkipped": {
+                    "type": "boolean"
+                  },
+                  "pushError": {
+                    "type": "string"
+                  },
+                  "statusPosted": {
+                    "type": "boolean"
+                  },
+                  "statusError": {
+                    "type": "string"
+                  }
+                },
+                "required": ["outcome", "pushed"]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "outcome": {
+                    "type": "string",
+                    "enum": ["incomplete"]
+                  },
+                  "unmet": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": ["outcome", "unmet"]
+              }
+            ],
+            "description": "Present when decide=true and the auto-decide ran."
           }
         },
         "required": ["reviewId", "commentIds", "status"]
@@ -1253,72 +1396,6 @@
           }
         },
         "required": ["path", "content", "truncated", "binary", "size"]
-      },
-      "CodeComment": {
-        "type": "object",
-        "properties": {
-          "commentId": {
-            "type": "string"
-          },
-          "body": {
-            "type": "string"
-          },
-          "span": {
-            "type": "string"
-          },
-          "status": {
-            "type": "string",
-            "enum": ["open"]
-          },
-          "author": {
-            "type": "string"
-          },
-          "anchorSha": {
-            "type": "string"
-          },
-          "currentHead": {
-            "type": "boolean"
-          }
-        },
-        "required": ["commentId", "body", "span", "status", "author", "anchorSha", "currentHead"]
-      },
-      "PostCodeCommentBody": {
-        "type": "object",
-        "properties": {
-          "path": {
-            "type": "string",
-            "description": "Repo-relative file path"
-          },
-          "span": {
-            "type": "string",
-            "description": "Line span, e.g. L10 or L10-L20"
-          },
-          "body": {
-            "type": "string",
-            "description": "Comment text"
-          },
-          "by": {
-            "type": "string",
-            "description": "Principal name signing the comment"
-          }
-        },
-        "required": ["path", "span", "body", "by"]
-      },
-      "PostCodeCommentResult": {
-        "type": "object",
-        "properties": {
-          "commentId": {
-            "type": "string"
-          },
-          "status": {
-            "type": "string",
-            "enum": ["saved", "pending"]
-          },
-          "anchorSha": {
-            "type": "string"
-          }
-        },
-        "required": ["commentId", "status", "anchorSha"]
       }
     },
     "parameters": {}
@@ -1621,7 +1698,7 @@
     "/api/v1/memories": {
       "get": {
         "summary": "List recent memories",
-        "description": "Most recently indexed memories, newest first. Same result shape as recall (score is 0). The `status` query param maps to the `approval` field. With `scope=all`, returns the full workspace index instead \u2014 every non-meta node including pending proposals, as MemoryIndexEntry \u2014 and the other query params are ignored.",
+        "description": "Most recently indexed memories, newest first. Same result shape as recall (score is 0). The `status` query param maps to the `approval` field. With `scope=all`, returns the full workspace index instead — every non-meta node including pending proposals, as MemoryIndexEntry — and the other query params are ignored.",
         "security": [
           {
             "bearerAuth": []
@@ -1768,7 +1845,7 @@
           {
             "schema": {
               "type": "string",
-              "description": "Filter by approval state \u2014 maps to the `approval` field on RecallResult"
+              "description": "Filter by approval state — maps to the `approval` field on RecallResult"
             },
             "required": false,
             "name": "status",
@@ -2200,7 +2277,7 @@
     "/api/v1/session": {
       "get": {
         "summary": "Get session config",
-        "description": "Returns non-secret Freehold configuration (defaultAgent, embedder, port). The bearer token is NOT returned here \u2014 it is injected as a meta tag by the server.",
+        "description": "Returns non-secret Freehold configuration (defaultAgent, embedder, port). The bearer token is NOT returned here — it is injected as a meta tag by the server.",
         "security": [
           {
             "bearerAuth": []
@@ -3075,95 +3152,6 @@
           },
           "409": {
             "description": "Connector not configured"
-          }
-        }
-      }
-    },
-    "/api/v1/code/comments": {
-      "get": {
-        "summary": "List code comments for a file",
-        "description": "List all standalone line-anchored code comments (review/ReviewComment@1) for the given file path. Returns both saved (admitted) and pending comments across all anchor shas.",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "description": "Repo-relative file path"
-            },
-            "required": true,
-            "name": "path",
-            "in": "query"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Code comments for the file",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "comments": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/CodeComment"
-                      }
-                    }
-                  },
-                  "required": ["comments"]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Not a repo graph or missing path parameter"
-          },
-          "401": {
-            "description": "Unauthorized"
-          }
-        }
-      },
-      "post": {
-        "summary": "Post a code comment on a file line",
-        "description": "Creates a standalone review/ReviewComment@1 anchored to the current HEAD sha of the repo. No Review node or part_of edge.",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PostCodeCommentBody"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Created code comment",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PostCodeCommentResult"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Not a repo graph or validation error"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "409": {
-            "description": "Signing key not found for the specified principal"
           }
         }
       }
