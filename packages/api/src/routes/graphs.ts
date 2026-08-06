@@ -22,7 +22,7 @@ graphsRouter.get("/graphs", async (c) => {
  */
 graphsRouter.post("/graphs", async (c) => {
   const manager = c.get("manager");
-  let body: { path?: string; id?: string; name?: string };
+  let body: { path?: string; id?: string; name?: string; signingPrincipal?: string };
   try {
     body = await c.req.json();
   } catch {
@@ -37,6 +37,7 @@ graphsRouter.post("/graphs", async (c) => {
     const entry = await manager.registerRepo(body.path, {
       id: body.id,
       name: body.name,
+      signingPrincipal: body.signingPrincipal,
     });
     return c.json(entry, 201);
   } catch (err) {

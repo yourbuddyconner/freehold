@@ -2575,6 +2575,8 @@ export interface components {
             embedder: "hash" | "semantic";
             allodGraphId: string;
             originRemote: string | null;
+            /** @description The principal name whose key signs decide/review operations on this graph */
+            signingPrincipal: string;
         };
         RegisterGraphBody: {
             /** @description Absolute path to the repo checkout */
@@ -2583,6 +2585,8 @@ export interface components {
             id?: string;
             /** @description Display name; defaults to id */
             name?: string;
+            /** @description Signing principal; defaults to 'owner' */
+            signingPrincipal?: string;
         };
         UpdateGraphBody: {
             name?: string;

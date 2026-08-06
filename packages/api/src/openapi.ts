@@ -131,6 +131,9 @@ const GraphInfo = z
     embedder: z.enum(["hash", "semantic"]),
     allodGraphId: z.string(),
     originRemote: z.string().nullable(),
+    signingPrincipal: z.string().openapi({
+      description: "The principal name whose key signs decide/review operations on this graph",
+    }),
   })
   .openapi("GraphInfo");
 
@@ -142,6 +145,10 @@ const RegisterGraphBody = z
       .optional()
       .openapi({ description: "Registry slug id; defaults to basename of path" }),
     name: z.string().optional().openapi({ description: "Display name; defaults to id" }),
+    signingPrincipal: z
+      .string()
+      .optional()
+      .openapi({ description: "Signing principal; defaults to 'owner'" }),
   })
   .openapi("RegisterGraphBody");
 
