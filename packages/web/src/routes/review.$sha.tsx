@@ -6,13 +6,15 @@
  */
 
 import { parseDiffFromFile } from "@pierre/diffs";
-import { CodeView, type CodeViewHandle, type DiffLineAnnotation } from "@pierre/diffs/react";
+import { Editor, type EditorOptions } from "@pierre/diffs/edit";
+import { CodeView, EditProvider, File, type CodeViewHandle, type DiffLineAnnotation } from "@pierre/diffs/react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { useQueryClient } from "@tanstack/react-query";
 import { createRoute } from "@tanstack/react-router";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
 import { ChecklistRow, DecidedChip, PathRow, ReviewComposer } from "~/components/GitProposalCard";
+import { PierreDiff } from "~/components/PierreDiff";
 import { PierreTree } from "~/components/PierreTree";
 import { apiClient } from "~/lib/api";
 import { cn } from "~/lib/cn";
@@ -26,7 +28,7 @@ import {
   useListGraphs,
   useReviewsForSha,
 } from "~/lib/hooks";
-import { type CommentDraft, clearDrafts, loadDrafts, saveDrafts } from "~/lib/reviewDrafts";
+import { type CommentDraft, clearDrafts, loadDrafts, saveDrafts, serializeSuggestionBody } from "~/lib/reviewDrafts";
 import { Route as RootRoute } from "./__root";
 
 export const Route = createRoute({
@@ -90,6 +92,31 @@ function parseSpan(span: string): { side: "deletions" | "additions"; lineNumber:
   return { side: isOld ? "deletions" : "additions", lineNumber };
 }
 
+function spanLines(newContent: string, span: string): string {
+  // span is "L5" or "L5-L9" (no "old:" prefix — guaranteed additions-side by caller)
+  const m = span.match(/^L(\d+)(?:-L(\d+))?$/);
+  if (!m) return newContent;
+  const start = Number.parseInt(m[1], 10);
+  const end = m[2] ? Number.parseInt(m[2], 10) : start;
+  const lines = newContent.split("\n");
+  // 1-indexed
+  return lines.slice(start - 1, end).join("\n");
+}
+
+function useDebouncedValue<T>(value: T, delay: number): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const id = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(id);
+  }, [value, delay]);
+  return debounced;
+}
+
+// biome-ignore lint/suspicious/noExplicitAny: EditorOptions annotation type param is unused here
+function createEditorForSuggestion(options: EditorOptions<any>) {
+  return new Editor(options);
+}
+
 // Exported for testing
 export function ReviewPage({ sha }: { sha: string }) {
   const { data: proposal, isLoading } = useGitProposal(sha);
@@ -132,6 +159,8 @@ export function ReviewPage({ sha }: { sha: string }) {
   const [drafts, setDraftsState] = useState<CommentDraft[]>(() => loadDrafts(sha));
   const [composerOpen, setComposerOpen] = useState<{ path: string; span: string } | null>(null);
   const [composerBody, setComposerBody] = useState("");
+  const [suggestionMode, setSuggestionMode] = useState(false);
+  const [suggestionText, setSuggestionText] = useState("");
   const [reviewError, setReviewError] = useState<string | null>(null);
   // Review composer open state (lifted from ReviewComposer)
   const [reviewComposerOpen, setReviewComposerOpen] = useState(false);
@@ -154,6 +183,9 @@ export function ReviewPage({ sha }: { sha: string }) {
   const scrollToFile = useCallback((path: string) => {
     codeViewRef.current?.scrollTo({ type: "item", id: path });
   }, []);
+
+  const suggestionFileRef = useRef<{ name: string; contents: string; cacheKey: string } | null>(null);
+  const debouncedSuggestionText = useDebouncedValue(suggestionText, 150);
 
   const files = diffData?.files ?? [];
 
@@ -208,6 +240,13 @@ export function ReviewPage({ sha }: { sha: string }) {
     return map;
   }, [drafts]);
 
+  const composerSpanLines = useMemo(() => {
+    if (!composerOpen) return "";
+    const f = files.find((f) => f.path === composerOpen.path);
+    if (!f) return "";
+    return spanLines(f.newContent, composerOpen.span);
+  }, [composerOpen, files]);
+
   // Build CodeView items for non-binary, non-truncated files
   const codeViewItems = useMemo(() => {
     return files
@@ -235,12 +274,17 @@ export function ReviewPage({ sha }: { sha: string }) {
   }
 
   function handleSaveDraft() {
-    if (!composerOpen || !composerBody.trim()) return;
-    persistDrafts([
-      ...drafts,
-      { path: composerOpen.path, span: composerOpen.span, body: composerBody.trim() },
-    ]);
+    if (!composerOpen || !composerBody.trim() && !suggestionMode) return;
+    const newDraft: CommentDraft = {
+      path: composerOpen.path,
+      span: composerOpen.span,
+      body: composerBody.trim(),
+      ...(suggestionMode && suggestionText ? { suggestion: suggestionText } : {}),
+    };
+    persistDrafts([...drafts, newDraft]);
     setComposerBody("");
+    setSuggestionMode(false);
+    setSuggestionText("");
     setComposerOpen(null);
   }
 
@@ -677,6 +721,8 @@ export function ReviewPage({ sha }: { sha: string }) {
                         ? `${side}L${range.start}`
                         : `${side}L${range.start}-L${range.end}`;
                     setComposerOpen({ path, span });
+                    setSuggestionMode(false);
+                    setSuggestionText("");
                   }}
                   options={{
                     diffStyle,
@@ -701,6 +747,34 @@ export function ReviewPage({ sha }: { sha: string }) {
           <div className="text-[11px] font-mono text-(--fg-muted)">
             Comment on {composerOpen.path} {composerOpen.span}
           </div>
+          <div className="flex gap-2 items-center">
+            {!composerOpen.span.startsWith("old:") && (
+              <button
+                type="button"
+                onClick={() => {
+                  const next = !suggestionMode;
+                  setSuggestionMode(next);
+                  if (next) {
+                    setSuggestionText(composerSpanLines);
+                    suggestionFileRef.current = {
+                      name: composerOpen.path,
+                      contents: composerSpanLines,
+                      cacheKey: `suggest-${composerOpen.path}-${composerOpen.span}`,
+                    };
+                  }
+                }}
+                className={cn(
+                  "border font-mono text-[11px] uppercase px-2 py-1",
+                  suggestionMode
+                    ? "border-(--border) bg-(--bg-subtle) text-(--fg)"
+                    : "border-(--border) text-(--fg-muted) hover:text-(--fg)"
+                )}
+                data-testid="suggest-toggle"
+              >
+                {suggestionMode ? "Suggesting" : "Suggest change"}
+              </button>
+            )}
+          </div>
           <textarea
             value={composerBody}
             onChange={(e) => setComposerBody(e.target.value)}
@@ -709,6 +783,28 @@ export function ReviewPage({ sha }: { sha: string }) {
             className="w-full border border-(--border) bg-(--bg) px-2 py-1.5 text-xs text-(--fg) resize-none font-mono"
             aria-label="Comment body"
           />
+          {suggestionMode && suggestionFileRef.current && (
+            <div className="space-y-2" data-testid="suggestion-editor-area">
+              <div className="border border-(--border)" data-testid="suggestion-editor">
+                <EditProvider createEditor={createEditorForSuggestion}>
+                  <File
+                    file={suggestionFileRef.current}
+                    edit
+                    editorOptions={{
+                      onChange: (file: { contents: string }) => setSuggestionText(file.contents),
+                    }}
+                    options={{ disableFileHeader: true, overflow: "wrap" }}
+                  />
+                </EditProvider>
+              </div>
+              <div className="text-[10px] font-mono uppercase text-(--fg-muted)">Suggested change</div>
+              <PierreDiff
+                oldText={composerSpanLines}
+                newText={debouncedSuggestionText}
+                name={composerOpen.path}
+              />
+            </div>
+          )}
           <div className="flex gap-2">
             <button
               type="button"
@@ -719,7 +815,11 @@ export function ReviewPage({ sha }: { sha: string }) {
             </button>
             <button
               type="button"
-              onClick={() => setComposerOpen(null)}
+              onClick={() => {
+                setComposerOpen(null);
+                setSuggestionMode(false);
+                setSuggestionText("");
+              }}
               className="border border-(--border) font-mono text-[11px] uppercase px-2 py-1 text-(--fg-muted)"
             >
               Cancel
