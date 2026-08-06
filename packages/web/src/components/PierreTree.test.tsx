@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -199,5 +199,215 @@ describe("PierreTree", () => {
     expect(ref.current).not.toBeNull();
     ref.current?.scrollToPath("src/index.ts");
     expect(mockModel.scrollToPath).toHaveBeenCalledWith("src/index.ts", { focus: true });
+  });
+
+  describe("onExpansionChange", () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("suppresses the initial emission on mount (Fix 3)", () => {
+      const spy = vi.fn();
+      mockModel.getVisibleRows.mockReturnValue([
+        {
+          path: "src/",
+          kind: "directory",
+          isExpanded: true,
+          depth: 0,
+          index: 0,
+          isSelected: false,
+          isFocused: false,
+          hasChildren: true,
+          isFlattened: false,
+          level: 1,
+          name: "src",
+          ancestorPaths: [],
+          posInSet: 1,
+          setSize: 1,
+        },
+      ]);
+      render(<PierreTree paths={defaultPaths} onSelect={vi.fn()} onExpansionChange={spy} />);
+      act(() => {
+        vi.advanceTimersByTime(250);
+      });
+      expect(spy).not.toHaveBeenCalled();
+    });
+
+    it("emits accumulated expanded list after debounce following a change", () => {
+      const spy = vi.fn();
+      // Initially nothing visible
+      mockModel.getVisibleCount.mockReturnValue(0);
+      mockModel.getVisibleRows.mockReturnValue([]);
+
+      const { rerender } = render(
+        <PierreTree paths={defaultPaths} onSelect={vi.fn()} onExpansionChange={spy} />
+      );
+      // Advance past mount — suppressed by Fix 3
+      act(() => {
+        vi.advanceTimersByTime(250);
+      });
+      expect(spy).not.toHaveBeenCalled();
+
+      // Simulate expansion change: src/ now visible and expanded
+      mockModel.getVisibleCount.mockReturnValue(1);
+      mockModel.getVisibleRows.mockReturnValue([
+        {
+          path: "src/",
+          kind: "directory",
+          isExpanded: true,
+          depth: 0,
+          index: 0,
+          isSelected: false,
+          isFocused: false,
+          hasChildren: true,
+          isFlattened: false,
+          level: 1,
+          name: "src",
+          ancestorPaths: [],
+          posInSet: 1,
+          setSize: 1,
+        },
+      ]);
+
+      // Re-render to trigger selector re-run with new expandedPaths
+      rerender(<PierreTree paths={defaultPaths} onSelect={vi.fn()} onExpansionChange={spy} />);
+
+      // Debounce not elapsed yet
+      expect(spy).not.toHaveBeenCalled();
+
+      act(() => {
+        vi.advanceTimersByTime(250);
+      });
+      expect(spy).toHaveBeenCalledWith(["src/"]);
+    });
+
+    it("preserves expanded-but-hidden directory state when ancestor collapses (Fix 1)", () => {
+      const spy = vi.fn();
+
+      // Phase 1: both src/ and src/components/ visible and expanded
+      mockModel.getVisibleCount.mockReturnValue(2);
+      mockModel.getVisibleRows.mockReturnValue([
+        {
+          path: "src/",
+          kind: "directory",
+          isExpanded: true,
+          depth: 0,
+          index: 0,
+          isSelected: false,
+          isFocused: false,
+          hasChildren: true,
+          isFlattened: false,
+          level: 1,
+          name: "src",
+          ancestorPaths: [],
+          posInSet: 1,
+          setSize: 1,
+        },
+        {
+          path: "src/components/",
+          kind: "directory",
+          isExpanded: true,
+          depth: 1,
+          index: 1,
+          isSelected: false,
+          isFocused: false,
+          hasChildren: true,
+          isFlattened: false,
+          level: 2,
+          name: "components",
+          ancestorPaths: ["src/"],
+          posInSet: 1,
+          setSize: 1,
+        },
+      ]);
+
+      const { rerender } = render(
+        <PierreTree paths={defaultPaths} onSelect={vi.fn()} onExpansionChange={spy} />
+      );
+      // Suppress initial emission
+      act(() => {
+        vi.advanceTimersByTime(250);
+      });
+      expect(spy).not.toHaveBeenCalled();
+
+      // Phase 2: src/ is collapsed — src/components/ is now hidden (not in visible rows)
+      mockModel.getVisibleCount.mockReturnValue(1);
+      mockModel.getVisibleRows.mockReturnValue([
+        {
+          path: "src/",
+          kind: "directory",
+          isExpanded: false,
+          depth: 0,
+          index: 0,
+          isSelected: false,
+          isFocused: false,
+          hasChildren: true,
+          isFlattened: false,
+          level: 1,
+          name: "src",
+          ancestorPaths: [],
+          posInSet: 1,
+          setSize: 1,
+        },
+      ]);
+
+      act(() => {
+        rerender(<PierreTree paths={defaultPaths} onSelect={vi.fn()} onExpansionChange={spy} />);
+      });
+      act(() => {
+        vi.advanceTimersByTime(250);
+      });
+
+      // src/ is now collapsed (false), src/components/ was never seen collapsed so stays true
+      expect(spy).toHaveBeenCalledWith(["src/components/"]);
+    });
+
+    it("clears pending timeout on unmount", () => {
+      const spy = vi.fn();
+      mockModel.getVisibleCount.mockReturnValue(0);
+      mockModel.getVisibleRows.mockReturnValue([]);
+
+      const { rerender, unmount } = render(
+        <PierreTree paths={defaultPaths} onSelect={vi.fn()} onExpansionChange={spy} />
+      );
+      // Advance past mount suppression
+      act(() => {
+        vi.advanceTimersByTime(250);
+      });
+
+      // Trigger a change to queue a debounced emission
+      mockModel.getVisibleCount.mockReturnValue(1);
+      mockModel.getVisibleRows.mockReturnValue([
+        {
+          path: "src/",
+          kind: "directory",
+          isExpanded: true,
+          depth: 0,
+          index: 0,
+          isSelected: false,
+          isFocused: false,
+          hasChildren: true,
+          isFlattened: false,
+          level: 1,
+          name: "src",
+          ancestorPaths: [],
+          posInSet: 1,
+          setSize: 1,
+        },
+      ]);
+      rerender(<PierreTree paths={defaultPaths} onSelect={vi.fn()} onExpansionChange={spy} />);
+
+      // Unmount before debounce fires
+      unmount();
+
+      act(() => {
+        vi.advanceTimersByTime(250);
+      });
+      expect(spy).not.toHaveBeenCalled();
+    });
   });
 });

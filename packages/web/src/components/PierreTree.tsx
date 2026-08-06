@@ -6,6 +6,10 @@ import { useEffect, useImperativeHandle, useRef, useState } from "react";
 export interface PierreTreeProps {
   paths: string[];
   gitStatus?: Array<{ path: string; status: "added" | "modified" | "deleted" | "renamed" }>;
+  /**
+   * Initial selected path. Initial-only: @pierre/trees 1.0.0-beta.6 has no reactive
+   * selection API, so changes to this prop after mount are not applied.
+   */
   selectedPath?: string;
   onSelect: (path: string, kind: "file" | "directory") => void;
   initialExpandedPaths?: string[];
@@ -34,7 +38,7 @@ export function PierreTree({
   initialExpansion = "open",
   search = false,
   header,
-  selectedPath: _selectedPath,
+  selectedPath,
   scrollToRef,
 }: PierreTreeProps): React.JSX.Element {
   const [themeStyles, setThemeStyles] = useState(() =>
@@ -58,6 +62,8 @@ export function PierreTree({
     paths,
     initialExpansion,
     ...(initialExpandedPaths ? { initialExpandedPaths } : {}),
+    // Fix 2: wire selectedPath as initialSelectedPaths (initial-only).
+    ...(selectedPath ? { initialSelectedPaths: [selectedPath] } : {}),
     search,
     gitStatus,
     onSelectionChange: (selectedPaths: readonly string[]) => {
@@ -84,17 +90,40 @@ export function PierreTree({
   const onExpansionChangeRef = useRef(onExpansionChange);
   onExpansionChangeRef.current = onExpansionChange;
 
+  // Fix 1: Accumulator keeps expansion state for paths no longer visible (e.g. inside
+  // a collapsed ancestor). Seeded from initialExpandedPaths so the first emission is
+  // consistent with what the caller originally requested.
+  const expansionAccumulatorRef = useRef<Map<string, boolean>>(
+    new Map(initialExpandedPaths?.map((p) => [p, true]) ?? [])
+  );
+
   // Derive expanded directory paths from visible rows via reactive selector.
+  // Updates the accumulator for every visible directory row; unseen rows are untouched.
   const expandedPaths = useFileTreeSelector(model, (m) => {
     const count = m.getVisibleCount();
-    if (count === 0) return [] as string[];
-    const rows = m.getVisibleRows(0, count);
-    return rows.filter((r) => r.kind === "directory" && r.isExpanded).map((r) => r.path);
+    const rows = count > 0 ? m.getVisibleRows(0, count) : [];
+    for (const row of rows) {
+      if (row.kind === "directory") {
+        expansionAccumulatorRef.current.set(row.path, row.isExpanded);
+      }
+    }
+    return [...expansionAccumulatorRef.current.entries()]
+      .filter(([, v]) => v)
+      .map(([k]) => k)
+      .sort();
   });
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Fix 3: Skip the initial emission to avoid spurious calls before any user interaction.
+  const isFirstRenderRef = useRef(true);
+
   useEffect(() => {
     if (!onExpansionChangeRef.current) return;
+    if (isFirstRenderRef.current) {
+      isFirstRenderRef.current = false;
+      return;
+    }
     if (debounceRef.current !== null) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       onExpansionChangeRef.current?.(expandedPaths);
