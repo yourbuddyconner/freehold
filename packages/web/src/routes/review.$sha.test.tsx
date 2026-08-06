@@ -1116,6 +1116,75 @@ describe("/review/$sha", () => {
     });
   });
 
+  describe("Suggested edits — submit serialization", () => {
+    it("submit with suggestion draft sends fenced body to postGitReview", async () => {
+      localStore.set(
+        `freehold:review-drafts:${SHA}`,
+        JSON.stringify([{
+          path: "src/lib.rs",
+          span: "L1",
+          body: "use this instead",
+          suggestion: "fn replaced() {}",
+        }])
+      );
+      const mutate = vi.fn();
+      setupDefaults({
+        decide: {
+          decideMut: { mutate, isPending: false, variables: undefined } as never,
+        },
+      });
+      await renderReviewPage();
+      const { apiClient } = await import("~/lib/api");
+
+      const approveBtn = screen.getByRole("button", { name: /^approve$/i });
+      await act(async () => { approveBtn.click(); });
+      const confirmBtn = screen
+        .getAllByRole("button", { name: /^approve$/i })
+        .find((b) => b.closest("[role=dialog]"));
+      await act(async () => { confirmBtn?.click(); });
+
+      await waitFor(() => {
+        expect(apiClient.postGitReview).toHaveBeenCalledWith(
+          SHA,
+          expect.objectContaining({
+            comments: [
+              expect.objectContaining({
+                body: "use this instead\n```suggestion\nfn replaced() {}\n```",
+                span: "L1",
+              }),
+            ],
+          })
+        );
+      });
+    });
+
+    it("submit with plain-comment draft sends body as-is (no fence)", async () => {
+      localStore.set(
+        `freehold:review-drafts:${SHA}`,
+        JSON.stringify([{ path: "src/lib.rs", span: "L1", body: "plain comment" }])
+      );
+      setupDefaults();
+      await renderReviewPage();
+      const { apiClient } = await import("~/lib/api");
+
+      const approveBtn = screen.getByRole("button", { name: /^approve$/i });
+      await act(async () => { approveBtn.click(); });
+      const confirmBtn = screen
+        .getAllByRole("button", { name: /^approve$/i })
+        .find((b) => b.closest("[role=dialog]"));
+      await act(async () => { confirmBtn?.click(); });
+
+      await waitFor(() => {
+        expect(apiClient.postGitReview).toHaveBeenCalledWith(
+          SHA,
+          expect.objectContaining({
+            comments: [expect.objectContaining({ body: "plain comment" })],
+          })
+        );
+      });
+    });
+  });
+
   it("Save-draft persists to localStorage after line selection", async () => {
     setupDefaults();
     await renderReviewPage();

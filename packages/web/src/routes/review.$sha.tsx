@@ -307,7 +307,13 @@ export function ReviewPage({ sha }: { sha: string }) {
         await apiClient.postGitReview(sha, {
           verdict: apiVerdict,
           by,
-          comments: drafts.map((d) => ({ body: d.body, anchor: anchor(d.path), span: d.span })),
+          comments: drafts.map((d) => ({
+            body: d.suggestion
+              ? serializeSuggestionBody(d.body, d.suggestion)
+              : d.body,
+            anchor: anchor(d.path),
+            span: d.span,
+          })),
         });
       } catch (err) {
         setReviewError(err instanceof Error ? err.message : "Review post failed.");
