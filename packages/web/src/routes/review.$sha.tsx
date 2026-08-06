@@ -19,6 +19,7 @@ import { PierreTree } from "~/components/PierreTree";
 import { apiClient } from "~/lib/api";
 import { cn } from "~/lib/cn";
 import {
+  keyFor,
   useActiveGraph,
   useActiveGraphPrincipal,
   useDecideProposal,
@@ -198,6 +199,12 @@ export function ReviewPage({ sha }: { sha: string }) {
 
   // Tracks which saved suggestion was most recently copied (by composite key)
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  // Tracks apply-suggestion state: null = idle, key = pending/result
+  const [applyingKey, setApplyingKey] = useState<string | null>(null);
+  const [applyResult, setApplyResult] = useState<
+    Record<string, { newSha: string } | { error: string }>
+  >({});
 
   // Diff view style — split (default) or unified; persisted
   const [diffStyle, setDiffStyle] = useState<"split" | "unified">(readDiffStyle);
@@ -599,18 +606,74 @@ export function ReviewPage({ sha }: { sha: string }) {
                     newText={suggestion}
                     name={meta.path}
                   />
-                  <button
-                    type="button"
-                    data-testid="copy-suggestion-btn"
-                    onClick={() => {
-                      navigator.clipboard.writeText(suggestion).catch(() => {});
-                      setCopiedKey(key);
-                      setTimeout(() => setCopiedKey(null), 2000);
-                    }}
-                    className="border border-(--border) font-mono text-[10px] uppercase px-2 py-0.5 text-(--fg-muted) hover:text-(--fg)"
-                  >
-                    {copiedKey === key ? "Copied" : "Copy suggestion"}
-                  </button>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      type="button"
+                      data-testid="copy-suggestion-btn"
+                      onClick={() => {
+                        navigator.clipboard.writeText(suggestion).catch(() => {});
+                        setCopiedKey(key);
+                        setTimeout(() => setCopiedKey(null), 2000);
+                      }}
+                      className="border border-(--border) font-mono text-[10px] uppercase px-2 py-0.5 text-(--fg-muted) hover:text-(--fg)"
+                    >
+                      {copiedKey === key ? "Copied" : "Copy suggestion"}
+                    </button>
+                    {proposal && (
+                      <button
+                        type="button"
+                        data-testid="apply-suggestion-btn"
+                        disabled={applyingKey === key}
+                        onClick={async () => {
+                          if (applyingKey === key) return;
+                          setApplyingKey(key);
+                          try {
+                            const result = await apiClient.applyGitSuggestion(sha, {
+                              branch: proposal.ref.replace("refs/heads/", ""),
+                              path: meta.path,
+                              span: meta.span,
+                              suggestion,
+                              by,
+                            });
+                            setApplyResult((prev) => ({
+                              ...prev,
+                              [key]: { newSha: result.newSha },
+                            }));
+                            queryClient.invalidateQueries({
+                              queryKey: keyFor(activeGraphId, "git-proposals"),
+                            });
+                            queryClient.invalidateQueries({
+                              queryKey: keyFor(activeGraphId, "git-proposal", sha),
+                            });
+                            queryClient.invalidateQueries({ queryKey: ["git-reviews", sha] });
+                          } catch (err) {
+                            const msg = err instanceof Error ? err.message : "Apply failed.";
+                            setApplyResult((prev) => ({ ...prev, [key]: { error: msg } }));
+                          } finally {
+                            setApplyingKey(null);
+                          }
+                        }}
+                        className="border border-(--border) font-mono text-[10px] uppercase px-2 py-0.5 text-(--fg-muted) hover:text-(--fg) disabled:opacity-50"
+                      >
+                        {applyingKey === key ? "Applying…" : "Apply as commit"}
+                      </button>
+                    )}
+                    {applyResult[key] && (
+                      <span
+                        data-testid="apply-suggestion-result"
+                        className={cn(
+                          "font-mono text-[10px]",
+                          "error" in applyResult[key]
+                            ? "text-red-600 dark:text-red-400"
+                            : "text-(--fg-muted)"
+                        )}
+                      >
+                        {"error" in applyResult[key]
+                          ? (applyResult[key] as { error: string }).error
+                          : `Committed ${(applyResult[key] as { newSha: string }).newSha.slice(0, 7)}.`}
+                      </span>
+                    )}
+                  </div>
                 </div>
               )}
             </>

@@ -135,6 +135,16 @@ export type {
 } from "./codeview.js";
 export type { RecallResult, RecallFilters } from "./recall.js";
 
+// Git suggestion apply
+export {
+  applySuggestion,
+  BranchMovedError,
+  BinaryFileError,
+  OldSideSpanError,
+  InvalidSpanError,
+} from "./gitapply.js";
+export type { ApplySuggestionInput, ApplySuggestionResult } from "./gitapply.js";
+
 // Git proposal review
 export {
   listGitProposals,

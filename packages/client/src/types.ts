@@ -2374,6 +2374,185 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/git/proposals/{sha}/suggestions/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply a review suggestion as a git commit
+         * @description Reads the blob at the branch tip, splices the span lines with the suggestion text, and commits the result via git plumbing (no working-tree mutation). The :sha must equal the current branch tip; concurrent pushes return 409. Binary files and old-side spans return 422.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    sha: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ApplySuggestionBody"];
+                };
+            };
+            responses: {
+                /** @description New commit SHA */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApplySuggestionResult"];
+                    };
+                };
+                /** @description Not a repo graph or validation error */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Proposal not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Branch tip moved since the suggestion was authored (code: branch-moved) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Binary file, old-side span, or invalid span format (codes: binary-file, old-side-span, invalid-span) */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/code/comments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List code comments for a file */
+        get: {
+            parameters: {
+                query: {
+                    path: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Code comments for the file */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            comments: components["schemas"]["CodeComment"][];
+                        };
+                    };
+                };
+                /** @description Not a repo graph or missing path param */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        /** Post a standalone line-anchored code comment */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["PostCodeCommentBody"];
+                };
+            };
+            responses: {
+                /** @description Created comment */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PostCodeCommentResult"];
+                    };
+                };
+                /** @description Not a repo graph or validation error */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No signing key (code: key-missing) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/connector": {
         parameters: {
             query?: never;
@@ -2999,6 +3178,44 @@ export interface components {
         DiffResponse: {
             files: components["schemas"]["DiffFile"][];
             truncated: boolean;
+        };
+        ApplySuggestionBody: {
+            /** @description Branch name (without refs/heads/ prefix) */
+            branch: string;
+            /** @description Repo-relative file path */
+            path: string;
+            /** @description Additions-side span, e.g. "L5" or "L5-L9" */
+            span: string;
+            /** @description Replacement text for the spanned lines */
+            suggestion: string;
+            /** @description Principal name for commit attribution */
+            by: string;
+        };
+        ApplySuggestionResult: {
+            /** @description SHA of the new commit */
+            newSha: string;
+        };
+        CodeComment: {
+            commentId: string;
+            body: string;
+            span: string;
+            /** @enum {string} */
+            status: "open";
+            author: string;
+            anchorSha: string;
+            currentHead: boolean;
+        };
+        PostCodeCommentBody: {
+            path: string;
+            span: string;
+            body: string;
+            by: string;
+        };
+        PostCodeCommentResult: {
+            commentId: string;
+            /** @enum {string} */
+            status: "saved" | "pending";
+            anchorSha: string;
         };
         MemoryIndexEntry: {
             id: string;

@@ -64,6 +64,8 @@ export type ReviewComment = Schemas["ReviewComment"];
 export type ReviewCommentInput = Schemas["ReviewCommentInput"];
 export type DiffFile = Schemas["DiffFile"];
 export type DiffResponse = Schemas["DiffResponse"];
+export type ApplySuggestionBody = Schemas["ApplySuggestionBody"];
+export type ApplySuggestionResult = Schemas["ApplySuggestionResult"];
 
 export type CodeComment = Schemas["CodeComment"];
 export type PostCodeCommentBody = Schemas["PostCodeCommentBody"];
@@ -523,6 +525,15 @@ export class FreeholdClient {
   /** GET /api/v1/git/proposals/:sha/diff — get per-file unified diff for a commit */
   async gitProposalDiff(sha: string): Promise<DiffResponse> {
     return this.fetch<DiffResponse>("GET", `/api/v1/git/proposals/${sha}/diff`);
+  }
+
+  /** POST /api/v1/git/proposals/:sha/suggestions/apply — apply a suggestion as a commit */
+  async applyGitSuggestion(sha: string, body: ApplySuggestionBody): Promise<ApplySuggestionResult> {
+    return this.fetch<ApplySuggestionResult>(
+      "POST",
+      `/api/v1/git/proposals/${sha}/suggestions/apply`,
+      { body }
+    );
   }
 
   /** GET /connector — get connector status and config */

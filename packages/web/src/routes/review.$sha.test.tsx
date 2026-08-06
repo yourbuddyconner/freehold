@@ -12,6 +12,7 @@ import { routeTree } from "~/routes/../routeTree.gen";
 
 // Mock hooks — include all hooks used by the page and by AppShell
 vi.mock("~/lib/hooks", () => ({
+  keyFor: (graphId: string, ...parts: unknown[]) => ["graph", graphId, ...parts],
   useGitProposal: vi.fn(),
   useGitProposalDiff: vi.fn(),
   useDecideProposal: vi.fn(),
@@ -44,6 +45,7 @@ vi.mock("~/lib/api", () => ({
     decideGitProposal: vi.fn().mockResolvedValue({ outcome: "approved", pushed: true }),
     pushGitNotes: vi.fn().mockResolvedValue({ pushed: true }),
     listGitReviews: vi.fn().mockResolvedValue({ reviews: [] }),
+    applyGitSuggestion: vi.fn().mockResolvedValue({ newSha: "deadbeef1234567" }),
   },
 }));
 
@@ -1222,6 +1224,126 @@ describe("/review/$sha", () => {
       setupDefaults();
       await renderReviewPage();
       expect(screen.queryByTestId("copy-suggestion-btn")).not.toBeInTheDocument();
+    });
+
+    it("saved suggestion annotation has apply-as-commit button", async () => {
+      setupDefaults({
+        reviews: {
+          reviews: [
+            {
+              reviewId: "rv-4",
+              verdict: "approve",
+              commit: `git:my-repo#${SHA}`,
+              author: "bob",
+              status: "saved",
+              comments: [
+                {
+                  commentId: "c-4",
+                  body: "```suggestion\nfn replaced() {}\n```",
+                  anchor: `git:my-repo#${SHA}:src/lib.rs`,
+                  span: "L1",
+                  status: "saved",
+                },
+              ],
+            },
+          ],
+        },
+      });
+      await renderReviewPage();
+      expect(screen.getByTestId("apply-suggestion-btn")).toBeInTheDocument();
+      expect(screen.getByTestId("apply-suggestion-btn")).toHaveTextContent("Apply as commit");
+    });
+
+    it("apply-as-commit button calls applyGitSuggestion and shows committed caption", async () => {
+      setupDefaults({
+        reviews: {
+          reviews: [
+            {
+              reviewId: "rv-5",
+              verdict: "approve",
+              commit: `git:my-repo#${SHA}`,
+              author: "bob",
+              status: "saved",
+              comments: [
+                {
+                  commentId: "c-5",
+                  body: "```suggestion\nfn replaced() {}\n```",
+                  anchor: `git:my-repo#${SHA}:src/lib.rs`,
+                  span: "L1",
+                  status: "saved",
+                },
+              ],
+            },
+          ],
+        },
+      });
+      await renderReviewPage();
+      const { apiClient } = await import("~/lib/api");
+
+      const applyBtn = screen.getByTestId("apply-suggestion-btn");
+      await act(async () => {
+        applyBtn.click();
+      });
+
+      await waitFor(() => {
+        expect(apiClient.applyGitSuggestion).toHaveBeenCalledWith(
+          SHA,
+          expect.objectContaining({
+            path: "src/lib.rs",
+            span: "L1",
+            suggestion: "fn replaced() {}",
+            by: "alice",
+          })
+        );
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId("apply-suggestion-result")).toBeInTheDocument();
+        expect(screen.getByTestId("apply-suggestion-result")).toHaveTextContent(
+          "Committed deadbee."
+        );
+      });
+    });
+
+    it("apply-as-commit button shows error message on failure", async () => {
+      const { apiClient } = await import("~/lib/api");
+      (apiClient.applyGitSuggestion as ReturnType<typeof vi.fn>).mockRejectedValue(
+        new Error("branch main moved during apply")
+      );
+      setupDefaults({
+        reviews: {
+          reviews: [
+            {
+              reviewId: "rv-6",
+              verdict: "approve",
+              commit: `git:my-repo#${SHA}`,
+              author: "bob",
+              status: "saved",
+              comments: [
+                {
+                  commentId: "c-6",
+                  body: "```suggestion\nfn replaced() {}\n```",
+                  anchor: `git:my-repo#${SHA}:src/lib.rs`,
+                  span: "L1",
+                  status: "saved",
+                },
+              ],
+            },
+          ],
+        },
+      });
+      await renderReviewPage();
+
+      const applyBtn = screen.getByTestId("apply-suggestion-btn");
+      await act(async () => {
+        applyBtn.click();
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId("apply-suggestion-result")).toHaveTextContent(
+          "branch main moved during apply"
+        );
+      });
     });
   });
 

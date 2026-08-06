@@ -1654,6 +1654,135 @@ function buildRegistry(): OpenAPIRegistry {
     },
   });
 
+  // Git proposals — apply suggestion as commit
+  const ApplySuggestionBody = z
+    .object({
+      branch: z.string().openapi({ description: "Branch name (without refs/heads/ prefix)" }),
+      path: z.string().openapi({ description: "Repo-relative file path" }),
+      span: z.string().openapi({ description: 'Additions-side span, e.g. "L5" or "L5-L9"' }),
+      suggestion: z.string().openapi({ description: "Replacement text for the spanned lines" }),
+      by: z.string().openapi({ description: "Principal name for commit attribution" }),
+    })
+    .openapi("ApplySuggestionBody");
+
+  const ApplySuggestionResult = z
+    .object({
+      newSha: z.string().openapi({ description: "SHA of the new commit" }),
+    })
+    .openapi("ApplySuggestionResult");
+
+  registry.register("ApplySuggestionBody", ApplySuggestionBody);
+  registry.register("ApplySuggestionResult", ApplySuggestionResult);
+
+  registry.registerPath({
+    method: "post",
+    path: "/api/v1/git/proposals/{sha}/suggestions/apply",
+    summary: "Apply a review suggestion as a git commit",
+    description:
+      "Reads the blob at the branch tip, splices the span lines with the suggestion text, and commits the result via git plumbing (no working-tree mutation). The :sha must equal the current branch tip; concurrent pushes return 409. Binary files and old-side spans return 422.",
+    security: auth,
+    request: {
+      params: z.object({ sha: z.string() }),
+      body: {
+        required: true,
+        content: { "application/json": { schema: ApplySuggestionBody } },
+      },
+    },
+    responses: {
+      "200": {
+        description: "New commit SHA",
+        content: { "application/json": { schema: ApplySuggestionResult } },
+      },
+      "400": { description: "Not a repo graph or validation error" },
+      "401": { description: "Unauthorized" },
+      "404": { description: "Proposal not found" },
+      "409": {
+        description: "Branch tip moved since the suggestion was authored (code: branch-moved)",
+      },
+      "422": {
+        description:
+          "Binary file, old-side span, or invalid span format (codes: binary-file, old-side-span, invalid-span)",
+      },
+    },
+  });
+
+  // Code comments schemas
+  const CodeComment = z
+    .object({
+      commentId: z.string(),
+      body: z.string(),
+      span: z.string(),
+      status: z.literal("open"),
+      author: z.string(),
+      anchorSha: z.string(),
+      currentHead: z.boolean(),
+    })
+    .openapi("CodeComment");
+
+  const PostCodeCommentBody = z
+    .object({
+      path: z.string(),
+      span: z.string(),
+      body: z.string(),
+      by: z.string(),
+    })
+    .openapi("PostCodeCommentBody");
+
+  const PostCodeCommentResult = z
+    .object({
+      commentId: z.string(),
+      status: z.enum(["saved", "pending"]),
+      anchorSha: z.string(),
+    })
+    .openapi("PostCodeCommentResult");
+
+  registry.register("CodeComment", CodeComment);
+  registry.register("PostCodeCommentBody", PostCodeCommentBody);
+  registry.register("PostCodeCommentResult", PostCodeCommentResult);
+
+  // Code comments — list
+  registry.registerPath({
+    method: "get",
+    path: "/api/v1/code/comments",
+    summary: "List code comments for a file",
+    security: auth,
+    request: {
+      query: z.object({ path: z.string().openapi({ description: "Repo-relative file path" }) }),
+    },
+    responses: {
+      "200": {
+        description: "Code comments for the file",
+        content: {
+          "application/json": {
+            schema: z.object({ comments: z.array(CodeComment) }),
+          },
+        },
+      },
+      "400": { description: "Not a repo graph or missing path param" },
+      "401": { description: "Unauthorized" },
+    },
+  });
+
+  // Code comments — post
+  registry.registerPath({
+    method: "post",
+    path: "/api/v1/code/comments",
+    summary: "Post a standalone line-anchored code comment",
+    security: auth,
+    request: {
+      body: { required: true, content: { "application/json": { schema: PostCodeCommentBody } } },
+    },
+    responses: {
+      "200": {
+        description: "Created comment",
+        content: { "application/json": { schema: PostCodeCommentResult } },
+      },
+      "400": { description: "Not a repo graph or validation error" },
+      "401": { description: "Unauthorized" },
+      "409": { description: "No signing key (code: key-missing)" },
+    },
+  });
+
   // Connector — GET
   registry.registerPath({
     method: "get",
