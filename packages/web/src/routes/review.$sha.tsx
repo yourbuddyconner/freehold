@@ -66,6 +66,17 @@ function activeTheme(): "dark" | "light" {
   return document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light";
 }
 
+/** Cheap fingerprint so the CodeView remounts when annotations change —
+ * the imperative shadow-DOM renderer does not repaint them on prop updates. */
+function annotationsFingerprint(
+  annotations: DiffLineAnnotation<AnnotationMeta>[] | undefined
+): string {
+  if (!annotations || annotations.length === 0) return "0";
+  return annotations
+    .map((a) => `${a.side[0]}${a.lineNumber}:${a.metadata?.kind ?? ""}:${a.metadata?.body.length ?? 0}`)
+    .join("|");
+}
+
 function verbToStatus(verb: string): "added" | "modified" | "deleted" | "renamed" {
   if (verb === "A") return "added";
   if (verb === "D") return "deleted";
@@ -812,7 +823,7 @@ export function ReviewPage({ sha }: { sha: string }) {
                   }}
                 >
                   <CodeView
-                    key={diffStyle}
+                    key={`${diffStyle}:${annotationsFingerprint(item.annotations)}`}
                     className="w-full"
                     items={[item]}
                     renderAnnotation={renderAnnotation}
