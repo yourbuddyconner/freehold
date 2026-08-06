@@ -122,6 +122,9 @@ gitreviewRouter.post("/git/proposals/:sha/decide", async (c) => {
       autoPushNotes: entry.autoPushNotes,
       originRemote: entry.originRemote,
     });
+    // The decision moved the decisions-notes tip, which invalidates the whole
+    // proposal cache. Re-warm in the background so the next list call is fast.
+    void listGitProposals(fh).catch(() => {});
     return c.json(result);
   } catch (err: unknown) {
     if (err instanceof KeyMissingError) {
