@@ -32,7 +32,10 @@
             "description": "Free-text note content"
           }
         },
-        "required": ["agent", "content"]
+        "required": [
+          "agent",
+          "content"
+        ]
       },
       "CreateEntityBody": {
         "type": "object",
@@ -52,7 +55,11 @@
             "type": "string"
           }
         },
-        "required": ["agent", "type", "attributes"]
+        "required": [
+          "agent",
+          "type",
+          "attributes"
+        ]
       },
       "UpdateEntityBody": {
         "type": "object",
@@ -72,7 +79,11 @@
             "description": "Hash of the changeset being superseded"
           }
         },
-        "required": ["agent", "type", "attributes"]
+        "required": [
+          "agent",
+          "type",
+          "attributes"
+        ]
       },
       "RelateBody": {
         "type": "object",
@@ -97,7 +108,12 @@
             "type": "boolean"
           }
         },
-        "required": ["agent", "from", "to", "edgeType"]
+        "required": [
+          "agent",
+          "from",
+          "to",
+          "edgeType"
+        ]
       },
       "ClassifyBody": {
         "type": "object",
@@ -113,11 +129,18 @@
           },
           "basis": {
             "type": "string",
-            "enum": ["model-assisted", "manual"],
+            "enum": [
+              "model-assisted",
+              "manual"
+            ],
             "description": "How the classification was derived; manual assertions skip the envelope rule"
           }
         },
-        "required": ["agent", "nodeId", "term"]
+        "required": [
+          "agent",
+          "nodeId",
+          "term"
+        ]
       },
       "AttachDocumentBody": {
         "type": "object",
@@ -135,7 +158,11 @@
             "type": "string"
           }
         },
-        "required": ["agent", "entityId", "content"]
+        "required": [
+          "agent",
+          "entityId",
+          "content"
+        ]
       },
       "RegisterAgentBody": {
         "type": "object",
@@ -144,7 +171,9 @@
             "type": "string"
           }
         },
-        "required": ["name"]
+        "required": [
+          "name"
+        ]
       },
       "ProposeOntologyBody": {
         "type": "object",
@@ -159,7 +188,11 @@
             "type": "string"
           }
         },
-        "required": ["agent", "packageName", "ontologyYaml"]
+        "required": [
+          "agent",
+          "packageName",
+          "ontologyYaml"
+        ]
       },
       "InstallOntologyBody": {
         "type": "object",
@@ -168,7 +201,9 @@
             "type": "string"
           }
         },
-        "required": ["docsYaml"]
+        "required": [
+          "docsYaml"
+        ]
       },
       "PolicyBody": {
         "type": "object",
@@ -182,14 +217,19 @@
             "description": "Authoring agent principal; omitted means the owner proposes"
           }
         },
-        "required": ["policy_yaml"]
+        "required": [
+          "policy_yaml"
+        ]
       },
       "AdmissionResponse": {
         "type": "object",
         "properties": {
           "status": {
             "type": "string",
-            "enum": ["saved", "pending"]
+            "enum": [
+              "saved",
+              "pending"
+            ]
           },
           "hash": {
             "type": "string"
@@ -202,7 +242,10 @@
             }
           }
         },
-        "required": ["status", "hash"]
+        "required": [
+          "status",
+          "hash"
+        ]
       },
       "RememberResponse": {
         "allOf": [
@@ -254,14 +297,19 @@
                 "before": {},
                 "after": {}
               },
-              "required": ["key"]
+              "required": [
+                "key"
+              ]
             }
           },
           "isSchemaProposal": {
             "type": "boolean"
           },
           "subject": {
-            "type": ["object", "null"],
+            "type": [
+              "object",
+              "null"
+            ],
             "properties": {
               "id": {
                 "type": "string"
@@ -270,7 +318,10 @@
                 "type": "string"
               }
             },
-            "required": ["id", "title"],
+            "required": [
+              "id",
+              "title"
+            ],
             "description": "The existing node this proposal targets, with its resolved title; null for creates"
           }
         },
@@ -299,7 +350,10 @@
             "type": "string"
           },
           "method": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Provenance method (model-assisted, manual, etc.) or null for unrecorded"
           },
           "approval": {
@@ -313,7 +367,15 @@
             "type": "number"
           }
         },
-        "required": ["id", "type", "author", "method", "approval", "changeset", "score"]
+        "required": [
+          "id",
+          "type",
+          "author",
+          "method",
+          "approval",
+          "changeset",
+          "score"
+        ]
       },
       "VerifyReport": {
         "type": "object",
@@ -336,11 +398,16 @@
                   "type": "string"
                 }
               },
-              "required": ["id", "reason"]
+              "required": [
+                "id",
+                "reason"
+              ]
             }
           }
         },
-        "required": ["ok"]
+        "required": [
+          "ok"
+        ]
       },
       "SchemaDescription": {
         "type": "object",
@@ -364,7 +431,9 @@
                   "type": "string"
                 }
               },
-              "required": ["name"]
+              "required": [
+                "name"
+              ]
             }
           },
           "edgeTypes": {
@@ -382,7 +451,9 @@
                   "type": "string"
                 }
               },
-              "required": ["name"]
+              "required": [
+                "name"
+              ]
             }
           },
           "terms": {
@@ -397,11 +468,17 @@
                   "type": "string"
                 }
               },
-              "required": ["name"]
+              "required": [
+                "name"
+              ]
             }
           }
         },
-        "required": ["entityTypes", "edgeTypes", "terms"]
+        "required": [
+          "entityTypes",
+          "edgeTypes",
+          "terms"
+        ]
       },
       "SessionGraphEntry": {
         "type": "object",
@@ -414,21 +491,34 @@
           },
           "kind": {
             "type": "string",
-            "enum": ["memory", "repo"]
+            "enum": [
+              "memory",
+              "repo"
+            ]
           }
         },
-        "required": ["id", "name", "kind"]
+        "required": [
+          "id",
+          "name",
+          "kind"
+        ]
       },
       "SessionInfo": {
         "type": "object",
         "properties": {
           "defaultAgent": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Default MCP agent name, if set"
           },
           "embedder": {
             "type": "string",
-            "enum": ["transformers", "hash"],
+            "enum": [
+              "transformers",
+              "hash"
+            ],
             "description": "Active embedder backend"
           },
           "port": {
@@ -451,7 +541,14 @@
             "description": "ID of the default graph"
           }
         },
-        "required": ["defaultAgent", "embedder", "port", "owner", "graphs", "defaultGraph"]
+        "required": [
+          "defaultAgent",
+          "embedder",
+          "port",
+          "owner",
+          "graphs",
+          "defaultGraph"
+        ]
       },
       "GraphInfo": {
         "type": "object",
@@ -467,20 +564,29 @@
           },
           "kind": {
             "type": "string",
-            "enum": ["memory", "repo"]
+            "enum": [
+              "memory",
+              "repo"
+            ]
           },
           "autoPushNotes": {
             "type": "boolean"
           },
           "embedder": {
             "type": "string",
-            "enum": ["hash", "semantic"]
+            "enum": [
+              "hash",
+              "semantic"
+            ]
           },
           "allodGraphId": {
             "type": "string"
           },
           "originRemote": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "signingPrincipal": {
             "type": "string",
@@ -519,7 +625,9 @@
             "description": "Signing principal; defaults to 'owner'"
           }
         },
-        "required": ["path"]
+        "required": [
+          "path"
+        ]
       },
       "UpdateGraphBody": {
         "type": "object",
@@ -532,7 +640,10 @@
           },
           "embedder": {
             "type": "string",
-            "enum": ["hash", "semantic"]
+            "enum": [
+              "hash",
+              "semantic"
+            ]
           }
         }
       },
@@ -559,9 +670,17 @@
             "items": {
               "type": "string"
             }
+          },
+          "filePath": {
+            "type": "string"
           }
         },
-        "required": ["nodeId", "type", "name", "terms"]
+        "required": [
+          "nodeId",
+          "type",
+          "name",
+          "terms"
+        ]
       },
       "CodeFileView": {
         "type": "object",
@@ -591,7 +710,12 @@
             }
           }
         },
-        "required": ["path", "nodeId", "terms", "items"]
+        "required": [
+          "path",
+          "nodeId",
+          "terms",
+          "items"
+        ]
       },
       "CodeItemView": {
         "allOf": [
@@ -601,9 +725,6 @@
           {
             "type": "object",
             "properties": {
-              "filePath": {
-                "type": "string"
-              },
               "callersIn": {
                 "type": "array",
                 "items": {
@@ -617,7 +738,10 @@
                 }
               }
             },
-            "required": ["callersIn", "callsOut"]
+            "required": [
+              "callersIn",
+              "callsOut"
+            ]
           }
         ]
       },
@@ -638,7 +762,10 @@
             }
           }
         },
-        "required": ["rule", "paths"]
+        "required": [
+          "rule",
+          "paths"
+        ]
       },
       "CodeNeighborhood": {
         "type": "object",
@@ -664,7 +791,12 @@
                   }
                 }
               },
-              "required": ["id", "label", "type", "terms"]
+              "required": [
+                "id",
+                "label",
+                "type",
+                "terms"
+              ]
             }
           },
           "edges": {
@@ -685,11 +817,19 @@
                   "type": "string"
                 }
               },
-              "required": ["id", "from", "to", "type"]
+              "required": [
+                "id",
+                "from",
+                "to",
+                "type"
+              ]
             }
           }
         },
-        "required": ["nodes", "edges"]
+        "required": [
+          "nodes",
+          "edges"
+        ]
       },
       "ConnectorStatus": {
         "type": "object",
@@ -712,7 +852,10 @@
         "properties": {
           "mode": {
             "type": "string",
-            "enum": ["credential", "app"],
+            "enum": [
+              "credential",
+              "app"
+            ],
             "description": "Authentication mode"
           },
           "owner": {
@@ -737,7 +880,13 @@
             "type": "string"
           }
         },
-        "required": ["mode", "owner", "repo", "pollIntervalSec", "webhooksEnabled"]
+        "required": [
+          "mode",
+          "owner",
+          "repo",
+          "pollIntervalSec",
+          "webhooksEnabled"
+        ]
       },
       "ConnectorResponse": {
         "type": "object",
@@ -752,7 +901,10 @@
             "$ref": "#/components/schemas/ConnectorStatus"
           }
         },
-        "required": ["configured", "status"]
+        "required": [
+          "configured",
+          "status"
+        ]
       },
       "PutConnectorBody": {
         "anyOf": [
@@ -761,7 +913,9 @@
             "properties": {
               "mode": {
                 "type": "string",
-                "enum": ["credential"],
+                "enum": [
+                  "credential"
+                ],
                 "description": "Credential mode uses gh CLI token discovery"
               },
               "pollIntervalSec": {
@@ -778,7 +932,9 @@
                 "description": "Public URL for webhook delivery"
               }
             },
-            "required": ["mode"]
+            "required": [
+              "mode"
+            ]
           },
           {
             "type": "object",
@@ -792,7 +948,9 @@
                 "description": "Public URL for webhook delivery"
               }
             },
-            "required": ["webhooksEnabled"]
+            "required": [
+              "webhooksEnabled"
+            ]
           }
         ]
       },
@@ -815,7 +973,11 @@
             "description": "Number of items unchanged"
           }
         },
-        "required": ["events", "errors", "unchanged"]
+        "required": [
+          "events",
+          "errors",
+          "unchanged"
+        ]
       },
       "GitProposalPath": {
         "type": "object",
@@ -836,7 +998,12 @@
             "type": "boolean"
           }
         },
-        "required": ["verb", "path", "regions", "indexed"]
+        "required": [
+          "verb",
+          "path",
+          "regions",
+          "indexed"
+        ]
       },
       "GitProposalCheck": {
         "type": "object",
@@ -848,10 +1015,16 @@
             "type": "string"
           },
           "conclusion": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
-        "required": ["name", "status"]
+        "required": [
+          "name",
+          "status"
+        ]
       },
       "GitProposal": {
         "type": "object",
@@ -892,7 +1065,11 @@
           },
           "decided": {
             "type": "string",
-            "enum": ["undecided", "approved", "rejected"]
+            "enum": [
+              "undecided",
+              "approved",
+              "rejected"
+            ]
           },
           "paths": {
             "type": "array",
@@ -926,14 +1103,20 @@
         "properties": {
           "verdict": {
             "type": "string",
-            "enum": ["approve", "reject"]
+            "enum": [
+              "approve",
+              "reject"
+            ]
           },
           "by": {
             "type": "string",
             "description": "Principal name performing the decision"
           }
         },
-        "required": ["verdict", "by"]
+        "required": [
+          "verdict",
+          "by"
+        ]
       },
       "DecideResult": {
         "anyOf": [
@@ -942,7 +1125,10 @@
             "properties": {
               "outcome": {
                 "type": "string",
-                "enum": ["approved", "rejected"]
+                "enum": [
+                  "approved",
+                  "rejected"
+                ]
               },
               "pushed": {
                 "type": "boolean"
@@ -955,14 +1141,19 @@
                 "type": "string"
               }
             },
-            "required": ["outcome", "pushed"]
+            "required": [
+              "outcome",
+              "pushed"
+            ]
           },
           {
             "type": "object",
             "properties": {
               "outcome": {
                 "type": "string",
-                "enum": ["incomplete"]
+                "enum": [
+                  "incomplete"
+                ]
               },
               "unmet": {
                 "type": "array",
@@ -971,7 +1162,10 @@
                 }
               }
             },
-            "required": ["outcome", "unmet"]
+            "required": [
+              "outcome",
+              "unmet"
+            ]
           }
         ]
       },
@@ -988,14 +1182,20 @@
             "type": "string"
           }
         },
-        "required": ["body"]
+        "required": [
+          "body"
+        ]
       },
       "PostReviewBody": {
         "type": "object",
         "properties": {
           "verdict": {
             "type": "string",
-            "enum": ["approve", "approve-with-comments", "request-changes"]
+            "enum": [
+              "approve",
+              "approve-with-comments",
+              "request-changes"
+            ]
           },
           "body": {
             "type": "string"
@@ -1011,7 +1211,10 @@
             }
           }
         },
-        "required": ["verdict", "by"]
+        "required": [
+          "verdict",
+          "by"
+        ]
       },
       "PostReviewResult": {
         "type": "object",
@@ -1027,10 +1230,17 @@
           },
           "status": {
             "type": "string",
-            "enum": ["saved", "pending"]
+            "enum": [
+              "saved",
+              "pending"
+            ]
           }
         },
-        "required": ["reviewId", "commentIds", "status"]
+        "required": [
+          "reviewId",
+          "commentIds",
+          "status"
+        ]
       },
       "ReviewComment": {
         "type": "object",
@@ -1057,7 +1267,10 @@
             "type": "string"
           }
         },
-        "required": ["commentId", "status"]
+        "required": [
+          "commentId",
+          "status"
+        ]
       },
       "ReviewEntry": {
         "type": "object",
@@ -1079,7 +1292,10 @@
           },
           "status": {
             "type": "string",
-            "enum": ["saved", "pending"]
+            "enum": [
+              "saved",
+              "pending"
+            ]
           },
           "comments": {
             "type": "array",
@@ -1088,7 +1304,14 @@
             }
           }
         },
-        "required": ["reviewId", "verdict", "commit", "author", "status", "comments"]
+        "required": [
+          "reviewId",
+          "verdict",
+          "commit",
+          "author",
+          "status",
+          "comments"
+        ]
       },
       "DiffFile": {
         "type": "object",
@@ -1101,7 +1324,12 @@
           },
           "verb": {
             "type": "string",
-            "enum": ["A", "M", "D", "R"]
+            "enum": [
+              "A",
+              "M",
+              "D",
+              "R"
+            ]
           },
           "binary": {
             "type": "boolean"
@@ -1116,7 +1344,14 @@
             "type": "boolean"
           }
         },
-        "required": ["path", "verb", "binary", "oldContent", "newContent", "truncated"]
+        "required": [
+          "path",
+          "verb",
+          "binary",
+          "oldContent",
+          "newContent",
+          "truncated"
+        ]
       },
       "DiffResponse": {
         "type": "object",
@@ -1131,7 +1366,10 @@
             "type": "boolean"
           }
         },
-        "required": ["files", "truncated"]
+        "required": [
+          "files",
+          "truncated"
+        ]
       },
       "MemoryIndexEntry": {
         "type": "object",
@@ -1163,7 +1401,15 @@
             "description": "Taxonomy terms from fold state"
           }
         },
-        "required": ["id", "type", "title", "approval", "author", "updatedAt", "terms"]
+        "required": [
+          "id",
+          "type",
+          "title",
+          "approval",
+          "author",
+          "updatedAt",
+          "terms"
+        ]
       },
       "GraphNode": {
         "type": "object",
@@ -1187,7 +1433,13 @@
             }
           }
         },
-        "required": ["id", "type", "title", "approval", "terms"]
+        "required": [
+          "id",
+          "type",
+          "title",
+          "approval",
+          "terms"
+        ]
       },
       "GraphEdge": {
         "type": "object",
@@ -1205,7 +1457,12 @@
             "type": "string"
           }
         },
-        "required": ["id", "type", "from", "to"]
+        "required": [
+          "id",
+          "type",
+          "from",
+          "to"
+        ]
       },
       "MemoryGraphView": {
         "type": "object",
@@ -1227,7 +1484,11 @@
             "description": "True when the node cap cut the listing short"
           }
         },
-        "required": ["nodes", "edges", "truncated"]
+        "required": [
+          "nodes",
+          "edges",
+          "truncated"
+        ]
       },
       "CodeSource": {
         "type": "object",
@@ -1252,7 +1513,13 @@
             "description": "File size in bytes (full file, not truncated)"
           }
         },
-        "required": ["path", "content", "truncated", "binary", "size"]
+        "required": [
+          "path",
+          "content",
+          "truncated",
+          "binary",
+          "size"
+        ]
       }
     },
     "parameters": {}
@@ -1271,10 +1538,14 @@
                   "properties": {
                     "status": {
                       "type": "string",
-                      "enum": ["ok"]
+                      "enum": [
+                        "ok"
+                      ]
                     }
                   },
-                  "required": ["status"]
+                  "required": [
+                    "status"
+                  ]
                 }
               }
             }
@@ -1630,7 +1901,9 @@
                       ]
                     }
                   },
-                  "required": ["results"]
+                  "required": [
+                    "results"
+                  ]
                 }
               }
             }
@@ -1724,7 +1997,9 @@
                       }
                     }
                   },
-                  "required": ["results"]
+                  "required": [
+                    "results"
+                  ]
                 }
               }
             }
@@ -1766,7 +2041,11 @@
           {
             "schema": {
               "type": "string",
-              "enum": ["out", "in", "both"]
+              "enum": [
+                "out",
+                "in",
+                "both"
+              ]
             },
             "required": false,
             "name": "direction",
@@ -1814,7 +2093,9 @@
                       }
                     }
                   },
-                  "required": ["proposals"]
+                  "required": [
+                    "proposals"
+                  ]
                 }
               }
             }
@@ -2180,7 +2461,9 @@
                       }
                     }
                   },
-                  "required": ["graphs"]
+                  "required": [
+                    "graphs"
+                  ]
                 }
               }
             }
@@ -2329,7 +2612,9 @@
                       "items": {}
                     }
                   },
-                  "required": ["tree"]
+                  "required": [
+                    "tree"
+                  ]
                 }
               }
             }
@@ -2452,7 +2737,9 @@
                       }
                     }
                   },
-                  "required": ["rules"]
+                  "required": [
+                    "rules"
+                  ]
                 }
               }
             }
@@ -2583,7 +2870,9 @@
                       }
                     }
                   },
-                  "required": ["proposals"]
+                  "required": [
+                    "proposals"
+                  ]
                 }
               }
             }
@@ -2773,7 +3062,9 @@
                       }
                     }
                   },
-                  "required": ["reviews"]
+                  "required": [
+                    "reviews"
+                  ]
                 }
               }
             }
@@ -2863,7 +3154,9 @@
                       "type": "string"
                     }
                   },
-                  "required": ["pushed"]
+                  "required": [
+                    "pushed"
+                  ]
                 }
               }
             }
@@ -2933,7 +3226,9 @@
                       "$ref": "#/components/schemas/ConnectorConfigView"
                     }
                   },
-                  "required": ["config"]
+                  "required": [
+                    "config"
+                  ]
                 }
               }
             }
@@ -2968,7 +3263,9 @@
                       "type": "boolean"
                     }
                   },
-                  "required": ["ok"]
+                  "required": [
+                    "ok"
+                  ]
                 }
               }
             }

@@ -170,6 +170,8 @@ const CodeItem = z
     signature: z.string().optional(),
     span: z.string().optional(),
     terms: z.array(z.string()),
+    /** File path of the source file declaring this item. Present on caller/callee rows. */
+    filePath: z.string().optional(),
   })
   .openapi("CodeItem");
 

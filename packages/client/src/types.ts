@@ -2601,6 +2601,7 @@ export interface components {
             signature?: string;
             span?: string;
             terms: string[];
+            filePath?: string;
         };
         CodeFileView: {
             path: string;
@@ -2611,7 +2612,6 @@ export interface components {
             items: components["schemas"]["CodeItem"][];
         };
         CodeItemView: components["schemas"]["CodeItem"] & {
-            filePath?: string;
             callersIn: components["schemas"]["CodeItem"][];
             callsOut: components["schemas"]["CodeItem"][];
         };
