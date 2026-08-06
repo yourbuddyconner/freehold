@@ -3038,6 +3038,16 @@ export interface components {
             status: string;
             conclusion?: string | null;
         };
+        GitProposalPriorDecision: {
+            /** @description The decided commit sha. */
+            sha: string;
+            /** @description The verdict from the decision record. */
+            verdict: string;
+            /** @description The principal who decided, if recorded. */
+            decidedBy?: string;
+            /** @description ISO timestamp of the decision, if recorded. */
+            decidedAt?: string;
+        };
         GitProposal: {
             sha: string;
             ref: string;
@@ -3052,6 +3062,7 @@ export interface components {
             decided: "undecided" | "approved" | "rejected";
             paths: components["schemas"]["GitProposalPath"][];
             checks?: components["schemas"]["GitProposalCheck"][];
+            priorDecision?: components["schemas"]["GitProposalPriorDecision"] & unknown;
         };
         DecideBody: {
             /** @enum {string} */

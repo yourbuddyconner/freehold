@@ -1022,6 +1022,28 @@
         },
         "required": ["name", "status"]
       },
+      "GitProposalPriorDecision": {
+        "type": "object",
+        "properties": {
+          "sha": {
+            "type": "string",
+            "description": "The decided commit sha."
+          },
+          "verdict": {
+            "type": "string",
+            "description": "The verdict from the decision record."
+          },
+          "decidedBy": {
+            "type": "string",
+            "description": "The principal who decided, if recorded."
+          },
+          "decidedAt": {
+            "type": "string",
+            "description": "ISO timestamp of the decision, if recorded."
+          }
+        },
+        "required": ["sha", "verdict"]
+      },
       "GitProposal": {
         "type": "object",
         "properties": {
@@ -1074,6 +1096,16 @@
             "items": {
               "$ref": "#/components/schemas/GitProposalCheck"
             }
+          },
+          "priorDecision": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/GitProposalPriorDecision"
+              },
+              {
+                "description": "Present on undecided proposals when a decided commit shares the same tree hash."
+              }
+            ]
           }
         },
         "required": [

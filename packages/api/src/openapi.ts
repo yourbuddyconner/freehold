@@ -1349,6 +1349,21 @@ function buildRegistry(): OpenAPIRegistry {
     })
     .openapi("GitProposalCheck");
 
+  const GitProposalPriorDecision = z
+    .object({
+      sha: z.string().openapi({ description: "The decided commit sha." }),
+      verdict: z.string().openapi({ description: "The verdict from the decision record." }),
+      decidedBy: z
+        .string()
+        .optional()
+        .openapi({ description: "The principal who decided, if recorded." }),
+      decidedAt: z
+        .string()
+        .optional()
+        .openapi({ description: "ISO timestamp of the decision, if recorded." }),
+    })
+    .openapi("GitProposalPriorDecision");
+
   const GitProposal = z
     .object({
       sha: z.string(),
@@ -1363,6 +1378,10 @@ function buildRegistry(): OpenAPIRegistry {
       decided: z.enum(["undecided", "approved", "rejected"]),
       paths: z.array(GitProposalPath),
       checks: z.array(GitProposalCheck).optional(),
+      priorDecision: GitProposalPriorDecision.optional().openapi({
+        description:
+          "Present on undecided proposals when a decided commit shares the same tree hash.",
+      }),
     })
     .openapi("GitProposal");
 
@@ -1490,6 +1509,7 @@ function buildRegistry(): OpenAPIRegistry {
 
   registry.register("GitProposalPath", GitProposalPath);
   registry.register("GitProposalCheck", GitProposalCheck);
+  registry.register("GitProposalPriorDecision", GitProposalPriorDecision);
   registry.register("GitProposal", GitProposal);
   registry.register("DecideBody", DecideBody);
   registry.register("DecideResult", DecideResult);
