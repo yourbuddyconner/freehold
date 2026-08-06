@@ -62,6 +62,10 @@ export type ReviewCommentInput = Schemas["ReviewCommentInput"];
 export type DiffFile = Schemas["DiffFile"];
 export type DiffResponse = Schemas["DiffResponse"];
 
+export type CodeComment = Schemas["CodeComment"];
+export type PostCodeCommentBody = Schemas["PostCodeCommentBody"];
+export type PostCodeCommentResult = Schemas["PostCodeCommentResult"];
+
 // ---------------------------------------------------------------------------
 // Health response (inline in openapi)
 // ---------------------------------------------------------------------------
@@ -440,6 +444,18 @@ export class FreeholdClient {
   /** GET /api/v1/code/source?path= — working-tree file content */
   async codeSource(path: string): Promise<CodeSource> {
     return this.fetch<CodeSource>("GET", "/api/v1/code/source", { query: { path } });
+  }
+
+  /** GET /api/v1/code/comments?path= — list standalone code comments for a file */
+  async listCodeComments(path: string): Promise<{ comments: CodeComment[] }> {
+    return this.fetch<{ comments: CodeComment[] }>("GET", "/api/v1/code/comments", {
+      query: { path },
+    });
+  }
+
+  /** POST /api/v1/code/comments — post a standalone line-anchored code comment */
+  async postCodeComment(body: PostCodeCommentBody): Promise<PostCodeCommentResult> {
+    return this.fetch<PostCodeCommentResult>("POST", "/api/v1/code/comments", { body });
   }
 
   /** GET /api/v1/git/proposals — list all branch-head git proposals */

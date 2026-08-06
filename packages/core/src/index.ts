@@ -148,6 +148,14 @@ export { branchHeads, pushNotes, commitDiff, decisionsTip } from "./git.js";
 export type { DiffFile } from "./git.js";
 export type { GitProposal, DecideResult, ReviewEntry, ReviewCommentEntry } from "./gitreview.js";
 
+// Code comments
+export {
+  postCodeComment,
+  listCodeComments,
+  CodeCommentKeyMissingError,
+} from "./codecomments.js";
+export type { PostCodeCommentInput, CodeCommentEntry } from "./codecomments.js";
+
 // Connector core
 export { makeTokenClient, parseOriginRemote, discoverCredential } from "./connector/github.js";
 export type { GithubClient } from "./connector/github.js";

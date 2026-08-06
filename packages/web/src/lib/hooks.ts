@@ -496,7 +496,32 @@ export type {
   PostReviewBody,
   PostReviewResult,
   ReviewEntry,
+  CodeComment,
 } from "@freehold/client";
+
+/** Code comments for a given file path. */
+export function useCodeComments(path: string | undefined) {
+  const { activeGraphId } = useActiveGraph();
+  return useQuery({
+    queryKey: keyFor(activeGraphId, "code-comments", path),
+    queryFn: () => apiClient.listCodeComments(path ?? ""),
+    enabled: !!path,
+    staleTime: 30_000,
+  });
+}
+
+/** Mutation to post a standalone code comment on a file line. */
+export function usePostCodeComment(path: string | undefined) {
+  const qc = useQueryClient();
+  const { activeGraphId } = useActiveGraph();
+  return useMutation({
+    mutationFn: (vars: { span: string; body: string; by: string }) =>
+      apiClient.postCodeComment({ path: path ?? "", ...vars }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: keyFor(activeGraphId, "code-comments", path) });
+    },
+  });
+}
 
 /** Mutation to propose a policy change via POST /policy. */
 export function useProposePolicy() {

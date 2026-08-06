@@ -1,9 +1,18 @@
-import type { OnLineEnterLeaveProps } from "@pierre/diffs";
+import type { LineAnnotation, OnLineClickProps, OnLineEnterLeaveProps } from "@pierre/diffs";
 import { File as PierreFile } from "@pierre/diffs/react";
 import { Link, createRoute } from "@tanstack/react-router";
 import { useRef, useState } from "react";
 import { MarkdownView } from "~/components/MarkdownView";
-import { useClassify, useCodeFile, useCodeSource, useGitHubBlobUrl } from "~/lib/hooks";
+import {
+  useActiveGraphPrincipal,
+  useClassify,
+  useCodeComments,
+  useCodeFile,
+  useCodeSource,
+  useGitHubBlobUrl,
+  usePostCodeComment,
+} from "~/lib/hooks";
+import type { CodeComment } from "~/lib/hooks";
 import { Route as RootRoute } from "./__root";
 
 function activeTheme(): "dark" | "light" {
@@ -117,6 +126,14 @@ interface SourcePanelProps {
   name?: string;
   /** Declared items — used to build the hover card line map. */
   items?: CodeItem[];
+  /** Code comments for line annotations. */
+  comments?: CodeComment[];
+  /** Called when user clicks a line number to open the comment composer. */
+  onLineNumberClick?: (lineNumber: number) => void;
+}
+
+interface CommentAnnotationMeta {
+  comments: CodeComment[];
 }
 
 /** Syntax-highlighted source panel with optional hover cards for declared items. */
@@ -127,6 +144,8 @@ function SourcePanel({
   content,
   name = "",
   items = [],
+  comments = [],
+  onLineNumberClick,
 }: SourcePanelProps) {
   const [hoveredItem, setHoveredItem] = useState<CodeItem | null>(null);
   const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -148,6 +167,49 @@ function SourcePanel({
     }, 100);
   };
 
+  const handleLineNumberClick = (props: OnLineClickProps) => {
+    onLineNumberClick?.(props.lineNumber);
+  };
+
+  // Build line annotations from comments
+  // Parse the first line number out of "L<n>" or "L<n>-L<m>"
+  const lineAnnotations: LineAnnotation<CommentAnnotationMeta>[] = (() => {
+    const byLine = new Map<number, CodeComment[]>();
+    for (const comment of comments) {
+      const m = comment.span.match(/^L?(\d+)/);
+      if (!m) continue;
+      const ln = Number.parseInt(m[1], 10);
+      if (!byLine.has(ln)) byLine.set(ln, []);
+      byLine.get(ln)?.push(comment);
+    }
+    return Array.from(byLine.entries()).map(([lineNumber, lineComments]) => ({
+      lineNumber,
+      metadata: { comments: lineComments },
+    }));
+  })();
+
+  function renderAnnotation(ann: LineAnnotation<CommentAnnotationMeta>) {
+    const lineComments = ann.metadata?.comments ?? [];
+    return (
+      <div className="space-y-1 py-1" data-testid="code-comment-annotation">
+        {lineComments.map((c) => (
+          <div
+            key={c.commentId}
+            className="border border-(--border) bg-(--bg-subtle) px-3 py-2 font-mono text-xs space-y-0.5"
+          >
+            <p className="text-(--fg) whitespace-pre-wrap">{c.body}</p>
+            <p className="text-(--fg-muted) text-[10px]">
+              {c.author}
+              {!c.currentHead && (
+                <span className="ml-2 text-(--fg-muted)">posted against an older revision</span>
+              )}
+            </p>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
   if (isLoading) {
     return <p className="text-xs text-(--fg-muted)">Loading source…</p>;
   }
@@ -164,12 +226,15 @@ function SourcePanel({
         <div className="border border-(--border) text-sm overflow-hidden">
           <PierreFile
             file={{ name, contents: content }}
+            lineAnnotations={lineAnnotations}
+            renderAnnotation={renderAnnotation}
             options={{
               themeType: activeTheme(),
               disableFileHeader: true,
               overflow: "wrap",
               onLineEnter,
               onLineLeave,
+              ...(onLineNumberClick ? { onLineNumberClick: handleLineNumberClick } : {}),
             }}
           />
         </div>
@@ -299,11 +364,97 @@ function MarkdownSourcePanel({
   );
 }
 
+/** Comment composer — shown when user clicks a line number. */
+function CommentComposer({
+  span,
+  by,
+  onPost,
+  onCancel,
+}: {
+  span: string;
+  by: string;
+  onPost: (body: string) => void;
+  onCancel: () => void;
+}) {
+  const [body, setBody] = useState("");
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!body.trim()) return;
+    onPost(body.trim());
+  }
+
+  return (
+    <form
+      data-testid="comment-composer"
+      onSubmit={handleSubmit}
+      className="border border-(--border) bg-(--bg-subtle) p-3 space-y-2"
+    >
+      <p className="font-mono text-[11px] text-(--fg-muted)">
+        Comment on <span className="text-(--fg)">{span}</span> · signing as{" "}
+        <span className="text-(--fg)">{by}</span>
+      </p>
+      <textarea
+        data-testid="comment-body"
+        value={body}
+        onChange={(e) => setBody(e.target.value)}
+        placeholder="Add a note…"
+        rows={3}
+        className="w-full border border-(--border) bg-(--bg) px-2 py-1 font-mono text-xs text-(--fg) placeholder:text-(--fg-muted) resize-none"
+      />
+      <div className="flex gap-2">
+        <button
+          type="submit"
+          disabled={!body.trim()}
+          data-testid="comment-save"
+          className="border border-(--border) bg-(--bg-subtle) px-3 py-1 font-mono text-[11px] uppercase tracking-[0.06em] text-(--fg) hover:bg-(--bg) disabled:opacity-50"
+        >
+          Save
+        </button>
+        <button
+          type="button"
+          data-testid="comment-cancel"
+          onClick={onCancel}
+          className="border border-(--border) bg-(--bg-subtle) px-3 py-1 font-mono text-[11px] uppercase tracking-[0.06em] text-(--fg-muted) hover:text-(--fg)"
+        >
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+}
+
 /** File page — shows path, language, source, declared items. */
 export function CodeFilePage({ filePath }: { filePath?: string }) {
   const { data, isLoading, isError } = useCodeFile(filePath);
   const { data: sourceData, isLoading: sourceLoading } = useCodeSource(filePath);
+  const { data: commentsData } = useCodeComments(filePath);
   const blobUrl = useGitHubBlobUrl(filePath);
+  const by = useActiveGraphPrincipal();
+  const postComment = usePostCodeComment(filePath);
+
+  // Composer state: null = closed, number = line number clicked
+  const [composerLine, setComposerLine] = useState<number | null>(null);
+  const [postResult, setPostResult] = useState<{ status: "saved" | "pending" } | null>(null);
+
+  function handleLineNumberClick(lineNumber: number) {
+    setComposerLine(lineNumber);
+    setPostResult(null);
+  }
+
+  function handleComposerPost(body: string) {
+    if (composerLine === null || !filePath) return;
+    const span = `L${composerLine}`;
+    postComment.mutate(
+      { span, body, by },
+      {
+        onSuccess: (r) => {
+          setPostResult({ status: r.status });
+          setComposerLine(null);
+        },
+      }
+    );
+  }
 
   if (!filePath) {
     return (
@@ -337,6 +488,8 @@ export function CodeFilePage({ filePath }: { filePath?: string }) {
 
   const items: CodeItem[] = data?.items ?? [];
   const isMd = isMarkdownPath(filePath);
+  const comments = commentsData?.comments ?? [];
+  const commentCount = comments.length;
 
   return (
     <article className="space-y-6">
@@ -393,6 +546,14 @@ export function CodeFilePage({ filePath }: { filePath?: string }) {
               {t.split("@")[0]}
             </span>
           ))}
+          {commentCount > 0 && (
+            <span
+              data-testid="comment-count-chip"
+              className="inline-flex items-center border border-(--border) bg-(--bg-subtle) px-1.5 py-0.5 text-[11px] font-mono text-(--fg-muted)"
+            >
+              {commentCount} {commentCount === 1 ? "note" : "notes"}
+            </span>
+          )}
         </div>
       </header>
 
@@ -406,6 +567,23 @@ export function CodeFilePage({ filePath }: { filePath?: string }) {
             </code>
           </p>
         </div>
+      )}
+
+      {/* Post result confirmation */}
+      {postResult && (
+        <p className="font-mono text-[11px] text-(--fg-muted)" data-testid="post-result">
+          {postResult.status === "saved" ? "Saved." : "Pending — review in the Inbox."}
+        </p>
+      )}
+
+      {/* Comment composer — shown when a line number is clicked */}
+      {composerLine !== null && (
+        <CommentComposer
+          span={`L${composerLine}`}
+          by={by}
+          onPost={handleComposerPost}
+          onCancel={() => setComposerLine(null)}
+        />
       )}
 
       {/* Declared items — compact, above source */}
@@ -479,6 +657,8 @@ export function CodeFilePage({ filePath }: { filePath?: string }) {
                 content={sourceData.content}
                 name={filePath}
                 items={items}
+                comments={comments}
+                onLineNumberClick={handleLineNumberClick}
               />
             )
           ) : null}

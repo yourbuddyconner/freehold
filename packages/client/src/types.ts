@@ -2402,6 +2402,111 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/code/comments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List code comments for a file
+         * @description List all standalone line-anchored code comments (review/ReviewComment@1) for the given file path. Returns both saved (admitted) and pending comments across all anchor shas.
+         */
+        get: {
+            parameters: {
+                query: {
+                    path: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Code comments for the file */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            comments: components["schemas"]["CodeComment"][];
+                        };
+                    };
+                };
+                /** @description Not a repo graph or missing path parameter */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        /**
+         * Post a code comment on a file line
+         * @description Creates a standalone review/ReviewComment@1 anchored to the current HEAD sha of the repo. No Review node or part_of edge.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["PostCodeCommentBody"];
+                };
+            };
+            responses: {
+                /** @description Created code comment */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PostCodeCommentResult"];
+                    };
+                };
+                /** @description Not a repo graph or validation error */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Signing key not found for the specified principal */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2822,6 +2927,32 @@ export interface components {
             binary: boolean;
             /** @description File size in bytes (full file, not truncated) */
             size: number;
+        };
+        CodeComment: {
+            commentId: string;
+            body: string;
+            span: string;
+            /** @enum {string} */
+            status: "open";
+            author: string;
+            anchorSha: string;
+            currentHead: boolean;
+        };
+        PostCodeCommentBody: {
+            /** @description Repo-relative file path */
+            path: string;
+            /** @description Line span, e.g. L10 or L10-L20 */
+            span: string;
+            /** @description Comment text */
+            body: string;
+            /** @description Principal name signing the comment */
+            by: string;
+        };
+        PostCodeCommentResult: {
+            commentId: string;
+            /** @enum {string} */
+            status: "saved" | "pending";
+            anchorSha: string;
         };
     };
     responses: never;
