@@ -98,7 +98,11 @@ export function ReviewPage({ sha }: { sha: string }) {
   const activeGraph = graphs.find((g) => g.id === activeGraphId) ?? null;
   const isRepoGraph = activeGraph?.kind === "repo";
 
-  const { data: diffData, isLoading: diffLoading } = useGitProposalDiff(sha, isRepoGraph);
+  const {
+    data: diffData,
+    isLoading: diffLoading,
+    error: diffError,
+  } = useGitProposalDiff(sha, isRepoGraph);
 
   const { data: sessionData } = useSession();
   const by = sessionData?.owner ?? "owner";
@@ -116,7 +120,7 @@ export function ReviewPage({ sha }: { sha: string }) {
   const queryClient = useQueryClient();
 
   // Reviews already posted for this commit
-  const { data: reviewsData } = useReviewsForSha(sha);
+  const { data: reviewsData, error: reviewsError } = useReviewsForSha(sha);
 
   // Full graph list for repo name derivation
   const { data: listGraphsData } = useListGraphs();
@@ -527,7 +531,9 @@ export function ReviewPage({ sha }: { sha: string }) {
           disabled={actionsDisabled || decideMut.isPending}
           className="border border-(--border) font-mono text-[12px] uppercase tracking-wide px-3 py-1.5 text-(--fg-muted) hover:text-(--fg) disabled:opacity-50 transition-colors"
         >
-          {decideMut.isPending && decideMut.variables === "reject" ? "Rejecting…" : "Reject"}
+          {decideMut.isPending && decideMut.variables === "reject"
+            ? "Requesting changes…"
+            : "Request changes"}
         </button>
 
         {drafts.length > 0 && (
@@ -583,6 +589,28 @@ export function ReviewPage({ sha }: { sha: string }) {
             </button>
           </div>
         </div>
+
+        {reviewsError && (
+          <div
+            data-testid="reviews-error"
+            className="border border-red-300 bg-red-50 dark:bg-red-950 px-3 py-2 text-xs text-red-700 dark:text-red-300"
+          >
+            Could not load review comments.
+            {reviewsError instanceof Error && reviewsError.message
+              ? ` ${reviewsError.message}`
+              : ""}
+          </div>
+        )}
+
+        {diffError && (
+          <div
+            data-testid="diff-error"
+            className="border border-red-300 bg-red-50 dark:bg-red-950 px-3 py-2 text-xs text-red-700 dark:text-red-300"
+          >
+            Could not load diff.
+            {diffError instanceof Error && diffError.message ? ` ${diffError.message}` : ""}
+          </div>
+        )}
 
         {diffLoading && <p className="text-sm text-(--fg-muted)">Loading diff…</p>}
 

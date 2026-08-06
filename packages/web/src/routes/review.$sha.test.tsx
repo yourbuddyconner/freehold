@@ -391,7 +391,7 @@ describe("/review/$sha", () => {
     await renderReviewPage();
     expect(screen.getByTestId("key-missing-notice")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /approve/i })).toBeDisabled();
-    expect(screen.getByRole("button", { name: /reject/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /request changes/i })).toBeDisabled();
   });
 
   it("checklist rows render met/unmet", async () => {
@@ -663,7 +663,7 @@ describe("/review/$sha", () => {
 
     const { apiClient } = await import("~/lib/api");
 
-    const rejectBtn = screen.getByRole("button", { name: /^reject$/i });
+    const rejectBtn = screen.getByRole("button", { name: /^request changes$/i });
     await act(async () => {
       rejectBtn.click();
     });
@@ -757,6 +757,122 @@ describe("/review/$sha", () => {
     expect(screen.getByTestId("line-composer")).toBeInTheDocument();
     expect(screen.getByTestId("line-composer")).toHaveTextContent("src/lib.rs");
     expect(screen.getByTestId("line-composer")).toHaveTextContent("L10-L15");
+  });
+
+  it("diff fetch failure renders diff-error notice", async () => {
+    const diffErr = new Error("network timeout");
+    vi.mocked(hooks.useGitProposalDiff).mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      error: diffErr,
+    } as unknown as ReturnType<typeof hooks.useGitProposalDiff>);
+    vi.mocked(hooks.useGitProposal).mockReturnValue({
+      data: baseProposal as never,
+      isLoading: false,
+      isError: false,
+      error: null,
+    } as unknown as ReturnType<typeof hooks.useGitProposal>);
+    vi.mocked(hooks.useSession).mockReturnValue({
+      data: {
+        owner: "alice",
+        defaultAgent: "claude",
+        port: 8710,
+        graphs: [],
+        defaultGraph: "main",
+      },
+      isLoading: false,
+      isError: false,
+      error: null,
+    } as unknown as ReturnType<typeof hooks.useSession>);
+    vi.mocked(hooks.useGraphs).mockReturnValue({
+      graphs: [{ id: "repo-1", name: "my-repo", kind: "repo" as "repo" | "memory" }],
+      defaultGraph: "repo-1",
+    });
+    vi.mocked(hooks.useActiveGraph).mockReturnValue({
+      activeGraphId: "repo-1",
+      setActiveGraphId: vi.fn(),
+    });
+    vi.mocked(hooks.useDecideProposal).mockReturnValue(
+      defaultDecideMock as unknown as ReturnType<typeof hooks.useDecideProposal>
+    );
+    vi.mocked(hooks.useReviewsForSha).mockReturnValue({
+      data: { reviews: [] },
+      isLoading: false,
+      isError: false,
+      error: null,
+    } as unknown as ReturnType<typeof hooks.useReviewsForSha>);
+    vi.mocked(hooks.useListGraphs).mockReturnValue({
+      data: { graphs: [{ id: "repo-1", name: "my-repo", path: "/repos/my-repo", kind: "repo" }] },
+      isLoading: false,
+      isError: false,
+      error: null,
+    } as unknown as ReturnType<typeof hooks.useListGraphs>);
+
+    await renderReviewPage();
+    expect(screen.getByTestId("diff-error")).toBeInTheDocument();
+    expect(screen.getByTestId("diff-error")).toHaveTextContent("Could not load diff.");
+    expect(screen.getByTestId("diff-error")).toHaveTextContent("network timeout");
+  });
+
+  it("reviews fetch failure shows reviews-error notice but still renders diff files", async () => {
+    const reviewsErr = new Error("fetch failed");
+    vi.mocked(hooks.useGitProposal).mockReturnValue({
+      data: baseProposal as never,
+      isLoading: false,
+      isError: false,
+      error: null,
+    } as unknown as ReturnType<typeof hooks.useGitProposal>);
+    vi.mocked(hooks.useGitProposalDiff).mockReturnValue({
+      data: baseDiff as never,
+      isLoading: false,
+      isError: false,
+      error: null,
+    } as unknown as ReturnType<typeof hooks.useGitProposalDiff>);
+    vi.mocked(hooks.useSession).mockReturnValue({
+      data: {
+        owner: "alice",
+        defaultAgent: "claude",
+        port: 8710,
+        graphs: [],
+        defaultGraph: "main",
+      },
+      isLoading: false,
+      isError: false,
+      error: null,
+    } as unknown as ReturnType<typeof hooks.useSession>);
+    vi.mocked(hooks.useGraphs).mockReturnValue({
+      graphs: [{ id: "repo-1", name: "my-repo", kind: "repo" as "repo" | "memory" }],
+      defaultGraph: "repo-1",
+    });
+    vi.mocked(hooks.useActiveGraph).mockReturnValue({
+      activeGraphId: "repo-1",
+      setActiveGraphId: vi.fn(),
+    });
+    vi.mocked(hooks.useDecideProposal).mockReturnValue(
+      defaultDecideMock as unknown as ReturnType<typeof hooks.useDecideProposal>
+    );
+    vi.mocked(hooks.useReviewsForSha).mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      error: reviewsErr,
+    } as unknown as ReturnType<typeof hooks.useReviewsForSha>);
+    vi.mocked(hooks.useListGraphs).mockReturnValue({
+      data: { graphs: [{ id: "repo-1", name: "my-repo", path: "/repos/my-repo", kind: "repo" }] },
+      isLoading: false,
+      isError: false,
+      error: null,
+    } as unknown as ReturnType<typeof hooks.useListGraphs>);
+
+    await renderReviewPage();
+    expect(screen.getByTestId("reviews-error")).toBeInTheDocument();
+    expect(screen.getByTestId("reviews-error")).toHaveTextContent(
+      "Could not load review comments."
+    );
+    // Diff files still render
+    expect(screen.getByTestId("diff-file")).toBeInTheDocument();
+    expect(screen.getByTestId("diff-file")).toHaveTextContent("src/lib.rs");
   });
 
   it("Save-draft persists to localStorage after line selection", async () => {
