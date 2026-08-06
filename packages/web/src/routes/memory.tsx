@@ -1,8 +1,8 @@
-import { Link, Outlet, createRoute, useRouterState } from "@tanstack/react-router";
-import { useState } from "react";
-import { MemoryTree } from "~/components/MemoryTree";
+import { Link, Outlet, createRoute, useNavigate, useRouterState } from "@tanstack/react-router";
+import { useCallback, useState } from "react";
+import { PierreTree } from "~/components/PierreTree";
 import { useMemoryIndex, usePrincipals, useRecall } from "~/lib/hooks";
-import { buildMemoryTree } from "~/lib/memoryTree";
+import { buildMemoryTree, treeToPaths } from "~/lib/memoryTree";
 import { Route as RootRoute } from "./__root";
 
 export const Route = createRoute({
@@ -10,6 +10,22 @@ export const Route = createRoute({
   path: "/memory",
   component: MemoryLayout,
 });
+
+const STORAGE_KEY = "freehold:memory-tree-open";
+
+function loadExpandedPaths(): string[] | undefined {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return undefined;
+    const parsed = JSON.parse(raw) as unknown;
+    if (Array.isArray(parsed) && parsed.every((v) => typeof v === "string")) {
+      return parsed as string[];
+    }
+    return undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 /** Compact display line for a recall result's content jsonb. */
 function resultTitle(content: unknown): string {
@@ -53,6 +69,7 @@ function MemoryLayout() {
 
   const entries = indexData?.results ?? [];
   const folders = buildMemoryTree(entries);
+  const { paths, idByPath } = treeToPaths(folders);
   const results = searchData?.results ?? [];
   const authors = (
     (principalsData as { principals?: Array<{ name: string; kind: string }> } | undefined)
@@ -60,6 +77,30 @@ function MemoryLayout() {
   )
     .filter((p) => p.kind === "agent")
     .map((p) => p.name);
+
+  const totalLeaves = folders.reduce((n, f) => n + f.count, 0);
+  const initialExpansion: "open" | "closed" = totalLeaves <= 15 ? "open" : "closed";
+
+  const navigate = useNavigate();
+
+  const handleSelect = useCallback(
+    (path: string, kind: "file" | "directory") => {
+      if (kind === "directory") return;
+      const id = idByPath.get(path);
+      if (id) {
+        void navigate({ to: "/memory/$id", params: { id } });
+      }
+    },
+    [idByPath, navigate]
+  );
+
+  const handleExpansionChange = useCallback((expandedPaths: string[]) => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(expandedPaths));
+    } catch {
+      // Storage unavailable — open state just won't persist
+    }
+  }, []);
 
   return (
     <div>
@@ -165,9 +206,16 @@ function MemoryLayout() {
             </div>
           ) : indexLoading ? (
             <p className="text-xs text-(--fg-muted)">Loading…</p>
-          ) : (
-            <MemoryTree folders={folders} activeId={activeId} />
-          )}
+          ) : paths.length > 0 ? (
+            <PierreTree
+              paths={paths}
+              selectedPath={activeId ? paths.find((p) => idByPath.get(p) === activeId) : undefined}
+              onSelect={handleSelect}
+              initialExpansion={initialExpansion}
+              initialExpandedPaths={loadExpandedPaths()}
+              onExpansionChange={handleExpansionChange}
+            />
+          ) : null}
         </aside>
 
         {/* Right pane: child route or resting state */}

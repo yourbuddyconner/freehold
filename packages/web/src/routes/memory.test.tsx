@@ -5,6 +5,37 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as hooks from "~/lib/hooks";
 import { routeTree } from "~/routes/../routeTree.gen";
 
+// Capture props passed to PierreTree so tests can assert on them and call callbacks.
+type PierreTreeCaptured = {
+  paths: string[];
+  onSelect: (path: string, kind: "file" | "directory") => void;
+  initialExpandedPaths?: string[];
+  onExpansionChange?: (expandedPaths: string[]) => void;
+  initialExpansion?: "open" | "closed";
+};
+let capturedPierreTreeProps: PierreTreeCaptured | null = null;
+
+vi.mock("~/components/PierreTree", () => ({
+  PierreTree: (props: PierreTreeCaptured) => {
+    capturedPierreTreeProps = props;
+    // Render buttons for each path so tests can click leaves by path
+    return (
+      <div data-testid="pierre-tree-mock">
+        {props.paths.map((p) => (
+          <button
+            type="button"
+            key={p}
+            data-testid={`pt-path-${p}`}
+            onClick={() => props.onSelect(p, p.endsWith("/") ? "directory" : "file")}
+          >
+            {p}
+          </button>
+        ))}
+      </div>
+    );
+  },
+}));
+
 vi.mock("~/lib/hooks", () => ({
   usePending: vi.fn(),
   useRecall: vi.fn(),
@@ -161,6 +192,7 @@ async function renderMemory(
       </QueryClientProvider>
     );
   });
+  return router;
 }
 
 describe("Memory workspace", () => {
@@ -168,6 +200,7 @@ describe("Memory workspace", () => {
   const store = new Map<string, string>();
   beforeEach(() => {
     vi.clearAllMocks();
+    capturedPierreTreeProps = null;
     store.clear();
     Object.defineProperty(window, "localStorage", {
       configurable: true,
@@ -189,20 +222,77 @@ describe("Memory workspace", () => {
     expect(screen.getByText(/freehold mcp setup claude-code/)).toBeInTheDocument();
   });
 
-  it("tree renders folders from the ontology with items inside", async () => {
+  it("tree renders PierreTree with synthetic paths from the ontology", async () => {
     await renderMemory({ entries: [sampleEntry, personEntry] });
-    expect(screen.getByText("Notes")).toBeInTheDocument();
-    expect(screen.getByText("People")).toBeInTheDocument();
-    expect(screen.getByText("Standup moved to 2pm")).toBeInTheDocument();
-    expect(screen.getByText("Sam Okafor")).toBeInTheDocument();
+    expect(screen.getByTestId("pierre-tree-mock")).toBeInTheDocument();
+    if (capturedPierreTreeProps === null) throw new Error("PierreTree was not rendered");
+    // Paths include the type folder directories and leaf paths
+    const { paths } = capturedPierreTreeProps;
+    expect(paths.some((p) => p.startsWith("Notes/"))).toBe(true);
+    expect(paths.some((p) => p.startsWith("People/"))).toBe(true);
+    expect(paths).toContain("Notes/Standup moved to 2pm");
+    expect(paths).toContain("People/Sam Okafor");
     expect(screen.queryByText(/freehold mcp setup claude-code/)).not.toBeInTheDocument();
   });
 
-  it("pending items show a pending marker in the tree", async () => {
-    await renderMemory({ entries: [pendingEntry] });
-    const row = screen.getByTestId("tree-item-pending-1");
-    expect(row).toHaveTextContent("Proposed note");
-    expect(row.querySelector('[title="Pending"]')).not.toBeNull();
+  it("clicking a leaf path in PierreTree navigates to /memory/$id", async () => {
+    const router = await renderMemory({ entries: [sampleEntry] });
+    // Find the PierreTree leaf button for the note and click it
+    const leafBtn = screen.getByTestId("pt-path-Notes/Standup moved to 2pm");
+    await act(async () => {
+      fireEvent.click(leafBtn);
+    });
+    expect(router.state.location.pathname).toBe("/memory/note-1");
+  });
+
+  it("clicking a directory path in PierreTree does not navigate", async () => {
+    const router = await renderMemory({ entries: [sampleEntry] });
+    // Find a directory button (paths ending in /)
+    const dirBtn = screen.getByTestId("pt-path-Notes/");
+    await act(async () => {
+      fireEvent.click(dirBtn);
+    });
+    // Should stay on /memory
+    expect(router.state.location.pathname).toBe("/memory");
+  });
+
+  it("seeds initialExpandedPaths from localStorage freehold:memory-tree-open", async () => {
+    store.set("freehold:memory-tree-open", JSON.stringify(["Notes/", "Notes/projects/"]));
+    await renderMemory({ entries: [sampleEntry] });
+    if (capturedPierreTreeProps === null) throw new Error("PierreTree was not rendered");
+    expect(capturedPierreTreeProps.initialExpandedPaths).toEqual(["Notes/", "Notes/projects/"]);
+  });
+
+  it("onExpansionChange writes expanded paths as JSON array to freehold:memory-tree-open", async () => {
+    await renderMemory({ entries: [sampleEntry] });
+    if (capturedPierreTreeProps === null) throw new Error("PierreTree was not rendered");
+    const { onExpansionChange } = capturedPierreTreeProps;
+    await act(async () => {
+      if (onExpansionChange) onExpansionChange(["Notes/", "People/"]);
+    });
+    expect(store.get("freehold:memory-tree-open")).toBe(JSON.stringify(["Notes/", "People/"]));
+  });
+
+  it("uses initialExpansion=open when total leaves ≤ 15", async () => {
+    await renderMemory({ entries: [sampleEntry] });
+    if (capturedPierreTreeProps === null) throw new Error("PierreTree was not rendered");
+    expect(capturedPierreTreeProps.initialExpansion).toBe("open");
+  });
+
+  it("uses initialExpansion=closed when total leaves > 15", async () => {
+    // Build 16 entries
+    const many = Array.from({ length: 16 }, (_, i) => ({
+      id: `n${i}`,
+      type: "memory/Note@1",
+      title: `Note ${i}`,
+      approval: "saved",
+      author: "claude",
+      updatedAt: "2026-08-04T10:00:00.000Z",
+      terms: [],
+    }));
+    await renderMemory({ entries: many });
+    if (capturedPierreTreeProps === null) throw new Error("PierreTree was not rendered");
+    expect(capturedPierreTreeProps.initialExpansion).toBe("closed");
   });
 
   it("typing a query swaps the tree for search results", async () => {
@@ -212,8 +302,8 @@ describe("Memory workspace", () => {
       fireEvent.change(input, { target: { value: "standup" } });
     });
     expect(screen.getByTestId("search-result-note-1")).toBeInTheDocument();
-    // Tree folders hidden while searching
-    expect(screen.queryByText("Notes")).not.toBeInTheDocument();
+    // PierreTree hidden while searching
+    expect(screen.queryByTestId("pierre-tree-mock")).not.toBeInTheDocument();
   });
 
   it("shows no results message for a query with no matches", async () => {
@@ -240,14 +330,5 @@ describe("Memory workspace", () => {
       expect.objectContaining({ author: "claude" }),
       true
     );
-  });
-
-  it("collapsing a folder hides its items", async () => {
-    await renderMemory({ entries: [sampleEntry] });
-    const folderBtn = screen.getByRole("button", { name: /Notes/ });
-    await act(async () => {
-      fireEvent.click(folderBtn);
-    });
-    expect(screen.queryByText("Standup moved to 2pm")).not.toBeInTheDocument();
   });
 });
