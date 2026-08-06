@@ -98,6 +98,71 @@ function countLeaves(folder: TreeFolder): number {
 }
 
 /**
+ * Map a TreeFolder hierarchy to flat synthetic paths suitable for PierreTree.
+ *
+ * Synthetic path format: `<TypeFolder>/<TermFolder>/<Title>`
+ * - Directory paths end with `/`
+ * - Leaf titles have `/` sanitized to `∕` (U+2215) so paths stay well-formed
+ * - Duplicate titles within the same folder get ` (2)`, ` (3)` suffixes in the
+ *   path only (the entry title is not modified)
+ *
+ * Returns:
+ *   paths    — all directory and leaf paths, suitable for PierreTree `paths` prop
+ *   idByPath — maps every leaf path to its memory id
+ */
+export function treeToPaths(folders: TreeFolder[]): {
+  paths: string[];
+  idByPath: Map<string, string>;
+} {
+  const paths: string[] = [];
+  const idByPath = new Map<string, string>();
+
+  function sanitizeTitle(title: string): string {
+    return title.replace(/\//g, "∕");
+  }
+
+  function walkFolder(folder: TreeFolder, prefix: string): void {
+    const dirPath = `${prefix}${folder.label}/`;
+    paths.push(dirPath);
+
+    // Count title occurrences among leaf children to deduplicate
+    const titleCount = new Map<string, number>();
+    const titleSeen = new Map<string, number>();
+    for (const child of folder.children) {
+      if (child.kind === "leaf") {
+        const sanitized = sanitizeTitle(child.entry.title);
+        titleCount.set(sanitized, (titleCount.get(sanitized) ?? 0) + 1);
+      }
+    }
+
+    for (const child of folder.children) {
+      if (child.kind === "folder") {
+        walkFolder(child, dirPath);
+      } else {
+        const sanitized = sanitizeTitle(child.entry.title);
+        const count = titleCount.get(sanitized) ?? 1;
+        let leafPath: string;
+        if (count <= 1) {
+          leafPath = `${dirPath}${sanitized}`;
+        } else {
+          const seen = (titleSeen.get(sanitized) ?? 0) + 1;
+          titleSeen.set(sanitized, seen);
+          leafPath = seen === 1 ? `${dirPath}${sanitized}` : `${dirPath}${sanitized} (${seen})`;
+        }
+        paths.push(leafPath);
+        idByPath.set(leafPath, child.entry.id);
+      }
+    }
+  }
+
+  for (const folder of folders) {
+    walkFolder(folder, "");
+  }
+
+  return { paths, idByPath };
+}
+
+/**
  * Build the workspace tree: one folder per display name (types that map to
  * the same display name — Person, Colleague — share a folder), with items
  * nested by their filing terms. Subfolders sort alphabetically before
