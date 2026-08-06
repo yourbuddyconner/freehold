@@ -5,6 +5,7 @@ import type {
   CodeSource,
   DecideResult,
   DiffResponse,
+  GitProposal,
   RegionRule,
   SessionGraphEntry,
 } from "@freehold/client";
@@ -12,10 +13,20 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { ApiError, GRAPH_STORAGE_KEY, apiClient, setActiveGraph } from "./api";
 
+/**
+ * Build a query key for graph-scoped queries.
+ * Including the activeGraphId ensures the cache is keyed separately per graph,
+ * so switching graphs in the UI does not serve stale data from the previous graph.
+ */
+export function keyFor(graphId: string, ...parts: unknown[]): [string, string, ...unknown[]] {
+  return ["graph", graphId, ...parts];
+}
+
 /** Pending proposals (the Inbox). */
 export function usePending() {
+  const { activeGraphId } = useActiveGraph();
   return useQuery({
-    queryKey: ["proposals"],
+    queryKey: keyFor(activeGraphId, "proposals"),
     queryFn: () => apiClient.proposals(),
   });
 }
@@ -26,8 +37,9 @@ export function useRecall(
   filters: { type?: string; author?: string; status?: string } = {},
   enabled = true
 ) {
+  const { activeGraphId } = useActiveGraph();
   return useQuery({
-    queryKey: ["recall", query, filters],
+    queryKey: keyFor(activeGraphId, "recall", query, filters),
     queryFn: () => apiClient.recall(query, filters),
     enabled: enabled && query.length > 0,
   });
@@ -38,8 +50,9 @@ export function useRecentMemories(
   filters: { type?: string; author?: string; status?: string } = {},
   enabled = true
 ) {
+  const { activeGraphId } = useActiveGraph();
   return useQuery({
-    queryKey: ["recent-memories", filters],
+    queryKey: keyFor(activeGraphId, "recent-memories", filters),
     queryFn: () => apiClient.recentMemories(filters),
     enabled,
   });
@@ -47,8 +60,9 @@ export function useRecentMemories(
 
 /** Full workspace index — every non-meta node, for the tree. */
 export function useMemoryIndex(enabled = true) {
+  const { activeGraphId } = useActiveGraph();
   return useQuery({
-    queryKey: ["memory-index"],
+    queryKey: keyFor(activeGraphId, "memory-index"),
     queryFn: () => apiClient.memoryIndex(),
     enabled,
   });
@@ -56,8 +70,9 @@ export function useMemoryIndex(enabled = true) {
 
 /** Graph export for the canvas. */
 export function useMemoryGraph(enabled = true) {
+  const { activeGraphId } = useActiveGraph();
   return useQuery({
-    queryKey: ["memory-graph"],
+    queryKey: keyFor(activeGraphId, "memory-graph"),
     queryFn: () => apiClient.graph(),
     enabled,
   });
@@ -66,6 +81,7 @@ export function useMemoryGraph(enabled = true) {
 /** Owner update of a node's attributes; invalidates the entity and listings. */
 export function useUpdateMemory(id: string | undefined) {
   const queryClient = useQueryClient();
+  const { activeGraphId } = useActiveGraph();
   return useMutation({
     mutationFn: (body: {
       agent: string;
@@ -76,18 +92,19 @@ export function useUpdateMemory(id: string | undefined) {
       // biome-ignore lint/style/noNonNullAssertion: callers only mutate with a loaded entity
       apiClient.updateEntity(id!, body),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["entity", id] });
-      queryClient.invalidateQueries({ queryKey: ["memory-index"] });
-      queryClient.invalidateQueries({ queryKey: ["memory-graph"] });
-      queryClient.invalidateQueries({ queryKey: ["recent-memories"] });
+      queryClient.invalidateQueries({ queryKey: keyFor(activeGraphId, "entity", id) });
+      queryClient.invalidateQueries({ queryKey: keyFor(activeGraphId, "memory-index") });
+      queryClient.invalidateQueries({ queryKey: keyFor(activeGraphId, "memory-graph") });
+      queryClient.invalidateQueries({ queryKey: keyFor(activeGraphId, "recent-memories") });
     },
   });
 }
 
 /** Single entity detail. */
 export function useEntity(id: string | undefined) {
+  const { activeGraphId } = useActiveGraph();
   return useQuery({
-    queryKey: ["entity", id],
+    queryKey: keyFor(activeGraphId, "entity", id),
     // biome-ignore lint/style/noNonNullAssertion: enabled guard above ensures id is defined
     queryFn: () => apiClient.getEntity(id!),
     enabled: !!id,
@@ -98,8 +115,9 @@ export function useEntity(id: string | undefined) {
 
 /** Verify report. */
 export function useVerify(enabled = false) {
+  const { activeGraphId } = useActiveGraph();
   return useQuery({
-    queryKey: ["verify"],
+    queryKey: keyFor(activeGraphId, "verify"),
     queryFn: () => apiClient.verify(),
     enabled,
   });
@@ -107,32 +125,36 @@ export function useVerify(enabled = false) {
 
 /** Schema description. */
 export function useSchema() {
+  const { activeGraphId } = useActiveGraph();
   return useQuery({
-    queryKey: ["schema"],
+    queryKey: keyFor(activeGraphId, "schema"),
     queryFn: () => apiClient.schema(),
   });
 }
 
 /** Policy rules (raw JSON from server). */
 export function usePolicy() {
+  const { activeGraphId } = useActiveGraph();
   return useQuery({
-    queryKey: ["policy"],
+    queryKey: keyFor(activeGraphId, "policy"),
     queryFn: () => apiClient.getPolicy() as Promise<unknown>,
   });
 }
 
 /** Changeset log (raw JSON from server). */
 export function useLog() {
+  const { activeGraphId } = useActiveGraph();
   return useQuery({
-    queryKey: ["log"],
+    queryKey: keyFor(activeGraphId, "log"),
     queryFn: () => apiClient.log() as Promise<unknown>,
   });
 }
 
 /** Principals list (raw JSON from server). */
 export function usePrincipals() {
+  const { activeGraphId } = useActiveGraph();
   return useQuery({
-    queryKey: ["principals"],
+    queryKey: keyFor(activeGraphId, "principals"),
     queryFn: () => apiClient.principals() as Promise<unknown>,
   });
 }
@@ -205,8 +227,9 @@ export function useActiveGraph(): {
 
 /** File tree for the active repo graph. */
 export function useCodeTree(enabled = true) {
+  const { activeGraphId } = useActiveGraph();
   return useQuery({
-    queryKey: ["code-tree"],
+    queryKey: keyFor(activeGraphId, "code-tree"),
     queryFn: () => apiClient.codeTree() as Promise<{ tree: unknown[] }>,
     enabled,
   });
@@ -214,8 +237,9 @@ export function useCodeTree(enabled = true) {
 
 /** Single file view with declared items. 404 when not indexed. */
 export function useCodeFile(path: string | undefined) {
+  const { activeGraphId } = useActiveGraph();
   return useQuery({
-    queryKey: ["code-file", path],
+    queryKey: keyFor(activeGraphId, "code-file", path),
     queryFn: () => apiClient.codeFile(path ?? ""),
     enabled: !!path,
     retry: false,
@@ -224,8 +248,9 @@ export function useCodeFile(path: string | undefined) {
 
 /** Single code item (function/class) with callers and callees. */
 export function useCodeItem(nodeId: string | undefined) {
+  const { activeGraphId } = useActiveGraph();
   return useQuery({
-    queryKey: ["code-item", nodeId],
+    queryKey: keyFor(activeGraphId, "code-item", nodeId),
     queryFn: () => apiClient.codeItem(nodeId ?? ""),
     enabled: !!nodeId,
     retry: false,
@@ -234,8 +259,9 @@ export function useCodeItem(nodeId: string | undefined) {
 
 /** Policy region membership rules. */
 export function useCodeRegions(enabled = true) {
+  const { activeGraphId } = useActiveGraph();
   return useQuery({
-    queryKey: ["code-regions"],
+    queryKey: keyFor(activeGraphId, "code-regions"),
     queryFn: () => apiClient.codeRegions(),
     enabled,
   });
@@ -243,8 +269,9 @@ export function useCodeRegions(enabled = true) {
 
 /** Neighborhood graph for a given file path — nodes and edges one hop out. */
 export function useCodeNeighborhood(path: string | undefined) {
+  const { activeGraphId } = useActiveGraph();
   return useQuery({
-    queryKey: ["code-neighborhood", path],
+    queryKey: keyFor(activeGraphId, "code-neighborhood", path),
     queryFn: () => apiClient.codeNeighborhood(path ?? ""),
     enabled: !!path,
     retry: false,
@@ -253,8 +280,9 @@ export function useCodeNeighborhood(path: string | undefined) {
 
 /** Working-tree source content for a file path. null → file not on disk (404). */
 export function useCodeSource(path: string | undefined) {
+  const { activeGraphId } = useActiveGraph();
   return useQuery({
-    queryKey: ["code-source", path],
+    queryKey: keyFor(activeGraphId, "code-source", path),
     queryFn: () => apiClient.codeSource(path ?? ""),
     enabled: !!path,
     retry: false,
@@ -263,8 +291,9 @@ export function useCodeSource(path: string | undefined) {
 
 /** Git proposals for the active repo graph. */
 export function useGitProposals(enabled = true) {
+  const { activeGraphId } = useActiveGraph();
   return useQuery({
-    queryKey: ["git-proposals"],
+    queryKey: keyFor(activeGraphId, "git-proposals"),
     queryFn: () => apiClient.listGitProposals(),
     enabled,
     staleTime: 30_000,
@@ -273,8 +302,9 @@ export function useGitProposals(enabled = true) {
 
 /** Single git proposal by sha. */
 export function useGitProposal(sha: string | undefined) {
+  const { activeGraphId } = useActiveGraph();
   return useQuery({
-    queryKey: ["git-proposal", sha],
+    queryKey: keyFor(activeGraphId, "git-proposal", sha),
     queryFn: () => apiClient.getGitProposal(sha ?? ""),
     enabled: !!sha,
     retry: false,
@@ -330,18 +360,57 @@ export function useActiveGraphPrincipal(): string {
 /**
  * Encapsulates all decide-related state and mutation for a git proposal.
  * Extracted from GitProposalCard to allow reuse in the review page.
+ *
+ * Optimistic update: on mutate, the cached proposal's `decided` field is
+ * immediately set in both the list and single-proposal caches so the button
+ * never flips back to an undecided state while the query refetch is in flight.
+ * The update is rolled back on error.  Invalidation uses refetchType:"none" so
+ * the staleTime carries the UI through the slow server-side recompute without
+ * triggering an immediate hanging refetch.
  */
 export function useDecideProposal(sha: string, by: string) {
   const qc = useQueryClient();
+  const { activeGraphId } = useActiveGraph();
   const [decideOutcome, setDecideOutcome] = useState<DecideResult | null>(null);
   const [keyMissingReason, setKeyMissingReason] = useState<string | null>(null);
   const [savedLocally, setSavedLocally] = useState(false);
   const [pushSkippedNotice, setPushSkippedNotice] = useState(false);
   const [retrying, setRetrying] = useState(false);
 
+  const listKey = keyFor(activeGraphId, "git-proposals");
+  const singleKey = keyFor(activeGraphId, "git-proposal", sha);
+
   const decideMut = useMutation({
     mutationFn: (verdict: "approve" | "reject") =>
       apiClient.decideGitProposal(sha, { verdict, by }),
+    onMutate: async (verdict) => {
+      // Cancel any in-flight refetches that could overwrite the optimistic update.
+      await qc.cancelQueries({ queryKey: listKey });
+      await qc.cancelQueries({ queryKey: singleKey });
+
+      const optimisticDecided = verdict === "approve" ? "approved" : "rejected";
+
+      // Snapshot previous values for rollback.
+      const prevList = qc.getQueryData<{ proposals: GitProposal[] }>(listKey);
+      const prevSingle = qc.getQueryData<GitProposal>(singleKey);
+
+      // Apply optimistic decided state to the list cache.
+      if (prevList) {
+        qc.setQueryData<{ proposals: GitProposal[] }>(listKey, {
+          ...prevList,
+          proposals: prevList.proposals.map((p) =>
+            p.sha === sha ? { ...p, decided: optimisticDecided } : p
+          ),
+        });
+      }
+
+      // Apply optimistic decided state to the single-proposal cache.
+      if (prevSingle) {
+        qc.setQueryData<GitProposal>(singleKey, { ...prevSingle, decided: optimisticDecided });
+      }
+
+      return { prevList, prevSingle };
+    },
     onSuccess: (result) => {
       setDecideOutcome(result);
       if ("pushed" in result && !result.pushed) {
@@ -351,10 +420,19 @@ export function useDecideProposal(sha: string, by: string) {
           setPushSkippedNotice(true);
         }
       }
-      qc.invalidateQueries({ queryKey: ["git-proposals"] });
-      qc.invalidateQueries({ queryKey: ["git-proposal", sha] });
+      // Mark stale without immediately re-fetching so staleTime carries the UI
+      // through the ~60s server-side background recompute after cache eviction.
+      qc.invalidateQueries({ queryKey: listKey, refetchType: "none" });
+      qc.invalidateQueries({ queryKey: singleKey, refetchType: "none" });
     },
-    onError: (err) => {
+    onError: (err, _verdict, ctx) => {
+      // Roll back the optimistic update.
+      if (ctx?.prevList !== undefined) {
+        qc.setQueryData(listKey, ctx.prevList);
+      }
+      if (ctx?.prevSingle !== undefined) {
+        qc.setQueryData(singleKey, ctx.prevSingle);
+      }
       if (err instanceof ApiError && err.code === "key-missing") {
         setKeyMissingReason(err.message);
       }
@@ -387,8 +465,9 @@ export function useDecideProposal(sha: string, by: string) {
 
 /** Per-file unified diff for a git proposal. */
 export function useGitProposalDiff(sha: string | undefined, enabled = true) {
+  const { activeGraphId } = useActiveGraph();
   return useQuery({
-    queryKey: ["git-proposal-diff", sha],
+    queryKey: keyFor(activeGraphId, "git-proposal-diff", sha),
     queryFn: () => apiClient.gitProposalDiff(sha ?? ""),
     enabled: enabled && !!sha,
     retry: false,
@@ -398,8 +477,9 @@ export function useGitProposalDiff(sha: string | undefined, enabled = true) {
 
 /** Reviews posted for a given commit sha. */
 export function useReviewsForSha(sha: string | undefined) {
+  const { activeGraphId } = useActiveGraph();
   return useQuery({
-    queryKey: ["git-reviews", sha],
+    queryKey: keyFor(activeGraphId, "git-reviews", sha),
     queryFn: () => apiClient.listGitReviews(sha ?? ""),
     enabled: !!sha,
     retry: false,

@@ -1,9 +1,11 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createRoute } from "@tanstack/react-router";
+import { useState } from "react";
 import { GitProposalCard } from "~/components/GitProposalCard";
 import { ProposalCard } from "~/components/ProposalCard";
 import { apiClient } from "~/lib/api";
 import {
+  keyFor,
   useActiveGraph,
   useActiveGraphPrincipal,
   useGitProposals,
@@ -17,6 +19,14 @@ export const Route = createRoute({
   path: "/inbox",
   component: InboxPage,
 });
+
+/**
+ * A bundle is all commits on a single branch ref.
+ * A bundle is fully decided when every commit in the bundle is decided (not "undecided").
+ */
+function isBundleDecided(proposals: { decided: string }[]): boolean {
+  return proposals.length > 0 && proposals.every((p) => p.decided !== "undecided");
+}
 
 function InboxPage() {
   const { data, isLoading } = usePending();
@@ -33,29 +43,50 @@ function InboxPage() {
 
   const by = useActiveGraphPrincipal();
 
+  // Decided-proposals filter state
+  const [showDecided, setShowDecided] = useState(false);
+
+  // Group git proposals by ref to determine bundle decided-ness.
+  // A bundle (all commits on one branch) is hidden when every commit in it is decided.
+  const proposalsByRef = new Map<string, typeof gitProposals>();
+  for (const p of gitProposals) {
+    const group = proposalsByRef.get(p.ref) ?? [];
+    group.push(p);
+    proposalsByRef.set(p.ref, group);
+  }
+
+  const visibleGitProposals = showDecided
+    ? gitProposals
+    : gitProposals.filter((p) => {
+        const bundle = proposalsByRef.get(p.ref) ?? [p];
+        return !isBundleDecided(bundle);
+      });
+
+  const decidedBundleCount = [...proposalsByRef.values()].filter(isBundleDecided).length;
+
   const approveMut = useMutation({
     mutationFn: (hash: string) => apiClient.approve(hash),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["proposals"] });
-      qc.invalidateQueries({ queryKey: ["recall"] });
-      qc.invalidateQueries({ queryKey: ["schema"] });
-      qc.invalidateQueries({ queryKey: ["verify"] });
-      qc.invalidateQueries({ queryKey: ["policy"] });
+      qc.invalidateQueries({ queryKey: keyFor(activeGraphId, "proposals") });
+      qc.invalidateQueries({ queryKey: keyFor(activeGraphId, "recall") });
+      qc.invalidateQueries({ queryKey: keyFor(activeGraphId, "schema") });
+      qc.invalidateQueries({ queryKey: keyFor(activeGraphId, "verify") });
+      qc.invalidateQueries({ queryKey: keyFor(activeGraphId, "policy") });
     },
   });
 
   const rejectMut = useMutation({
     mutationFn: (hash: string) => apiClient.reject(hash),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["proposals"] });
-      qc.invalidateQueries({ queryKey: ["recall"] });
-      qc.invalidateQueries({ queryKey: ["schema"] });
-      qc.invalidateQueries({ queryKey: ["verify"] });
-      qc.invalidateQueries({ queryKey: ["policy"] });
+      qc.invalidateQueries({ queryKey: keyFor(activeGraphId, "proposals") });
+      qc.invalidateQueries({ queryKey: keyFor(activeGraphId, "recall") });
+      qc.invalidateQueries({ queryKey: keyFor(activeGraphId, "schema") });
+      qc.invalidateQueries({ queryKey: keyFor(activeGraphId, "verify") });
+      qc.invalidateQueries({ queryKey: keyFor(activeGraphId, "policy") });
     },
   });
 
-  const totalCount = proposals.length + (isRepoGraph ? gitProposals.length : 0);
+  const totalCount = proposals.length + (isRepoGraph ? visibleGitProposals.length : 0);
 
   return (
     <div>
@@ -83,30 +114,59 @@ function InboxPage() {
             <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-(--fg-muted)">
               Commits
             </span>
-            {gitProposals.length > 0 && (
+            {visibleGitProposals.length > 0 && (
               <span className="font-mono text-[11px] text-(--fg-muted)">
-                ({gitProposals.length})
+                ({visibleGitProposals.length})
               </span>
             )}
           </div>
 
           {gitLoading && <p className="text-(--fg-muted) text-sm">Loading commits…</p>}
 
-          {!gitLoading && gitProposals.length === 0 && (
+          {!gitLoading && visibleGitProposals.length === 0 && decidedBundleCount === 0 && (
             <p className="text-sm text-(--fg-muted)">
               No commit proposals. Branch heads are listed here when there are unresolved governance
               requirements.
             </p>
           )}
 
-          {!gitLoading && gitProposals.length > 0 && (
+          {!gitLoading && visibleGitProposals.length === 0 && decidedBundleCount > 0 && (
+            <p className="text-sm text-(--fg-muted)">No open commit proposals.</p>
+          )}
+
+          {!gitLoading && visibleGitProposals.length > 0 && (
             <ul className="space-y-4 max-w-2xl">
-              {gitProposals.map((proposal, index) => (
-                <li key={proposal.sha} className={`reveal reveal-${(index % 6) + 1}`}>
-                  <GitProposalCard proposal={proposal} by={by} />
-                </li>
-              ))}
+              {visibleGitProposals.map((proposal, index) => {
+                const bundle = proposalsByRef.get(proposal.ref) ?? [proposal];
+                return (
+                  <li key={proposal.sha} className={`reveal reveal-${(index % 6) + 1}`}>
+                    <GitProposalCard
+                      proposal={proposal}
+                      by={by}
+                      bundleSize={bundle.length}
+                      bundleIndex={bundle.indexOf(proposal)}
+                    />
+                  </li>
+                );
+              })}
             </ul>
+          )}
+
+          {!gitLoading && decidedBundleCount > 0 && (
+            <div className="mt-4 flex items-center gap-2" data-testid="decided-hidden-line">
+              <span className="text-xs text-(--fg-muted) font-mono">
+                {decidedBundleCount} decided {decidedBundleCount === 1 ? "branch" : "branches"}{" "}
+                hidden
+              </span>
+              <button
+                type="button"
+                data-testid="toggle-decided"
+                onClick={() => setShowDecided((v) => !v)}
+                className="text-xs font-mono text-(--fg-muted) underline underline-offset-2 hover:text-(--fg)"
+              >
+                {showDecided ? "hide" : "show"}
+              </button>
+            </div>
           )}
         </section>
       )}
