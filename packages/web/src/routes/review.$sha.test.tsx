@@ -992,6 +992,130 @@ describe("/review/$sha", () => {
     });
   });
 
+  describe("Suggested edits — annotation rendering", () => {
+    beforeEach(() => {
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: { writeText: vi.fn().mockResolvedValue(undefined) },
+      });
+    });
+
+    it("draft annotation with suggestion body renders nested pierre-diff", async () => {
+      localStore.set(
+        `freehold:review-drafts:${SHA}`,
+        JSON.stringify([{
+          path: "src/lib.rs",
+          span: "L1",
+          body: "replace this",
+          suggestion: "fn replaced() {}",
+        }])
+      );
+      setupDefaults();
+      await renderReviewPage();
+      expect(screen.getByTestId("suggestion-diff")).toBeInTheDocument();
+      expect(screen.getByTestId("pierre-diff")).toBeInTheDocument();
+    });
+
+    it("saved annotation with suggestion fence renders nested pierre-diff", async () => {
+      setupDefaults({
+        reviews: {
+          reviews: [
+            {
+              reviewId: "rv-1",
+              verdict: "approve",
+              commit: `git:my-repo#${SHA}`,
+              author: "bob",
+              status: "saved",
+              comments: [
+                {
+                  commentId: "c-1",
+                  body: "fix it\n```suggestion\nfn replaced() {}\n```",
+                  anchor: `git:my-repo#${SHA}:src/lib.rs`,
+                  span: "L1",
+                  status: "saved",
+                },
+              ],
+            },
+          ],
+        },
+      });
+      await renderReviewPage();
+      expect(screen.getByTestId("suggestion-diff")).toBeInTheDocument();
+      expect(screen.getByTestId("pierre-diff")).toBeInTheDocument();
+    });
+
+    it("annotation without suggestion fence renders plain body (no suggestion-diff)", async () => {
+      setupDefaults({
+        reviews: {
+          reviews: [
+            {
+              reviewId: "rv-2",
+              verdict: "approve",
+              commit: `git:my-repo#${SHA}`,
+              author: "bob",
+              status: "saved",
+              comments: [
+                {
+                  commentId: "c-2",
+                  body: "just a comment",
+                  anchor: `git:my-repo#${SHA}:src/lib.rs`,
+                  span: "L1",
+                  status: "saved",
+                },
+              ],
+            },
+          ],
+        },
+      });
+      await renderReviewPage();
+      expect(screen.queryByTestId("suggestion-diff")).not.toBeInTheDocument();
+      expect(screen.getByTestId("annotation")).toHaveTextContent("just a comment");
+    });
+
+    it("saved suggestion annotation has copy-suggestion button", async () => {
+      setupDefaults({
+        reviews: {
+          reviews: [
+            {
+              reviewId: "rv-3",
+              verdict: "approve",
+              commit: `git:my-repo#${SHA}`,
+              author: "bob",
+              status: "saved",
+              comments: [
+                {
+                  commentId: "c-3",
+                  body: "```suggestion\nfn replaced() {}\n```",
+                  anchor: `git:my-repo#${SHA}:src/lib.rs`,
+                  span: "L1",
+                  status: "saved",
+                },
+              ],
+            },
+          ],
+        },
+      });
+      await renderReviewPage();
+      expect(screen.getByTestId("copy-suggestion-btn")).toBeInTheDocument();
+      expect(screen.getByTestId("copy-suggestion-btn")).toHaveTextContent("Copy suggestion");
+    });
+
+    it("draft suggestion annotation does NOT have copy-suggestion button", async () => {
+      localStore.set(
+        `freehold:review-drafts:${SHA}`,
+        JSON.stringify([{
+          path: "src/lib.rs",
+          span: "L1",
+          body: "",
+          suggestion: "fn replaced() {}",
+        }])
+      );
+      setupDefaults();
+      await renderReviewPage();
+      expect(screen.queryByTestId("copy-suggestion-btn")).not.toBeInTheDocument();
+    });
+  });
+
   it("Save-draft persists to localStorage after line selection", async () => {
     setupDefaults();
     await renderReviewPage();

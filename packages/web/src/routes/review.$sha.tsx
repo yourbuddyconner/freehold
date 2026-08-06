@@ -28,7 +28,7 @@ import {
   useListGraphs,
   useReviewsForSha,
 } from "~/lib/hooks";
-import { type CommentDraft, clearDrafts, loadDrafts, saveDrafts, serializeSuggestionBody } from "~/lib/reviewDrafts";
+import { type CommentDraft, clearDrafts, loadDrafts, parseSuggestionBody, saveDrafts, serializeSuggestionBody } from "~/lib/reviewDrafts";
 import { Route as RootRoute } from "./__root";
 
 export const Route = createRoute({
@@ -75,6 +75,7 @@ interface AnnotationMeta {
   path: string;
   draftIndex?: number;
   external_source?: string;
+  suggestion?: string;
 }
 
 function parseAnchorPath(anchor: string | undefined): string | null {
@@ -165,6 +166,9 @@ export function ReviewPage({ sha }: { sha: string }) {
   // Review composer open state (lifted from ReviewComposer)
   const [reviewComposerOpen, setReviewComposerOpen] = useState(false);
 
+  // Tracks which saved suggestion was most recently copied (by composite key)
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
   // Diff view style — split (default) or unified; persisted
   const [diffStyle, setDiffStyle] = useState<"split" | "unified">(readDiffStyle);
 
@@ -233,6 +237,7 @@ export function ReviewPage({ sha }: { sha: string }) {
           span: draft.span,
           path: draft.path,
           draftIndex,
+          suggestion: draft.suggestion,
         },
       });
       map.set(draft.path, arr);
@@ -324,6 +329,9 @@ export function ReviewPage({ sha }: { sha: string }) {
   ): React.ReactNode {
     const meta = ann.metadata;
     if (meta.kind === "draft") {
+      const { prose, suggestion } = meta.suggestion !== undefined
+        ? { prose: meta.body, suggestion: meta.suggestion }
+        : parseSuggestionBody(meta.body);
       return (
         <div
           className="border border-(--border) bg-(--bg-subtle) p-2 text-xs space-y-1"
@@ -344,36 +352,88 @@ export function ReviewPage({ sha }: { sha: string }) {
               Remove
             </button>
           </div>
-          <div className="text-(--fg)">{meta.body}</div>
+          {(() => (
+            <>
+              {prose && <div className="text-(--fg)">{prose}</div>}
+              {suggestion !== null && (
+                <div data-testid="suggestion-diff" className="space-y-1">
+                  <div className="text-[10px] font-mono uppercase text-(--fg-muted)">Suggested change</div>
+                  <PierreDiff
+                    oldText={(() => {
+                      const f = files.find((f) => f.path === meta.path);
+                      return f ? spanLines(f.newContent, meta.span) : "";
+                    })()}
+                    newText={suggestion}
+                    name={meta.path}
+                  />
+                </div>
+              )}
+              {suggestion === null && <div className="text-(--fg)">{meta.body}</div>}
+            </>
+          ))()}
         </div>
       );
     }
-    return (
-      <div
-        className="border border-(--border) bg-(--bg-subtle) p-2 text-xs space-y-1"
-        data-testid="annotation"
-        data-path={meta.path}
-        data-span={meta.span}
-        data-status={meta.status}
-        data-author={meta.author}
-      >
-        <div className="flex items-center gap-2">
-          <span className="font-mono text-[10px] text-(--fg-muted)">{meta.author}</span>
-          <span
-            className={cn(
-              "font-mono text-[10px] uppercase px-1",
-              meta.status === "saved" ? "text-green-600" : "text-amber-600"
+    {
+      const { prose, suggestion } = parseSuggestionBody(meta.body);
+      const key = `${meta.path}:${meta.span}:${meta.author ?? ""}:${meta.status}`;
+      return (
+        <div
+          className="border border-(--border) bg-(--bg-subtle) p-2 text-xs space-y-1"
+          data-testid="annotation"
+          data-path={meta.path}
+          data-span={meta.span}
+          data-status={meta.status}
+          data-author={meta.author}
+        >
+          <div className="flex items-center gap-2">
+            <span className="font-mono text-[10px] text-(--fg-muted)">{meta.author}</span>
+            <span
+              className={cn(
+                "font-mono text-[10px] uppercase px-1",
+                meta.status === "saved" ? "text-green-600" : "text-amber-600"
+              )}
+            >
+              {meta.status}
+            </span>
+            {meta.external_source && (
+              <span className="font-mono text-[10px] text-(--fg-muted)">via github</span>
             )}
-          >
-            {meta.status}
-          </span>
-          {meta.external_source && (
-            <span className="font-mono text-[10px] text-(--fg-muted)">via github</span>
-          )}
+          </div>
+          {(() => (
+            <>
+              {prose && <div className="text-(--fg)">{prose}</div>}
+              {suggestion !== null && (
+                <div data-testid="suggestion-diff" className="space-y-1">
+                  <div className="text-[10px] font-mono uppercase text-(--fg-muted)">Suggested change</div>
+                  <PierreDiff
+                    oldText={(() => {
+                      const f = files.find((f) => f.path === meta.path);
+                      return f ? spanLines(f.newContent, meta.span) : "";
+                    })()}
+                    newText={suggestion}
+                    name={meta.path}
+                  />
+                  <button
+                    type="button"
+                    data-testid="copy-suggestion-btn"
+                    onClick={() => {
+                      navigator.clipboard.writeText(suggestion).catch(() => {});
+                      setCopiedKey(key);
+                      setTimeout(() => setCopiedKey(null), 2000);
+                    }}
+                    className="border border-(--border) font-mono text-[10px] uppercase px-2 py-0.5 text-(--fg-muted) hover:text-(--fg)"
+                  >
+                    {copiedKey === key ? "Copied" : "Copy suggestion"}
+                  </button>
+                </div>
+              )}
+              {suggestion === null && <div className="text-(--fg)">{meta.body}</div>}
+            </>
+          ))()}
         </div>
-        <div className="text-(--fg)">{meta.body}</div>
-      </div>
-    );
+      );
+    }
   }
 
   if (!isRepoGraph) {
