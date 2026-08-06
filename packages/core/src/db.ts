@@ -264,11 +264,19 @@ export async function openDb(pgDir: string): Promise<DbHandle> {
         auto_push_notes  boolean NOT NULL DEFAULT false,
         embedder         text    NOT NULL DEFAULT 'hash',
         allod_graph_id   text    NOT NULL DEFAULT '',
-        origin_remote    text
+        origin_remote    text,
+        signing_principal text
       )
     `);
   } catch {
     // Ignore — table may already exist
+  }
+
+  // Migrate: add signing_principal column to graphs for existing databases.
+  try {
+    await pg.exec("ALTER TABLE graphs ADD COLUMN IF NOT EXISTS signing_principal TEXT");
+  } catch {
+    // Column may already exist
   }
 
   // Migrate: connector tables (idempotent, IF NOT EXISTS).
