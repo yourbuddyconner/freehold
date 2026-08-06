@@ -412,6 +412,83 @@ describe("Policy structured editor + staging", () => {
     expect(apiClient.proposePolicy).not.toHaveBeenCalled();
   });
 
+  it("add-path: typing a pattern and clicking Add appends a chip and the staged payload includes the new path", async () => {
+    const mockStage = vi.fn();
+    vi.mocked(changesetModule.useChangeset).mockReturnValue(
+      makeChangesetStore({ stage: mockStage }) as ReturnType<typeof changesetModule.useChangeset>
+    );
+
+    await renderPolicy();
+
+    // Open editor for a rule that has no paths (agent-writes-are-proposals has a selector but
+    // pathsFromSelector returns no plain region — only a "not" branch, which the walker does visit
+    // but only for "workspace/scratch". Use scratch-is-free which yields ["workspace/scratch"].
+    // We add a NEW, distinct path so the duplicate guard doesn't block.)
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("edit-rule-scratch-is-free"));
+    });
+
+    // Type a new path in the Path pattern input
+    const pathInput = screen.getByLabelText("Path pattern");
+    await act(async () => {
+      fireEvent.change(pathInput, { target: { value: "workspace/notes" } });
+    });
+
+    // Click the Add button
+    const addBtn = screen.getByTestId("add-path-btn");
+    await act(async () => {
+      fireEvent.click(addBtn);
+    });
+
+    // Chip for the new path should now appear
+    expect(screen.getByText("workspace/notes")).toBeInTheDocument();
+    // Input should be cleared after adding
+    expect(pathInput).toHaveValue("");
+
+    // Stage the change and verify the payload includes the new path
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("stage-rule-scratch-is-free"));
+    });
+
+    expect(mockStage).toHaveBeenCalledTimes(1);
+    const payload = mockStage.mock.calls[0][0].payload as {
+      rules: Array<{ name: string; select?: unknown }>;
+    };
+    const rule = payload.rules.find((r) => r.name === "scratch-is-free");
+    const selectStr = JSON.stringify(rule?.select ?? "");
+    expect(selectStr).toContain("workspace/notes");
+  });
+
+  it("add-path: pressing Enter in the path input also adds a chip", async () => {
+    await renderPolicy();
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("edit-rule-scratch-is-free"));
+    });
+
+    const pathInput = screen.getByLabelText("Path pattern");
+    await act(async () => {
+      fireEvent.change(pathInput, { target: { value: "workspace/archive" } });
+    });
+
+    await act(async () => {
+      fireEvent.keyDown(pathInput, { key: "Enter" });
+    });
+
+    expect(screen.getByText("workspace/archive")).toBeInTheDocument();
+    expect(pathInput).toHaveValue("");
+  });
+
+  it("add-rule affordance appears before the first rule section", async () => {
+    await renderPolicy();
+    const addBtn = screen.getByTestId("add-rule-btn");
+    const saveSection = screen.getByTestId("outcome-saves");
+    // add-rule-btn must appear before the first outcome section in DOM order
+    expect(
+      addBtn.compareDocumentPosition(saveSection) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+  });
+
   it("staging a new rule appends it to the definition", async () => {
     const mockStage = vi.fn();
     vi.mocked(changesetModule.useChangeset).mockReturnValue(

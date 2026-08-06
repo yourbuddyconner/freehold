@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider, createMemoryHistory, createRouter } from "@tanstack/react-router";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError, apiClient } from "~/lib/api";
 import * as hooks from "~/lib/hooks";
 import { routeTree } from "~/routes/../routeTree.gen";
@@ -266,6 +266,86 @@ describe("Settings", () => {
   it("shows empty state when no principals", async () => {
     await renderSettings({ principals: [] });
     expect(screen.getByText(/no principals registered/i)).toBeInTheDocument();
+  });
+});
+
+describe("API token masking", () => {
+  const REAL_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.testpayload.sig";
+
+  function setTokenMeta(value: string) {
+    let meta = document.querySelector<HTMLMetaElement>('meta[name="freehold-token"]');
+    if (!meta) {
+      meta = document.createElement("meta");
+      meta.name = "freehold-token";
+      document.head.appendChild(meta);
+    }
+    meta.content = value;
+  }
+
+  function clearTokenMeta() {
+    const meta = document.querySelector('meta[name="freehold-token"]');
+    if (meta) meta.remove();
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setTokenMeta(REAL_TOKEN);
+  });
+
+  afterEach(() => {
+    clearTokenMeta();
+  });
+
+  it("hides real token by default — masked string shown, real value absent from DOM", async () => {
+    await renderSettings();
+    const display = screen.getByTestId("api-token-display");
+    expect(display).not.toHaveTextContent(REAL_TOKEN);
+    expect(display).toHaveTextContent("••••");
+    // Real token must not appear anywhere in the page
+    expect(document.body.textContent).not.toContain(REAL_TOKEN);
+  });
+
+  it("View toggle reveals the real token", async () => {
+    await renderSettings();
+    const toggle = screen.getByTestId("token-visibility-toggle");
+    expect(toggle).toHaveTextContent("View");
+    await act(async () => {
+      fireEvent.click(toggle);
+    });
+    const display = screen.getByTestId("api-token-display");
+    expect(display).toHaveTextContent(REAL_TOKEN);
+    expect(toggle).toHaveTextContent("Hide");
+  });
+
+  it("Hide toggle re-masks the token after revealing it", async () => {
+    await renderSettings();
+    const toggle = screen.getByTestId("token-visibility-toggle");
+    await act(async () => {
+      fireEvent.click(toggle);
+    });
+    // Now visible — click Hide
+    await act(async () => {
+      fireEvent.click(toggle);
+    });
+    const display = screen.getByTestId("api-token-display");
+    expect(display).not.toHaveTextContent(REAL_TOKEN);
+    expect(display).toHaveTextContent("••••");
+  });
+
+  it("Copy button copies the real token regardless of visibility state", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText },
+      configurable: true,
+    });
+
+    await renderSettings();
+    // Token is hidden — copy should still use the real value
+    const copyBtn = screen.getByTestId("token-copy-btn");
+    await act(async () => {
+      fireEvent.click(copyBtn);
+    });
+    expect(writeText).toHaveBeenCalledWith(REAL_TOKEN);
   });
 });
 

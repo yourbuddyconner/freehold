@@ -393,14 +393,21 @@ function PolicyRuleEditor({ rule, definition, isStaged }: PolicyRuleEditorProps)
             <div className="flex gap-1.5">
               <input
                 type="text"
+                aria-label="Path pattern"
                 placeholder="workspace/scratch"
                 value={newPath}
                 onChange={(e) => setNewPath(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && addPath()}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    addPath();
+                  }
+                }}
                 className="flex-1 border border-(--border) bg-(--bg-subtle) px-2.5 py-1 font-mono text-[10px] text-(--fg) placeholder:text-(--fg-muted) focus:outline-none focus:ring-1 focus:ring-(--border)"
               />
               <button
                 type="button"
+                data-testid="add-path-btn"
                 onClick={addPath}
                 className="border border-(--border) px-2 py-1 font-mono text-[10px] text-(--fg-muted) hover:text-(--fg)"
               >
@@ -767,6 +774,8 @@ function PolicyPage() {
             proposal in the Inbox.
           </p>
 
+          <AddRuleCard definition={definition ?? {}} />
+
           {OUTCOME_SECTIONS.map((section) => {
             const sectionRules = rules.filter(
               (r) => describeRequirement(r.require).chipTone === section.tone
@@ -792,8 +801,6 @@ function PolicyPage() {
               </section>
             );
           })}
-
-          <AddRuleCard definition={definition ?? {}} />
 
           {/* The catch-all: what happens when nothing matches */}
           {definition?.default_posture && (
