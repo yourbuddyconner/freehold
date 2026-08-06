@@ -140,24 +140,27 @@ function CodeLayout() {
 
       <div className="flex gap-6 items-start">
         {/* Left pane: file tree + governed paths */}
-        <aside className="w-72 shrink-0 border-r border-(--border) pr-4">
-          {treeLoading ? (
-            <p className="text-xs text-(--fg-muted)">Loading…</p>
-          ) : paths.length === 0 ? (
-            <p className="text-xs text-(--fg-muted)">No files indexed.</p>
-          ) : (
-            <PierreTree
-              paths={paths}
-              selectedPath={activePath}
-              search
-              onSelect={(path, kind) => {
-                if (kind === "file") {
-                  void navigate({ to: "/code/file", search: { path } });
-                }
-              }}
-            />
-          )}
-          <RegionsPanel rules={rules} />
+        <aside className="w-72 shrink-0 border-r border-(--border) pr-4 sticky top-0 self-start">
+          <div className="overflow-y-auto" style={{ height: "calc(100vh - 160px)" }}>
+            {treeLoading ? (
+              <p className="text-xs text-(--fg-muted)">Loading…</p>
+            ) : paths.length === 0 ? (
+              <p className="text-xs text-(--fg-muted)">No files indexed.</p>
+            ) : (
+              <PierreTree
+                paths={paths}
+                selectedPath={activePath}
+                search
+                height="calc(100vh - 160px)"
+                onSelect={(path, kind) => {
+                  if (kind === "file") {
+                    void navigate({ to: "/code/file", search: { path } });
+                  }
+                }}
+              />
+            )}
+            <RegionsPanel rules={rules} />
+          </div>
         </aside>
 
         {/* Right pane: child route or resting state */}
