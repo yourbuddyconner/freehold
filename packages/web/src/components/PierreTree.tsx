@@ -1,5 +1,11 @@
 import { themeToTreeStyles } from "@pierre/trees";
 import { FileTree, useFileTree, useFileTreeSelector } from "@pierre/trees/react";
+
+/** Shallow equality for string arrays — passed to useFileTreeSelector to stabilize the
+ *  returned reference when expansion contents have not changed. */
+function shallowStringArrayEqual(a: readonly string[], b: readonly string[]): boolean {
+  return a.length === b.length && a.every((v, i) => v === b[i]);
+}
 import type React from "react";
 import { useEffect, useImperativeHandle, useRef, useState } from "react";
 
@@ -99,19 +105,25 @@ export function PierreTree({
 
   // Derive expanded directory paths from visible rows via reactive selector.
   // Updates the accumulator for every visible directory row; unseen rows are untouched.
-  const expandedPaths = useFileTreeSelector(model, (m) => {
-    const count = m.getVisibleCount();
-    const rows = count > 0 ? m.getVisibleRows(0, count) : [];
-    for (const row of rows) {
-      if (row.kind === "directory") {
-        expansionAccumulatorRef.current.set(row.path, row.isExpanded);
+  // Pass areArraysEqual so the hook returns the previous reference when sorted contents
+  // are unchanged — prevents useEffect([expandedPaths]) from firing on every re-render.
+  const expandedPaths = useFileTreeSelector(
+    model,
+    (m) => {
+      const count = m.getVisibleCount();
+      const rows = count > 0 ? m.getVisibleRows(0, count) : [];
+      for (const row of rows) {
+        if (row.kind === "directory") {
+          expansionAccumulatorRef.current.set(row.path, row.isExpanded);
+        }
       }
-    }
-    return [...expansionAccumulatorRef.current.entries()]
-      .filter(([, v]) => v)
-      .map(([k]) => k)
-      .sort();
-  });
+      return [...expansionAccumulatorRef.current.entries()]
+        .filter(([, v]) => v)
+        .map(([k]) => k)
+        .sort();
+    },
+    shallowStringArrayEqual
+  );
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 

@@ -56,6 +56,9 @@ const mockUseFileTree = vi.fn((options: Record<string, unknown>) => {
   return { model: mockModel };
 });
 
+// Track the last value returned by useFileTreeSelector so we can honor the equality fn.
+let lastSelectorResult: unknown = undefined;
+
 vi.mock("@pierre/trees/react", () => ({
   useFileTree: (options: Record<string, unknown>) => mockUseFileTree(options),
   FileTree: ({
@@ -65,11 +68,24 @@ vi.mock("@pierre/trees/react", () => ({
     "data-testid"?: string;
     header?: React.ReactNode;
   }) => <div data-testid={testId ?? "pierre-tree"}>{header}</div>,
-  // useFileTreeSelector: call selector with the model so the component can derive state.
+  // Mirror the real hook signature: selector is called each render; if isEqual says the
+  // new result equals the previous one, return the previous reference (stable identity).
   useFileTreeSelector: <TSelected,>(
     model: typeof mockModel,
-    selector: (m: typeof mockModel) => TSelected
-  ) => selector(model),
+    selector: (m: typeof mockModel) => TSelected,
+    isEqual?: (prev: TSelected, next: TSelected) => boolean
+  ) => {
+    const next = selector(model);
+    if (
+      lastSelectorResult !== undefined &&
+      isEqual !== undefined &&
+      isEqual(lastSelectorResult as TSelected, next)
+    ) {
+      return lastSelectorResult as TSelected;
+    }
+    lastSelectorResult = next;
+    return next;
+  },
 }));
 
 // Mock themeToTreeStyles from @pierre/trees
@@ -86,6 +102,7 @@ describe("PierreTree", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     capturedOptions.length = 0;
+    lastSelectorResult = undefined;
   });
 
   afterEach(() => {
@@ -204,6 +221,7 @@ describe("PierreTree", () => {
   describe("onExpansionChange", () => {
     beforeEach(() => {
       vi.useFakeTimers();
+      lastSelectorResult = undefined;
     });
 
     afterEach(() => {
@@ -403,6 +421,51 @@ describe("PierreTree", () => {
 
       // Unmount before debounce fires
       unmount();
+
+      act(() => {
+        vi.advanceTimersByTime(250);
+      });
+      expect(spy).not.toHaveBeenCalled();
+    });
+
+    it("does not call onExpansionChange on re-renders with unchanged expansion (Fix: stable selector reference)", () => {
+      const spy = vi.fn();
+      // src/ visible and expanded — this is the stable state
+      mockModel.getVisibleCount.mockReturnValue(1);
+      mockModel.getVisibleRows.mockReturnValue([
+        {
+          path: "src/",
+          kind: "directory",
+          isExpanded: true,
+          depth: 0,
+          index: 0,
+          isSelected: false,
+          isFocused: false,
+          hasChildren: true,
+          isFlattened: false,
+          level: 1,
+          name: "src",
+          ancestorPaths: [],
+          posInSet: 1,
+          setSize: 1,
+        },
+      ]);
+
+      const { rerender } = render(
+        <PierreTree paths={defaultPaths} onSelect={vi.fn()} onExpansionChange={spy} />
+      );
+
+      // Advance past initial-emission suppression
+      act(() => {
+        vi.advanceTimersByTime(250);
+      });
+      expect(spy).not.toHaveBeenCalled();
+
+      // Re-render twice with UNCHANGED mock rows — selector returns same contents.
+      // areArraysEqual causes the hook to return the previous reference, so useEffect
+      // sees no dependency change and does NOT schedule another debounced emission.
+      rerender(<PierreTree paths={defaultPaths} onSelect={vi.fn()} onExpansionChange={spy} />);
+      rerender(<PierreTree paths={defaultPaths} onSelect={vi.fn()} onExpansionChange={spy} />);
 
       act(() => {
         vi.advanceTimersByTime(250);
