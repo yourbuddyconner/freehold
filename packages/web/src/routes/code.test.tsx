@@ -110,6 +110,14 @@ vi.mock("~/lib/hooks", () => ({
   useGitProposals: vi
     .fn()
     .mockReturnValue({ data: { proposals: [] }, isLoading: false, isError: false, error: null }),
+  useActiveGraphPrincipal: vi.fn().mockReturnValue("owner"),
+  useCodeComments: vi
+    .fn()
+    .mockReturnValue({ data: { comments: [] }, isLoading: false, isError: false, error: null }),
+  usePostCodeComment: vi.fn().mockReturnValue({
+    mutate: vi.fn(),
+    isPending: false,
+  }),
 }));
 
 vi.mock("~/lib/api", () => ({
@@ -126,6 +134,8 @@ vi.mock("~/lib/api", () => ({
     listGraphs: vi.fn(),
     codeNeighborhood: vi.fn(),
     codeSource: vi.fn(),
+    listCodeComments: vi.fn().mockResolvedValue({ comments: [] }),
+    postCodeComment: vi.fn(),
   },
 }));
 

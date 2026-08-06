@@ -1,5 +1,6 @@
 import { basename } from "node:path";
 import {
+  CodeCommentKeyMissingError,
   PathTraversalError,
   codeFile,
   codeItem,
@@ -7,6 +8,8 @@ import {
   codeRegions,
   codeSource,
   codeTree,
+  listCodeComments,
+  postCodeComment,
 } from "@freehold/core";
 import { Hono } from "hono";
 import type { AppEnv } from "../types.js";
@@ -85,6 +88,70 @@ codeRouter.get("/code/regions", async (c) => {
   const repoName = basename(fh.graphDir);
   const rules = await codeRegions(fh, repoName);
   return c.json({ rules });
+});
+
+// GET /code/comments?path=
+codeRouter.get("/code/comments", async (c) => {
+  const fh = c.get("freehold");
+  if (!repoOnly(fh)) {
+    return c.json({ error: "code view is only available for repo graphs" }, 400);
+  }
+  const path = c.req.query("path");
+  if (!path) {
+    return c.json({ error: "path query parameter is required" }, 400);
+  }
+  const comments = await listCodeComments(fh, path);
+  return c.json({ comments });
+});
+
+// POST /code/comments
+codeRouter.post("/code/comments", async (c) => {
+  const fh = c.get("freehold");
+  if (!repoOnly(fh)) {
+    return c.json({ error: "code view is only available for repo graphs" }, 400);
+  }
+
+  let rawBody: unknown;
+  try {
+    rawBody = await c.req.json();
+  } catch {
+    return c.json({ error: "invalid JSON body" }, 400);
+  }
+
+  if (!rawBody || typeof rawBody !== "object" || Array.isArray(rawBody)) {
+    return c.json({ error: "invalid JSON body" }, 400);
+  }
+
+  const body = rawBody as Record<string, unknown>;
+  const { path, span, body: commentBody, by } = body;
+
+  if (typeof path !== "string" || !path) {
+    return c.json({ error: "path is required" }, 400);
+  }
+  if (typeof span !== "string" || !span) {
+    return c.json({ error: "span is required" }, 400);
+  }
+  if (typeof commentBody !== "string" || !commentBody) {
+    return c.json({ error: "body is required" }, 400);
+  }
+  if (typeof by !== "string" || !by) {
+    return c.json({ error: "by is required" }, 400);
+  }
+
+  try {
+    const result = await postCodeComment(fh, {
+      path,
+      span,
+      body: commentBody,
+      by,
+    });
+    return c.json(result);
+  } catch (err: unknown) {
+    if (err instanceof CodeCommentKeyMissingError) {
+      return c.json({ error: `no signing key for ${by}`, code: "key-missing" }, 409);
+    }
+    throw err;
+  }
 });
 
 // GET /code/source?path=
