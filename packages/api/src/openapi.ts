@@ -1706,40 +1706,6 @@ function buildRegistry(): OpenAPIRegistry {
     },
   });
 
-  // Code comments schemas
-  const CodeComment = z
-    .object({
-      commentId: z.string(),
-      body: z.string(),
-      span: z.string(),
-      status: z.literal("open"),
-      author: z.string(),
-      anchorSha: z.string(),
-      currentHead: z.boolean(),
-    })
-    .openapi("CodeComment");
-
-  const PostCodeCommentBody = z
-    .object({
-      path: z.string(),
-      span: z.string(),
-      body: z.string(),
-      by: z.string(),
-    })
-    .openapi("PostCodeCommentBody");
-
-  const PostCodeCommentResult = z
-    .object({
-      commentId: z.string(),
-      status: z.enum(["saved", "pending"]),
-      anchorSha: z.string(),
-    })
-    .openapi("PostCodeCommentResult");
-
-  registry.register("CodeComment", CodeComment);
-  registry.register("PostCodeCommentBody", PostCodeCommentBody);
-  registry.register("PostCodeCommentResult", PostCodeCommentResult);
-
   // Code comments — list
   registry.registerPath({
     method: "get",

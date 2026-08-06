@@ -21,7 +21,6 @@ vi.mock("~/lib/hooks", () => ({
     .fn()
     .mockReturnValue({ data: { graphs: [] }, isLoading: false, isError: false, error: null }),
   useActiveGraph: vi.fn().mockReturnValue({ activeGraphId: "main", setActiveGraphId: vi.fn() }),
-  useListGraphs: vi.fn().mockReturnValue({ data: { graphs: [] }, isLoading: false }),
   useGitProposals: vi
     .fn()
     .mockReturnValue({ data: { proposals: [] }, isLoading: false, isError: false, error: null }),
