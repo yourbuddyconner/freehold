@@ -5,6 +5,32 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as hooks from "~/lib/hooks";
 import { routeTree } from "~/routes/../routeTree.gen";
 
+// Route-level mock for PierreTree — renders a flat button per path so tests can
+// assert on paths prop and simulate file selection without @pierre/trees internals.
+vi.mock("~/components/PierreTree", () => ({
+  PierreTree: ({
+    paths,
+    onSelect,
+  }: {
+    paths: string[];
+    onSelect: (path: string, kind: "file" | "directory") => void;
+  }) => (
+    <div data-testid="pierre-tree-root">
+      {paths.map((p) => (
+        <button
+          key={p}
+          type="button"
+          data-testid="tree-row"
+          data-path={p}
+          onClick={() => onSelect(p, "file")}
+        >
+          {p}
+        </button>
+      ))}
+    </div>
+  ),
+}));
+
 vi.mock("~/lib/hooks", () => ({
   usePending: vi.fn(),
   useRecall: vi.fn(),
@@ -306,11 +332,15 @@ describe("Code workspace", () => {
   });
 
   describe("File tree", () => {
-    it("renders directory and file nodes from the tree fixture", async () => {
+    it("passes flattened file paths from the nested tree to PierreTree", async () => {
       await renderCode();
-      expect(screen.getByText("src")).toBeInTheDocument();
-      expect(screen.getByText("main.ts")).toBeInTheDocument();
-      expect(screen.getByText("utils.ts")).toBeInTheDocument();
+      // sampleTree has two files: src/main.ts and src/utils.ts (dir "src" is not a file)
+      const rows = screen.getAllByTestId("tree-row");
+      const paths = rows.map((r) => r.getAttribute("data-path"));
+      expect(paths).toContain("src/main.ts");
+      expect(paths).toContain("src/utils.ts");
+      // Directory paths are NOT included
+      expect(paths).not.toContain("src");
     });
 
     it("shows resting state message when no file is selected", async () => {
@@ -318,21 +348,27 @@ describe("Code workspace", () => {
       expect(screen.getByText(/select a file/i)).toBeInTheDocument();
     });
 
-    it("renders language chip after file name", async () => {
+    it("clicking a file row navigates to the code file route", async () => {
       await renderCode();
-      expect(screen.getAllByText("typescript")).toHaveLength(2);
-    });
-
-    it("renders classification chips (node.terms) after language chip", async () => {
-      await renderCode();
-      expect(screen.getByText("workspace/core")).toBeInTheDocument();
+      const mainRow = screen
+        .getAllByTestId("tree-row")
+        .find((r) => r.getAttribute("data-path") === "src/main.ts");
+      expect(mainRow).toBeDefined();
+      await act(async () => {
+        mainRow?.click();
+      });
+      // After navigation the file view (src/main.ts) heading should be visible
+      expect(screen.getAllByText("src/main.ts").length).toBeGreaterThan(0);
+      // The "select a file" resting state should no longer be shown
+      expect(screen.queryByText(/select a file/i)).not.toBeInTheDocument();
     });
   });
 
   describe("File page", () => {
     it("shows the file path and declared items", async () => {
       await renderCode({}, "/code/file?path=src%2Fmain.ts");
-      expect(screen.getByText("src/main.ts")).toBeInTheDocument();
+      // The path appears in the file heading (and also in the sidebar tree mock)
+      expect(screen.getAllByText("src/main.ts").length).toBeGreaterThan(0);
       expect(screen.getByText("main")).toBeInTheDocument();
       expect(screen.getByText("helper")).toBeInTheDocument();
     });
@@ -453,7 +489,8 @@ describe("Code workspace", () => {
     it("graph page renders node labels from the neighborhood", async () => {
       await renderCode({}, "/code/graph?path=src%2Fmain.ts");
       // The ReactFlow canvas renders nodes; check that node label text appears
-      expect(screen.getByText("src/main.ts")).toBeInTheDocument();
+      // (path also appears in the sidebar tree mock, so use getAllByText)
+      expect(screen.getAllByText("src/main.ts").length).toBeGreaterThan(0);
     });
 
     it("graph page renders empty state when no nodes returned", async () => {
@@ -470,10 +507,18 @@ describe("Code workspace", () => {
       expect(pathLinks[0]).toHaveAttribute("href", expect.stringContaining("path="));
     });
 
-    it("renders file tree links with correct path search param", async () => {
+    it("clicking a tree-row file navigates to the code file route with the correct path", async () => {
       await renderCode();
-      const fileLink = screen.getByTestId("code-file-src/main.ts");
-      expect(fileLink).toHaveAttribute("href", expect.stringContaining("path="));
+      const mainRow = screen
+        .getAllByTestId("tree-row")
+        .find((r) => r.getAttribute("data-path") === "src/main.ts");
+      expect(mainRow).toBeDefined();
+      await act(async () => {
+        mainRow?.click();
+      });
+      // The file page heading for src/main.ts is now displayed (resting state gone)
+      expect(screen.queryByText(/select a file/i)).not.toBeInTheDocument();
+      expect(screen.getAllByText("src/main.ts").length).toBeGreaterThan(0);
     });
   });
 });
