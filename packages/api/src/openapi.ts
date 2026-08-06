@@ -160,6 +160,48 @@ const UpdateGraphBody = z
   })
   .openapi("UpdateGraphBody");
 
+// ---- Repo onboarding schemas ----
+
+const OnboardStep = z
+  .object({
+    step: z.string().openapi({ description: "Step name, e.g. 'allod init'" }),
+    status: z.enum(["ok", "skipped", "failed"]),
+    detail: z.string().optional().openapi({ description: "Error or skip reason" }),
+  })
+  .openapi("OnboardStep");
+
+const OnboardRepoBody = z
+  .object({
+    path: z.string().openapi({ description: "Absolute path to the repository checkout" }),
+    name: z
+      .string()
+      .optional()
+      .openapi({ description: "Display name; defaults to basename of path" }),
+    id: z
+      .string()
+      .optional()
+      .openapi({ description: "Registry slug id; defaults to basename of path" }),
+    principal: z
+      .string()
+      .optional()
+      .openapi({ description: "Signing principal; defaults to 'owner'" }),
+    noIndex: z.boolean().optional().openapi({ description: "Skip the initial git index step" }),
+    defaultBranch: z
+      .string()
+      .optional()
+      .openapi({ description: "Default branch for git index; defaults to 'main'" }),
+  })
+  .openapi("OnboardRepoBody");
+
+const OnboardRepoResult = z
+  .object({
+    steps: z.array(OnboardStep),
+    entry: GraphInfo,
+    keyPath: z.string().openapi({ description: "Absolute path to the generated key file" }),
+    principal: z.string().openapi({ description: "Principal whose key was generated or verified" }),
+  })
+  .openapi("OnboardRepoResult");
+
 // ---- Code view schemas ----
 
 const CodeItem = z
@@ -445,6 +487,37 @@ const PollResult = z
   })
   .openapi("PollResult");
 
+// ---- Code comment schemas ----
+
+const CodeComment = z
+  .object({
+    commentId: z.string(),
+    body: z.string(),
+    span: z.string(),
+    status: z.enum(["open"]),
+    author: z.string(),
+    anchorSha: z.string(),
+    currentHead: z.boolean(),
+  })
+  .openapi("CodeComment");
+
+const PostCodeCommentBody = z
+  .object({
+    path: z.string().openapi({ description: "Repo-relative file path" }),
+    span: z.string().openapi({ description: "Line span, e.g. L10 or L10-L20" }),
+    body: z.string().openapi({ description: "Comment text" }),
+    by: z.string().openapi({ description: "Principal name signing the comment" }),
+  })
+  .openapi("PostCodeCommentBody");
+
+const PostCodeCommentResult = z
+  .object({
+    commentId: z.string(),
+    status: z.enum(["saved", "pending"]),
+    anchorSha: z.string(),
+  })
+  .openapi("PostCodeCommentResult");
+
 // ---- Registry setup ----
 
 function buildRegistry(): OpenAPIRegistry {
@@ -479,6 +552,9 @@ function buildRegistry(): OpenAPIRegistry {
   registry.register("GraphInfo", GraphInfo);
   registry.register("RegisterGraphBody", RegisterGraphBody);
   registry.register("UpdateGraphBody", UpdateGraphBody);
+  registry.register("OnboardStep", OnboardStep);
+  registry.register("OnboardRepoBody", OnboardRepoBody);
+  registry.register("OnboardRepoResult", OnboardRepoResult);
   registry.register("CodeItem", CodeItem);
   registry.register("CodeFileView", CodeFileView);
   registry.register("CodeItemView", CodeItemView);
@@ -489,6 +565,9 @@ function buildRegistry(): OpenAPIRegistry {
   registry.register("ConnectorResponse", ConnectorResponse);
   registry.register("PutConnectorBody", PutConnectorBody);
   registry.register("PollResult", PollResult);
+  registry.register("CodeComment", CodeComment);
+  registry.register("PostCodeCommentBody", PostCodeCommentBody);
+  registry.register("PostCodeCommentResult", PostCodeCommentResult);
 
   const auth = [{ bearerAuth: [] }];
 
@@ -1002,6 +1081,27 @@ function buildRegistry(): OpenAPIRegistry {
     },
   });
 
+  // Repos — onboard
+  registry.registerPath({
+    method: "post",
+    path: "/api/v1/repos/onboard",
+    summary: "Onboard a repository",
+    description:
+      "Server-side repo onboarding: runs allod init if needed, generates a signing key, registers the graph, and optionally indexes. Returns a step list with per-step status.",
+    security: auth,
+    request: {
+      body: { required: true, content: { "application/json": { schema: OnboardRepoBody } } },
+    },
+    responses: {
+      "201": {
+        description: "Onboarding complete — graph registered",
+        content: { "application/json": { schema: OnboardRepoResult } },
+      },
+      "400": { description: "Onboarding failed — step list included in body" },
+      "401": { description: "Unauthorized" },
+    },
+  });
+
   // Code view — tree
   registry.registerPath({
     method: "get",
@@ -1134,6 +1234,56 @@ function buildRegistry(): OpenAPIRegistry {
       "400": { description: "Not a repo graph, missing path param, or path traversal attempt" },
       "401": { description: "Unauthorized" },
       "404": { description: "File not found on disk" },
+    },
+  });
+
+  // Code comments — list
+  registry.registerPath({
+    method: "get",
+    path: "/api/v1/code/comments",
+    summary: "List code comments for a file",
+    description:
+      "List all standalone line-anchored code comments (review/ReviewComment@1) for the given file path. Returns both saved (admitted) and pending comments across all anchor shas.",
+    security: auth,
+    request: {
+      query: z.object({
+        path: z.string().openapi({ description: "Repo-relative file path" }),
+      }),
+    },
+    responses: {
+      "200": {
+        description: "Code comments for the file",
+        content: {
+          "application/json": { schema: z.object({ comments: z.array(CodeComment) }) },
+        },
+      },
+      "400": { description: "Not a repo graph or missing path parameter" },
+      "401": { description: "Unauthorized" },
+    },
+  });
+
+  // Code comments — post
+  registry.registerPath({
+    method: "post",
+    path: "/api/v1/code/comments",
+    summary: "Post a code comment on a file line",
+    description:
+      "Creates a standalone review/ReviewComment@1 anchored to the current HEAD sha of the repo. No Review node or part_of edge.",
+    security: auth,
+    request: {
+      body: {
+        required: true,
+        content: { "application/json": { schema: PostCodeCommentBody } },
+      },
+    },
+    responses: {
+      "200": {
+        description: "Created code comment",
+        content: { "application/json": { schema: PostCodeCommentResult } },
+      },
+      "400": { description: "Not a repo graph or validation error" },
+      "401": { description: "Unauthorized" },
+      "409": { description: "Signing key not found for the specified principal" },
     },
   });
 

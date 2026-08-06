@@ -1423,6 +1423,63 @@ export interface paths {
         };
         trace?: never;
     };
+    "/api/v1/repos/onboard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Onboard a repository
+         * @description Server-side repo onboarding: runs allod init if needed, generates a signing key, registers the graph, and optionally indexes. Returns a step list with per-step status.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["OnboardRepoBody"];
+                };
+            };
+            responses: {
+                /** @description Onboarding complete — graph registered */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["OnboardRepoResult"];
+                    };
+                };
+                /** @description Onboarding failed — step list included in body */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/code/tree": {
         parameters: {
             query?: never;
@@ -1768,6 +1825,111 @@ export interface paths {
         };
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/code/comments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List code comments for a file
+         * @description List all standalone line-anchored code comments (review/ReviewComment@1) for the given file path. Returns both saved (admitted) and pending comments across all anchor shas.
+         */
+        get: {
+            parameters: {
+                query: {
+                    path: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Code comments for the file */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            comments: components["schemas"]["CodeComment"][];
+                        };
+                    };
+                };
+                /** @description Not a repo graph or missing path parameter */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        /**
+         * Post a code comment on a file line
+         * @description Creates a standalone review/ReviewComment@1 anchored to the current HEAD sha of the repo. No Review node or part_of edge.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["PostCodeCommentBody"];
+                };
+            };
+            responses: {
+                /** @description Created code comment */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PostCodeCommentResult"];
+                    };
+                };
+                /** @description Not a repo graph or validation error */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Signing key not found for the specified principal */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;
@@ -2402,111 +2564,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/code/comments": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List code comments for a file
-         * @description List all standalone line-anchored code comments (review/ReviewComment@1) for the given file path. Returns both saved (admitted) and pending comments across all anchor shas.
-         */
-        get: {
-            parameters: {
-                query: {
-                    path: string;
-                };
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Code comments for the file */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            comments: components["schemas"]["CodeComment"][];
-                        };
-                    };
-                };
-                /** @description Not a repo graph or missing path parameter */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-                /** @description Unauthorized */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-            };
-        };
-        put?: never;
-        /**
-         * Post a code comment on a file line
-         * @description Creates a standalone review/ReviewComment@1 anchored to the current HEAD sha of the repo. No Review node or part_of edge.
-         */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": components["schemas"]["PostCodeCommentBody"];
-                };
-            };
-            responses: {
-                /** @description Created code comment */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["PostCodeCommentResult"];
-                    };
-                };
-                /** @description Not a repo graph or validation error */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-                /** @description Unauthorized */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-                /** @description Signing key not found for the specified principal */
-                409: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2699,6 +2756,36 @@ export interface components {
             /** @enum {string} */
             embedder?: "hash" | "semantic";
         };
+        OnboardStep: {
+            /** @description Step name, e.g. 'allod init' */
+            step: string;
+            /** @enum {string} */
+            status: "ok" | "skipped" | "failed";
+            /** @description Error or skip reason */
+            detail?: string;
+        };
+        OnboardRepoBody: {
+            /** @description Absolute path to the repository checkout */
+            path: string;
+            /** @description Display name; defaults to basename of path */
+            name?: string;
+            /** @description Registry slug id; defaults to basename of path */
+            id?: string;
+            /** @description Signing principal; defaults to 'owner' */
+            principal?: string;
+            /** @description Skip the initial git index step */
+            noIndex?: boolean;
+            /** @description Default branch for git index; defaults to 'main' */
+            defaultBranch?: string;
+        };
+        OnboardRepoResult: {
+            steps: components["schemas"]["OnboardStep"][];
+            entry: components["schemas"]["GraphInfo"];
+            /** @description Absolute path to the generated key file */
+            keyPath: string;
+            /** @description Principal whose key was generated or verified */
+            principal: string;
+        };
         CodeItem: {
             nodeId: string;
             type: string;
@@ -2790,6 +2877,32 @@ export interface components {
             errors: string[];
             /** @description Number of items unchanged */
             unchanged: number;
+        };
+        CodeComment: {
+            commentId: string;
+            body: string;
+            span: string;
+            /** @enum {string} */
+            status: "open";
+            author: string;
+            anchorSha: string;
+            currentHead: boolean;
+        };
+        PostCodeCommentBody: {
+            /** @description Repo-relative file path */
+            path: string;
+            /** @description Line span, e.g. L10 or L10-L20 */
+            span: string;
+            /** @description Comment text */
+            body: string;
+            /** @description Principal name signing the comment */
+            by: string;
+        };
+        PostCodeCommentResult: {
+            commentId: string;
+            /** @enum {string} */
+            status: "saved" | "pending";
+            anchorSha: string;
         };
         GitProposalPath: {
             verb: string;
@@ -2927,32 +3040,6 @@ export interface components {
             binary: boolean;
             /** @description File size in bytes (full file, not truncated) */
             size: number;
-        };
-        CodeComment: {
-            commentId: string;
-            body: string;
-            span: string;
-            /** @enum {string} */
-            status: "open";
-            author: string;
-            anchorSha: string;
-            currentHead: boolean;
-        };
-        PostCodeCommentBody: {
-            /** @description Repo-relative file path */
-            path: string;
-            /** @description Line span, e.g. L10 or L10-L20 */
-            span: string;
-            /** @description Comment text */
-            body: string;
-            /** @description Principal name signing the comment */
-            by: string;
-        };
-        PostCodeCommentResult: {
-            commentId: string;
-            /** @enum {string} */
-            status: "saved" | "pending";
-            anchorSha: string;
         };
     };
     responses: never;
