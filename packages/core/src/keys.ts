@@ -238,6 +238,42 @@ export async function signPayload(
   throw new Error(`unknown backend: ${(key as ResolvedKey).backend}`);
 }
 
+// ─── keyIdFor ─────────────────────────────────────────────────────────────────
+
+/**
+ * Return the key_id for a resolved key without signing.
+ *
+ * Loads the YAML record from the resolved location (file read or keychain fetch)
+ * using the same parseKeyYaml helper used by signPayload, so the key_id field
+ * is extracted in one place.
+ */
+export async function keyIdFor(
+  key: ResolvedKey,
+  allodGraphId: string,
+  opts?: KeyBackendOptions
+): Promise<string> {
+  if (key.backend === "file") {
+    const kp = loadKeyFile(key.location);
+    return kp.key_id;
+  }
+
+  if (key.backend === "keychain") {
+    if (process.platform !== "darwin") {
+      throw new Error("keychain backend is only available on macOS");
+    }
+    const service = opts?.keychainService ?? "allod";
+    const account = `${graphDirComponent(allodGraphId)}/${key.principal}`;
+    const yamlStr = await fetchFromKeychain(service, account);
+    if (yamlStr === null) {
+      throw new Error(`key not found in keychain at ${key.location}`);
+    }
+    const kp = parseKeyYaml(yamlStr, key.location);
+    return kp.key_id;
+  }
+
+  throw new Error(`unknown backend: ${(key as ResolvedKey).backend}`);
+}
+
 // ─── publicHex ────────────────────────────────────────────────────────────────
 
 /**

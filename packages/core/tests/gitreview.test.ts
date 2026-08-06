@@ -794,3 +794,106 @@ describe("postReview — two-phase signed commit", () => {
     });
   });
 });
+
+// ── postReview — host-managed key (the broken case) ───────────────────────────
+//
+// This test creates a graph fixture whose author key lives ONLY as a file under
+// ALLOD_KEYS_DIR (not in the graph's wasm store). This is the exact case that
+// was broken before passing key_id to commit_payload: the wasm module tried to
+// resolve the key from its internal store and failed.
+
+describe("postReview — host-managed key (file-only, not in wasm store)", () => {
+  let hostKeyFh: Freehold;
+  let hostKeyRepoDir: string;
+  let hostKeyGraphId: string;
+  let hostKeyPgDir: string;
+  let hostKeysDir: string;
+  let hostMainSha: string;
+  const hostKeyOrigKeysDir = process.env.ALLOD_KEYS_DIR;
+
+  beforeAll(async () => {
+    hostKeyRepoDir = makeTempDir("gitreview-hostkey-repo-");
+    hostKeyPgDir = makeTempDir("gitreview-hostkey-pg-");
+    hostKeysDir = makeTempDir("gitreview-hostkey-keys-");
+    process.env.ALLOD_KEYS_DIR = hostKeysDir;
+
+    // Minimal git repo
+    execFileSync("git", ["init", "-b", "main"], { cwd: hostKeyRepoDir });
+    execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: hostKeyRepoDir });
+    execFileSync("git", ["config", "user.name", "Test User"], { cwd: hostKeyRepoDir });
+    writeFileSync(join(hostKeyRepoDir, "README.md"), "# host key test");
+    execFileSync("git", ["add", "README.md"], { cwd: hostKeyRepoDir });
+    execFileSync("git", ["commit", "-m", "init"], { cwd: hostKeyRepoDir });
+    hostMainSha = execFileSync("git", ["rev-parse", "HEAD"], { cwd: hostKeyRepoDir })
+      .toString()
+      .trim();
+
+    // Create allod graph
+    await createGraph(hostKeyRepoDir, "host-author");
+
+    const db = await openDb(hostKeyPgDir);
+    hostKeyFh = await openFreehold({
+      graphDir: hostKeyRepoDir,
+      db,
+      home: hostKeyRepoDir,
+      graphName: "host-key-test",
+      graphId: "host-key-test",
+      kind: "repo",
+    });
+
+    // Get allod graph_id
+    const graphYaml = readFileSync(join(hostKeyRepoDir, ".allod", "graph.yaml"), "utf8");
+    const idMatch = graphYaml.match(/\bgraph_id:\s*(.+)/);
+    hostKeyGraphId = idMatch ? idMatch[1].trim() : "host-key-test";
+
+    // Install review ontology
+    const reviewYaml = stripOntologyPreamble(assetYaml("review-ontology.yaml"));
+    const result = await installOntology(hostKeyFh.graph, reviewYaml);
+    if (result.status === "pending" && result.hash) {
+      const d = await approve(hostKeyFh.graph, "host-author", result.hash);
+      expect(d.status).toBe("approved");
+    }
+
+    // Copy the host-author key from .allod/keys/ to ALLOD_KEYS_DIR only
+    // (simulate the host-managed key scenario: key is on host filesystem, not in wasm store)
+    const legacyKeyPath = join(hostKeyRepoDir, ".allod", "keys", "host-author.yaml");
+    const graphComp = graphDirComponent(hostKeyGraphId);
+    mkdirSync(join(hostKeysDir, graphComp), { recursive: true });
+    writeFileSync(
+      join(hostKeysDir, graphComp, "host-author.yaml"),
+      readFileSync(legacyKeyPath, "utf8")
+    );
+  }, 120_000);
+
+  afterAll(() => {
+    process.env.ALLOD_KEYS_DIR = hostKeyOrigKeysDir;
+  });
+
+  test("postReview succeeds with host-managed key (key_id passed to commit_payload)", async () => {
+    const result = await postReview(hostKeyFh, {
+      sha: hostMainSha,
+      verdict: "approve-with-comments",
+      body: "host-key signing path verification",
+      by: "host-author",
+      comments: [
+        {
+          body: "signing-path verification",
+          anchor: `git:${basename(hostKeyRepoDir)}#${hostMainSha}:README.md`,
+          span: "L1",
+        },
+      ],
+      allodGraphId: hostKeyGraphId,
+    });
+
+    expect(typeof result.reviewId).toBe("string");
+    expect(result.reviewId).not.toBe("");
+    expect(result.commentIds).toHaveLength(1);
+    expect(["saved", "pending"]).toContain(result.status);
+
+    // Verify via listReviewsForSha
+    const reviews = await listReviewsForSha(hostKeyFh, hostMainSha);
+    const found = reviews.find((r) => r.reviewId === result.reviewId);
+    expect(found, "review not found in listReviewsForSha").toBeDefined();
+    expect(found?.verdict).toBe("approve-with-comments");
+  });
+});

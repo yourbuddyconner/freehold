@@ -58,13 +58,14 @@ function wasmCommitPayload(
   graph: unknown,
   author: string,
   intent: string,
-  ops: unknown[]
+  ops: unknown[],
+  keyId?: string
 ): CommitPayloadResult {
   return (
     graph as {
-      commit_payload(author: string, intent: string, ops: unknown[]): CommitPayloadResult;
+      commit_payload(author: string, intent: string, ops: unknown[], key_id?: string | null): CommitPayloadResult;
     }
-  ).commit_payload(author, intent, ops);
+  ).commit_payload(author, intent, ops, keyId ?? null);
 }
 
 function wasmCommitSigned(
@@ -134,28 +135,7 @@ export async function postCodeComment(
     },
   };
 
-  // Phase 1: build unsigned changeset + hash.
-  // commit_payload throws a wasm error if `by` is not a known principal in the graph.
-  let commitPayloadResult: CommitPayloadResult;
-  try {
-    commitPayloadResult = await withGraph(fh.graph, () =>
-      wasmCommitPayload(fh.graph, by, `code comment on ${path}`, [op])
-    );
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    // Wasm reports unknown principals as "no key for principal" or similar
-    if (
-      msg.toLowerCase().includes("no key") ||
-      msg.toLowerCase().includes("principal") ||
-      msg.toLowerCase().includes("unknown author")
-    ) {
-      throw new CodeCommentKeyMissingError(msg);
-    }
-    throw err;
-  }
-  const { changeset, hash } = commitPayloadResult;
-
-  // Resolve signing key — raise CodeCommentKeyMissingError if absent
+  // Resolve signing key first — raise CodeCommentKeyMissingError if absent
   let resolvedKey: Awaited<ReturnType<typeof keys.resolveKey>>;
   try {
     resolvedKey = await keys.resolveKey(allodGraphId, by, { repoDir: fh.graphDir });
@@ -163,6 +143,15 @@ export async function postCodeComment(
     const msg = err instanceof Error ? err.message : String(err);
     throw new CodeCommentKeyMissingError(msg);
   }
+
+  // Get key_id so wasm can stamp it into the changeset body
+  const keyId = await keys.keyIdFor(resolvedKey, allodGraphId, { repoDir: fh.graphDir });
+
+  // Phase 1: build unsigned changeset + hash.
+  // Pass key_id so wasm stamps it (avoids wasm-side key resolution which fails for host-managed keys).
+  const { changeset, hash } = await withGraph(fh.graph, () =>
+    wasmCommitPayload(fh.graph, by, `code comment on ${path}`, [op], keyId)
+  );
 
   // Sign the hash payload
   const signature = await keys.signPayload(resolvedKey, hash, allodGraphId, {

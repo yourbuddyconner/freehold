@@ -88,8 +88,8 @@ importers:
   packages/core:
     dependencies:
       '@allod/core':
-        specifier: https://github.com/yourbuddyconner/allod/releases/download/core-v0.2.0/allod-core-0.2.0.tgz
-        version: https://github.com/yourbuddyconner/allod/releases/download/core-v0.2.0/allod-core-0.2.0.tgz
+        specifier: file:../../vendor/allod-core-0.2.1.tgz
+        version: file:vendor/allod-core-0.2.1.tgz
       '@electric-sql/pglite':
         specifier: ^0.5.4
         version: 0.5.4
@@ -236,9 +236,9 @@ packages:
   '@adobe/css-tools@4.5.0':
     resolution: {integrity: sha512-6OzddxPio9UiWTCemp4N8cYLV2ZN1ncRnV1cVGtve7dhPOtRkleRyx32GQCYSwDYgaHU3USMm84tNsvKzRCa1Q==}
 
-  '@allod/core@https://github.com/yourbuddyconner/allod/releases/download/core-v0.2.0/allod-core-0.2.0.tgz':
-    resolution: {integrity: sha512-sxr0fyE1dD/9AjUBGy9Yg1qVnawFWzo0sPN8MG9p0U2yc75CfcKs14fFPFtKGwWnlWhMngM4xxpwAjdoo9BNgw==, tarball: https://github.com/yourbuddyconner/allod/releases/download/core-v0.2.0/allod-core-0.2.0.tgz}
-    version: 0.2.0
+  '@allod/core@file:vendor/allod-core-0.2.1.tgz':
+    resolution: {integrity: sha512-1Jt26uX60xkkTWppgoJlOpRseyjY5uh7KJ5rV4ce89v64Gii16X7mzVf4//JJYGBEG7h/Sytqc+1nmtTobvEsA==, tarball: file:vendor/allod-core-0.2.1.tgz}
+    version: 0.2.1
 
   '@anthropic-ai/sdk@0.91.1':
     resolution: {integrity: sha512-LAmu761tSN9r66ixvmciswUj/ZC+1Q4iAfpedTfSVLeswRwnY3n2Nb6Tsk+cLPP28aLOPWeMgIuTuCcMC6W/iw==}
@@ -3696,7 +3696,7 @@ snapshots:
 
   '@adobe/css-tools@4.5.0': {}
 
-  '@allod/core@https://github.com/yourbuddyconner/allod/releases/download/core-v0.2.0/allod-core-0.2.0.tgz': {}
+  '@allod/core@file:vendor/allod-core-0.2.1.tgz': {}
 
   '@anthropic-ai/sdk@0.91.1(zod@3.25.76)':
     dependencies:
