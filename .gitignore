@@ -23,3 +23,4 @@ Thumbs.db
 
 # Bun build cache
 *.bun-build
+.worktrees/
