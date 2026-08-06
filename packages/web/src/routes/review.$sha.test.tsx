@@ -126,7 +126,9 @@ vi.mock("@pierre/diffs/react", () => ({
             {i.annotations?.map((ann, idx) =>
               renderAnnotation ? (
                 // biome-ignore lint/suspicious/noArrayIndexKey: test mock
-                <React.Fragment key={idx}>{renderAnnotation(ann as never, i as never)}</React.Fragment>
+                <React.Fragment key={idx}>
+                  {renderAnnotation(ann as never, i as never)}
+                </React.Fragment>
               ) : (
                 <div
                   // biome-ignore lint/suspicious/noArrayIndexKey: test mock

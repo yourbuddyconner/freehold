@@ -6,7 +6,7 @@
  */
 
 import { parseDiffFromFile } from "@pierre/diffs";
-import { type DiffLineAnnotation, CodeView, type CodeViewHandle } from "@pierre/diffs/react";
+import { CodeView, type CodeViewHandle, type DiffLineAnnotation } from "@pierre/diffs/react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { useQueryClient } from "@tanstack/react-query";
 import { createRoute } from "@tanstack/react-router";
