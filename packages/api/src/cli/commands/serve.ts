@@ -10,7 +10,14 @@
  * we import from @freehold/api's app entry point instead.
  */
 
-import { GraphManager, hashEmbedder, loadConfig, makeEmbedder, syncIndex } from "@freehold/core";
+import {
+  GraphManager,
+  hashEmbedder,
+  listGitProposals,
+  loadConfig,
+  makeEmbedder,
+  syncIndex,
+} from "@freehold/core";
 import { serve as honoServe } from "@hono/node-server";
 import { createApp } from "../../app.js";
 
@@ -57,4 +64,23 @@ export async function runServe(): Promise<void> {
       console.log(`[freehold] listening on http://127.0.0.1:${info.port}`);
     }
   );
+
+  // Pre-warm the git-proposal cache for repo graphs so the first inbox or
+  // review page load does not pay the cold checklist-evaluation cost.
+  void (async () => {
+    try {
+      const entries = await manager.list();
+      for (const entry of entries) {
+        if (entry.kind !== "repo") continue;
+        const fh = await manager.get(entry.id);
+        const started = Date.now();
+        await listGitProposals(fh);
+        console.log(`[freehold] pre-warmed proposals for ${entry.id} in ${Date.now() - started}ms`);
+      }
+    } catch (err) {
+      console.warn(
+        `[freehold] proposal pre-warm failed: ${err instanceof Error ? err.message : err}`
+      );
+    }
+  })();
 }
