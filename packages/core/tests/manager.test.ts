@@ -295,7 +295,10 @@ describe("GraphManager", () => {
     await makeRepoGraph(repoDir);
 
     const manager = await GraphManager.open(home);
-    const entry = await manager.registerRepo(repoDir, { name: "My Repo", signingPrincipal: "conner" });
+    const entry = await manager.registerRepo(repoDir, {
+      name: "My Repo",
+      signingPrincipal: "conner",
+    });
 
     expect(entry.signingPrincipal).toBe("conner");
 
@@ -318,10 +321,7 @@ describe("GraphManager", () => {
     const manager = await GraphManager.open(home);
 
     // Simulate a legacy row by inserting without the signing_principal column
-    await manager.db.pg.query(
-      `UPDATE graphs SET signing_principal = NULL WHERE id = $1`,
-      ["main"]
-    );
+    await manager.db.pg.query("UPDATE graphs SET signing_principal = NULL WHERE id = $1", ["main"]);
 
     const entry = await manager.getEntry("main");
     expect(entry?.signingPrincipal).toBe("owner");

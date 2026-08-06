@@ -303,7 +303,12 @@ export class GraphManager {
    */
   async registerRepo(
     repoPath: string,
-    opts: { name?: string; id?: string; embedder?: "hash" | "semantic"; signingPrincipal?: string } = {}
+    opts: {
+      name?: string;
+      id?: string;
+      embedder?: "hash" | "semantic";
+      signingPrincipal?: string;
+    } = {}
   ): Promise<GraphEntry> {
     // Validate .allod/graph.yaml exists BEFORE opening
     if (!existsSync(join(repoPath, ".allod", "graph.yaml"))) {
