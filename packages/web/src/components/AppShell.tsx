@@ -2,7 +2,9 @@ import { Link, Outlet } from "@tanstack/react-router";
 import { Archive, BookOpen, Code, GitBranch, Settings, Shield, SquareCheck } from "lucide-react";
 import type React from "react";
 import { cn } from "~/lib/cn";
+import { ChangesetProvider } from "~/lib/changeset";
 import { useActiveGraph, useGitProposals, useGraphs, usePending } from "~/lib/hooks";
+import { ChangesetTray } from "./ChangesetTray";
 
 interface NavEntry {
   to: string;
@@ -48,76 +50,79 @@ export function AppShell() {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden">
-      {/* Sidebar */}
-      <nav
-        aria-label="Main navigation"
-        className="w-52 shrink-0 border-r border-(--border) bg-(--bg-subtle) flex flex-col py-4 gap-1"
-      >
-        <div className="px-4 pb-2">
-          <h1 className="text-lg font-semibold tracking-tight font-sans">Freehold</h1>
-        </div>
-
-        {/* Graph switcher — only rendered when more than one graph is registered */}
-        {graphs.length > 1 && (
-          <div className="px-4 pb-3">
-            <select
-              aria-label="Active graph"
-              value={activeGraphId}
-              onChange={handleGraphChange}
-              className={cn(
-                "w-full text-xs px-2 py-1 rounded border border-(--border)",
-                "bg-(--bg-subtle) text-(--fg) focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
-              )}
-            >
-              <option value={defaultGraph}>
-                {graphs.find((g) => g.id === defaultGraph)?.name ?? defaultGraph}
-              </option>
-              {graphs
-                .filter((g) => g.id !== defaultGraph)
-                .map((g) => (
-                  <option key={g.id} value={g.id}>
-                    {g.name}
-                  </option>
-                ))}
-            </select>
+    <ChangesetProvider graphId={activeGraphId}>
+      <div className="flex h-screen overflow-hidden">
+        {/* Sidebar */}
+        <nav
+          aria-label="Main navigation"
+          className="w-52 shrink-0 border-r border-(--border) bg-(--bg-subtle) flex flex-col py-4 gap-1"
+        >
+          <div className="px-4 pb-2">
+            <h1 className="text-lg font-semibold tracking-tight font-sans">Freehold</h1>
           </div>
-        )}
 
-        {NAV.filter(({ kinds }) => {
-          // No kinds restriction → always visible
-          if (!kinds) return true;
-          // Visible only if the active graph's kind is in the allowed list
-          return kinds.includes(activeKind);
-        }).map(({ to, label, icon: Icon, badge }) => (
-          <Link
-            key={to}
-            to={to}
-            className={cn(
-              "flex items-center gap-2.5 mx-2 px-3 py-2 text-sm transition-colors",
-              "text-(--fg-muted) hover:text-(--fg)",
-              "[&.active]:text-(--fg) [&.active]:font-medium [&.active]:border-l-[3px] [&.active]:border-l-[var(--color-accent)] [&.active]:pl-[9px]"
-            )}
-            activeProps={{ className: "active" }}
-          >
-            <Icon className="h-4 w-4 shrink-0" aria-hidden />
-            <span>{label}</span>
-            {badge && pendingCount > 0 && (
-              <span
-                aria-label={`${pendingCount} pending`}
-                className="ml-auto inline-flex h-4 min-w-4 items-center justify-center bg-[var(--color-accent)] text-[var(--color-accent-fg)] text-[10px] font-bold font-mono px-0.5"
+          {/* Graph switcher — only rendered when more than one graph is registered */}
+          {graphs.length > 1 && (
+            <div className="px-4 pb-3">
+              <select
+                aria-label="Active graph"
+                value={activeGraphId}
+                onChange={handleGraphChange}
+                className={cn(
+                  "w-full text-xs px-2 py-1 rounded border border-(--border)",
+                  "bg-(--bg-subtle) text-(--fg) focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+                )}
               >
-                {pendingCount > 99 ? "99+" : pendingCount}
-              </span>
-            )}
-          </Link>
-        ))}
-      </nav>
+                <option value={defaultGraph}>
+                  {graphs.find((g) => g.id === defaultGraph)?.name ?? defaultGraph}
+                </option>
+                {graphs
+                  .filter((g) => g.id !== defaultGraph)
+                  .map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.name}
+                    </option>
+                  ))}
+              </select>
+            </div>
+          )}
 
-      {/* Content pane */}
-      <main className="flex-1 overflow-auto p-6">
-        <Outlet />
-      </main>
-    </div>
+          {NAV.filter(({ kinds }) => {
+            // No kinds restriction → always visible
+            if (!kinds) return true;
+            // Visible only if the active graph's kind is in the allowed list
+            return kinds.includes(activeKind);
+          }).map(({ to, label, icon: Icon, badge }) => (
+            <Link
+              key={to}
+              to={to}
+              className={cn(
+                "flex items-center gap-2.5 mx-2 px-3 py-2 text-sm transition-colors",
+                "text-(--fg-muted) hover:text-(--fg)",
+                "[&.active]:text-(--fg) [&.active]:font-medium [&.active]:border-l-[3px] [&.active]:border-l-[var(--color-accent)] [&.active]:pl-[9px]"
+              )}
+              activeProps={{ className: "active" }}
+            >
+              <Icon className="h-4 w-4 shrink-0" aria-hidden />
+              <span>{label}</span>
+              {badge && pendingCount > 0 && (
+                <span
+                  aria-label={`${pendingCount} pending`}
+                  className="ml-auto inline-flex h-4 min-w-4 items-center justify-center bg-[var(--color-accent)] text-[var(--color-accent-fg)] text-[10px] font-bold font-mono px-0.5"
+                >
+                  {pendingCount > 99 ? "99+" : pendingCount}
+                </span>
+              )}
+            </Link>
+          ))}
+        </nav>
+
+        {/* Content pane */}
+        <main className="flex-1 overflow-auto p-6">
+          <Outlet />
+          <ChangesetTray />
+        </main>
+      </div>
+    </ChangesetProvider>
   );
 }

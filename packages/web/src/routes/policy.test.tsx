@@ -1,8 +1,9 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider, createMemoryHistory, createRouter } from "@tanstack/react-router";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { apiClient } from "~/lib/api";
+import * as changesetModule from "~/lib/changeset";
 import * as hooks from "~/lib/hooks";
 import { routeTree } from "~/routes/../routeTree.gen";
 
@@ -24,6 +25,13 @@ vi.mock("~/lib/hooks", () => ({
   useGitProposals: vi
     .fn()
     .mockReturnValue({ data: { proposals: [] }, isLoading: false, isError: false, error: null }),
+  useProposePolicy: vi.fn().mockReturnValue({
+    mutate: vi.fn(),
+    mutateAsync: vi.fn(),
+    isPending: false,
+    isError: false,
+    error: null,
+  }),
 }));
 
 vi.mock("~/lib/api", () => ({
@@ -34,6 +42,19 @@ vi.mock("~/lib/api", () => ({
     getPolicy: vi.fn(),
     proposePolicy: vi.fn(),
   },
+}));
+
+vi.mock("~/lib/changeset", () => ({
+  ChangesetProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  useChangeset: vi.fn(() => ({
+    graphId: "test",
+    entries: [],
+    intent: "",
+    stage: vi.fn(),
+    unstage: vi.fn(),
+    clear: vi.fn(),
+    setIntent: vi.fn(),
+  })),
 }));
 
 const definition = {
@@ -107,6 +128,20 @@ function setupHooks(policyData: unknown = policyFixture) {
   } as unknown as ReturnType<typeof hooks.useMemoryIndex>);
 }
 
+function makeChangesetStore(
+  overrides: { stage?: ReturnType<typeof vi.fn>; entries?: unknown[] } = {}
+) {
+  return {
+    graphId: "test",
+    entries: overrides.entries ?? [],
+    intent: "",
+    stage: overrides.stage ?? vi.fn(),
+    unstage: vi.fn(),
+    clear: vi.fn(),
+    setIntent: vi.fn(),
+  };
+}
+
 async function renderPolicy(policyData: unknown = policyFixture) {
   setupHooks(policyData);
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -131,6 +166,9 @@ describe("Policy", () => {
       status: "pending",
       hash: "sha256:abc",
     } as never);
+    vi.mocked(changesetModule.useChangeset).mockReturnValue(
+      makeChangesetStore() as ReturnType<typeof changesetModule.useChangeset>
+    );
   });
 
   it("shows the decision summary, roles, and the everything-else posture", async () => {
@@ -187,45 +225,224 @@ describe("Policy", () => {
     expect(screen.getByText(/no policy rules loaded/i)).toBeInTheDocument();
   });
 
-  it("edits a rule inline and proposes the changed policy", async () => {
+  it("stages a rule edit without calling proposePolicy directly", async () => {
+    const mockStage = vi.fn();
+    vi.mocked(changesetModule.useChangeset).mockReturnValue(
+      makeChangesetStore({ stage: mockStage }) as ReturnType<typeof changesetModule.useChangeset>
+    );
+
     await renderPolicy();
     await act(async () => {
       fireEvent.click(screen.getByTestId("edit-rule-scratch-is-free"));
     });
-    const textarea = screen.getByLabelText("Edit rule scratch-is-free") as HTMLTextAreaElement;
-    expect(textarea.value).toContain("scratch-is-free");
 
-    const edited = JSON.parse(textarea.value);
-    edited.require = { reviewers: { quorum: 1, role: "owner" } };
+    // Change the require via dropdown
+    const requireSelect = screen.getByRole("combobox");
     await act(async () => {
-      fireEvent.change(textarea, { target: { value: JSON.stringify(edited, null, 2) } });
-    });
-    await act(async () => {
-      fireEvent.click(screen.getByTestId("save-rule-scratch-is-free"));
+      fireEvent.change(requireSelect, { target: { value: "review" } });
     });
 
-    await waitFor(() => {
-      expect(apiClient.proposePolicy).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("stage-rule-scratch-is-free"));
     });
-    const arg = vi.mocked(apiClient.proposePolicy).mock.calls[0][0] as { policy_yaml: string };
-    const proposed = JSON.parse(arg.policy_yaml);
-    expect(proposed.default_posture).toBe("restricted");
-    const rule = proposed.rules.find((r: { name: string }) => r.name === "scratch-is-free");
-    expect(rule.require).toEqual({ reviewers: { quorum: 1, role: "owner" } });
-    // Pending banner links to the Inbox
-    expect(screen.getByText(/pending in the/i)).toBeInTheDocument();
+
+    expect(mockStage).toHaveBeenCalledTimes(1);
+    expect(apiClient.proposePolicy).not.toHaveBeenCalled();
+    const payload = mockStage.mock.calls[0][0].payload as {
+      default_posture: string;
+      rules: Array<{ name: string; require: unknown }>;
+    };
+    expect(payload.default_posture).toBe("restricted");
+    const rule = payload.rules.find((r) => r.name === "scratch-is-free");
+    expect((rule?.require as { reviewers?: unknown })?.reviewers).toBeDefined();
   });
 
-  it("disables propose while the draft is invalid JSON", async () => {
+  it("disables Stage change button when rule name is empty", async () => {
     await renderPolicy();
     await act(async () => {
       fireEvent.click(screen.getByTestId("edit-rule-scratch-is-free"));
     });
-    const textarea = screen.getByLabelText("Edit rule scratch-is-free");
+    const nameInput = screen.getByLabelText("Rule name");
     await act(async () => {
-      fireEvent.change(textarea, { target: { value: "{ not json" } });
+      fireEvent.change(nameInput, { target: { value: "" } });
     });
-    expect(screen.getByTestId("save-rule-scratch-is-free")).toBeDisabled();
-    expect(screen.getByText(/not valid json yet/i)).toBeInTheDocument();
+    expect(screen.getByTestId("stage-rule-scratch-is-free")).toBeDisabled();
+  });
+
+  it("stages a saves-type rule with schema_valid: true in require", async () => {
+    const mockStage = vi.fn();
+    vi.mocked(changesetModule.useChangeset).mockReturnValue(
+      makeChangesetStore({ stage: mockStage }) as ReturnType<typeof changesetModule.useChangeset>
+    );
+
+    await renderPolicy();
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("edit-rule-scratch-is-free"));
+    });
+
+    // Keep it as "saves" kind (default)
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("stage-rule-scratch-is-free"));
+    });
+
+    expect(mockStage).toHaveBeenCalledTimes(1);
+    const payload = mockStage.mock.calls[0][0].payload as {
+      rules: Array<{ name: string; require: unknown }>;
+    };
+    const rule = payload.rules.find((r) => r.name === "scratch-is-free");
+    expect((rule?.require as { schema_valid?: boolean })?.schema_valid).toBe(true);
+  });
+});
+
+describe("Policy structured editor + staging", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(changesetModule.useChangeset).mockReturnValue(
+      makeChangesetStore() as ReturnType<typeof changesetModule.useChangeset>
+    );
+    vi.mocked(apiClient.proposePolicy).mockResolvedValue({
+      status: "pending",
+      hash: "sha256:abc",
+    } as never);
+  });
+
+  it("shows 'Stage change' button instead of 'Propose change' on each rule card", async () => {
+    await renderPolicy();
+    // Should have Stage change buttons, not Propose change
+    expect(screen.queryByText(/propose change/i)).not.toBeInTheDocument();
+    // After clicking Edit, should see Stage change
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("edit-rule-scratch-is-free"));
+    });
+    expect(screen.getByTestId("stage-rule-scratch-is-free")).toBeInTheDocument();
+  });
+
+  it("staging a rule edit calls useChangeset.stage with the full definition payload", async () => {
+    const mockStage = vi.fn();
+    vi.mocked(changesetModule.useChangeset).mockReturnValue(
+      makeChangesetStore({ stage: mockStage }) as ReturnType<typeof changesetModule.useChangeset>
+    );
+
+    await renderPolicy();
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("edit-rule-scratch-is-free"));
+    });
+
+    // Change the name field
+    const nameInput = screen.getByLabelText("Rule name");
+    await act(async () => {
+      fireEvent.change(nameInput, { target: { value: "scratch-is-free-v2" } });
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("stage-rule-scratch-is-free"));
+    });
+
+    expect(mockStage).toHaveBeenCalledTimes(1);
+    const call = mockStage.mock.calls[0][0];
+    expect(call.kind).toBe("policy");
+    expect(call.label).toContain("policy: edit rule");
+    // Payload is the full definition with updated rule
+    const payload = call.payload as { rules: Array<{ name: string }> };
+    expect(payload.rules.some((r) => r.name === "scratch-is-free-v2")).toBe(true);
+    // No direct API call
+    expect(apiClient.proposePolicy).not.toHaveBeenCalled();
+  });
+
+  it("shows staged chip on a rule card when it is staged", async () => {
+    vi.mocked(changesetModule.useChangeset).mockReturnValue(
+      makeChangesetStore({
+        entries: [
+          {
+            id: "e1",
+            kind: "policy",
+            label: "policy: edit rule scratch-is-free",
+            payload: { rules: [{ name: "scratch-is-free" }] },
+          },
+        ],
+      }) as ReturnType<typeof changesetModule.useChangeset>
+    );
+
+    await renderPolicy();
+    const card = screen.getByTestId("rule-scratch-is-free");
+    expect(card).toHaveTextContent(/staged/i);
+  });
+
+  it("does not show staged chip due to substring match (exact label match only)", async () => {
+    vi.mocked(changesetModule.useChangeset).mockReturnValue(
+      makeChangesetStore({
+        entries: [
+          {
+            id: "e1",
+            kind: "policy",
+            label: "policy: edit rule scratch-is-free-v2",
+            payload: { rules: [{ name: "scratch-is-free-v2" }] },
+          },
+        ],
+      }) as ReturnType<typeof changesetModule.useChangeset>
+    );
+
+    await renderPolicy();
+    const card = screen.getByTestId("rule-scratch-is-free");
+    // Should NOT show staged chip because the label doesn't exactly match
+    expect(card).not.toHaveTextContent(/staged/i);
+  });
+
+  it("delete rule stages a definition without that rule", async () => {
+    const mockStage = vi.fn();
+    vi.mocked(changesetModule.useChangeset).mockReturnValue(
+      makeChangesetStore({ stage: mockStage }) as ReturnType<typeof changesetModule.useChangeset>
+    );
+
+    await renderPolicy();
+    // Click Delete on scratch-is-free
+    const deleteBtn = screen.getByTestId("delete-rule-scratch-is-free");
+    await act(async () => {
+      fireEvent.click(deleteBtn);
+    });
+    // Confirm inline
+    const confirmBtn = screen.getByTestId("confirm-delete-scratch-is-free");
+    await act(async () => {
+      fireEvent.click(confirmBtn);
+    });
+
+    expect(mockStage).toHaveBeenCalledTimes(1);
+    const payload = mockStage.mock.calls[0][0].payload as { rules: Array<{ name: string }> };
+    expect(payload.rules.find((r) => r.name === "scratch-is-free")).toBeUndefined();
+    expect(apiClient.proposePolicy).not.toHaveBeenCalled();
+  });
+
+  it("staging a new rule appends it to the definition", async () => {
+    const mockStage = vi.fn();
+    vi.mocked(changesetModule.useChangeset).mockReturnValue(
+      makeChangesetStore({ stage: mockStage }) as ReturnType<typeof changesetModule.useChangeset>
+    );
+
+    await renderPolicy();
+
+    // Click "Add rule" button
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("add-rule-btn"));
+    });
+
+    // Fill in the name
+    const nameInput = screen.getByLabelText("New rule name");
+    await act(async () => {
+      fireEvent.change(nameInput, { target: { value: "new-test-rule" } });
+    });
+
+    // Click "Stage add"
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("stage-add-rule-btn"));
+    });
+
+    expect(mockStage).toHaveBeenCalledTimes(1);
+    const call = mockStage.mock.calls[0][0];
+    expect(call.kind).toBe("policy");
+    expect(call.label).toBe("policy: add rule new-test-rule");
+    const payload = call.payload as { rules: Array<{ name: string }> };
+    expect(payload.rules.some((r) => r.name === "new-test-rule")).toBe(true);
+    // Existing rules are preserved
+    expect(payload.rules.some((r) => r.name === "scratch-is-free")).toBe(true);
   });
 });

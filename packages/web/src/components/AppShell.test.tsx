@@ -24,7 +24,7 @@ vi.mock("~/lib/hooks", () => ({
 vi.mock("~/lib/api", () => ({
   GRAPH_STORAGE_KEY: "freehold-graph",
   setActiveGraph: vi.fn(),
-  apiClient: { proposals: vi.fn(), session: vi.fn() },
+  apiClient: { proposals: vi.fn(), session: vi.fn(), proposePolicy: vi.fn() },
   ApiError: class ApiError extends Error {},
 }));
 
