@@ -279,6 +279,15 @@ export async function openDb(pgDir: string): Promise<DbHandle> {
     // Column may already exist
   }
 
+  // Migrate: add ignore_branches column for branch-scoping (stored as JSON array text).
+  try {
+    await pg.exec(
+      "ALTER TABLE graphs ADD COLUMN IF NOT EXISTS ignore_branches TEXT NOT NULL DEFAULT '[]'"
+    );
+  } catch {
+    // Column may already exist
+  }
+
   // Migrate: connector tables (idempotent, IF NOT EXISTS).
   try {
     await pg.exec(`

@@ -61,6 +61,7 @@ graphsRouter.patch("/graphs/:id", async (c) => {
     autoPushNotes?: boolean;
     embedder?: "hash" | "semantic";
     signingPrincipal?: string;
+    ignoreBranches?: string[];
   };
   try {
     body = await c.req.json();
@@ -74,6 +75,7 @@ graphsRouter.patch("/graphs/:id", async (c) => {
       autoPushNotes: body.autoPushNotes,
       embedder: body.embedder,
       signingPrincipal: body.signingPrincipal,
+      ignoreBranches: body.ignoreBranches,
     });
     return c.json(entry);
   } catch (err) {

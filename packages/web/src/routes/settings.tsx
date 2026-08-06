@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { type Principal, PrincipalCard } from "~/components/PrincipalCard";
 import { ApiError, apiClient } from "~/lib/api";
 import { cn } from "~/lib/cn";
-import { usePrincipals, useSession } from "~/lib/hooks";
+import { useActiveGraph, useListGraphs, usePrincipals, useSession } from "~/lib/hooks";
 import { type ThemeChoice, readStoredTheme, setTheme } from "~/lib/theme";
 import { Route as RootRoute } from "./__root";
 
@@ -446,6 +446,103 @@ interface ConnectorStatus {
   status: { lastPollAt?: string; lastErrors?: string[] };
 }
 
+// ---------------------------------------------------------------------------
+// IgnoreBranchesSection — per-repo-graph branch exclusion patterns
+// ---------------------------------------------------------------------------
+
+function IgnoreBranchesSection() {
+  const qc = useQueryClient();
+  const { activeGraphId } = useActiveGraph();
+  const { data: listData } = useListGraphs();
+
+  const activeGraph = listData?.graphs.find((g) => g.id === activeGraphId) ?? null;
+
+  // Local edit state: comma-separated patterns in the textarea
+  const [patternsText, setPatternsText] = useState<string>("");
+  const [initialized, setInitialized] = useState(false);
+
+  useEffect(() => {
+    if (!initialized && activeGraph && "ignoreBranches" in activeGraph) {
+      const patterns = (activeGraph as { ignoreBranches?: string[] }).ignoreBranches ?? [];
+      setPatternsText(patterns.join(", "));
+      setInitialized(true);
+    }
+  }, [activeGraph, initialized]);
+
+  // Reset initialized flag whenever the active graph changes so patterns reload.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: activeGraphId triggers the reset; setInitialized is stable
+  useEffect(() => {
+    setInitialized(false);
+  }, [activeGraphId]);
+
+  const saveMut = useMutation({
+    mutationFn: (patterns: string[]) =>
+      apiClient.updateGraph(activeGraphId, { ignoreBranches: patterns }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["list-graphs"] }),
+  });
+
+  if (!activeGraph || activeGraph.kind !== "repo") return null;
+
+  function handleSave() {
+    const patterns = patternsText
+      .split(",")
+      .map((p) => p.trim())
+      .filter(Boolean);
+    saveMut.mutate(patterns);
+  }
+
+  return (
+    <section className="space-y-3" data-testid="ignore-branches-section">
+      <h3 className="text-sm font-semibold text-(--fg)">Branch exclusions</h3>
+      <p className="text-xs text-(--fg-muted)">
+        Glob patterns matched against bare branch names. Matching branches are excluded from the
+        proposals list. Separate patterns with commas.
+      </p>
+      <div className="space-y-2">
+        <input
+          type="text"
+          value={patternsText}
+          onChange={(e) => {
+            setPatternsText(e.target.value);
+            if (saveMut.isSuccess || saveMut.isError) saveMut.reset();
+          }}
+          placeholder="worktree-*"
+          className="block w-full border border-(--border) bg-(--bg) px-2 py-1.5 text-xs text-(--fg) font-mono"
+          data-testid="ignore-branches-input"
+          aria-label="Branch exclusion patterns (comma-separated)"
+        />
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saveMut.isPending}
+            className="bg-(--fg) text-white font-mono text-[11px] uppercase px-2 py-1 disabled:opacity-50"
+            data-testid="ignore-branches-save"
+          >
+            {saveMut.isPending ? "Saving…" : "Save"}
+          </button>
+          {saveMut.isSuccess && (
+            <span
+              className="text-xs text-green-600 dark:text-green-400"
+              data-testid="ignore-branches-saved"
+            >
+              Saved.
+            </span>
+          )}
+          {saveMut.isError && (
+            <span
+              className="text-xs text-red-600 dark:text-red-400"
+              data-testid="ignore-branches-error"
+            >
+              {saveMut.error instanceof Error ? saveMut.error.message : "Save failed."}
+            </span>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function ConnectorSection() {
   const qc = useQueryClient();
 
@@ -868,6 +965,10 @@ function SettingsPage() {
       <div className="border-t border-(--border)" />
 
       <OntologyInstallSection />
+
+      <div className="border-t border-(--border)" />
+
+      <IgnoreBranchesSection />
 
       <div className="border-t border-(--border)" />
 
