@@ -27,7 +27,9 @@ async function main() {
 
   // Read the real allod graph_id from disk
   const { readFileSync } = await import("node:fs");
-  const { load: yamlLoad } = await import(join(CORE_PKG, "node_modules", "js-yaml", "dist", "js-yaml.cjs.js"));
+  const { load: yamlLoad } = await import(
+    join(CORE_PKG, "node_modules", "js-yaml", "dist", "js-yaml.cjs.js")
+  );
   const graphYaml = readFileSync(`${ALLOD_REPO}/.allod/graph.yaml`, "utf-8");
   const graphDoc = yamlLoad(graphYaml) as Record<string, unknown>;
   const allodGraphId = graphDoc.graph_id as string;

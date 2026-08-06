@@ -63,7 +63,12 @@ function wasmCommitPayload(
 ): CommitPayloadResult {
   return (
     graph as {
-      commit_payload(author: string, intent: string, ops: unknown[], key_id?: string | null): CommitPayloadResult;
+      commit_payload(
+        author: string,
+        intent: string,
+        ops: unknown[],
+        key_id?: string | null
+      ): CommitPayloadResult;
     }
   ).commit_payload(author, intent, ops, keyId ?? null);
 }
