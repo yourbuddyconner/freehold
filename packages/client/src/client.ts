@@ -70,7 +70,7 @@ export interface HealthResponse {
 }
 
 // ---------------------------------------------------------------------------
-// ApiError — thrown on { error: { code, message } } responses
+// ApiError — thrown on { error: { code, message } } or { error, code } responses
 // ---------------------------------------------------------------------------
 
 export class ApiError extends Error {
@@ -89,8 +89,12 @@ export class ApiError extends Error {
 // Internal helpers
 // ---------------------------------------------------------------------------
 
+// Some routes use the nested shape { error: { code, message } };
+// others use the flat shape { error: string, code?: string }.
+// We handle both so ApiError always carries the right code and message.
 interface ErrorBody {
-  error?: { code?: string; message?: string };
+  error?: { code?: string; message?: string } | string;
+  code?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -208,8 +212,21 @@ export class FreeholdClient {
 
     if (!res.ok) {
       const eb = json as ErrorBody;
-      const code = eb?.error?.code ?? "http_error";
-      const message = eb?.error?.message ?? `HTTP ${res.status}`;
+      // Handle both shapes:
+      //   nested: { error: { code, message } }  (governance routes)
+      //   flat:   { error: string, code?: string }  (gitreview, connector routes)
+      let code: string;
+      let message: string;
+      if (typeof eb?.error === "object" && eb.error !== null) {
+        code = eb.error.code ?? "http_error";
+        message = eb.error.message ?? `HTTP ${res.status}`;
+      } else if (typeof eb?.error === "string") {
+        code = eb.code ?? "http_error";
+        message = eb.error;
+      } else {
+        code = "http_error";
+        message = `HTTP ${res.status}`;
+      }
       throw new ApiError(code, message, res.status);
     }
 

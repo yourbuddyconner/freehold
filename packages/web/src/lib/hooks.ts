@@ -317,6 +317,17 @@ export function useGitHubBlobUrl(filePath: string | undefined): string | null {
 }
 
 /**
+ * Returns the signing principal for the currently-active graph.
+ * Falls back to "owner" if the active graph has no signingPrincipal or is not found.
+ */
+export function useActiveGraphPrincipal(): string {
+  const { activeGraphId } = useActiveGraph();
+  const { data } = useListGraphs();
+  const entry = data?.graphs.find((g) => g.id === activeGraphId);
+  return entry?.signingPrincipal ?? "owner";
+}
+
+/**
  * Encapsulates all decide-related state and mutation for a git proposal.
  * Extracted from GitProposalCard to allow reuse in the review page.
  */

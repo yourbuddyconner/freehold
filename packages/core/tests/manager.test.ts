@@ -289,6 +289,44 @@ describe("GraphManager", () => {
     );
   });
 
+  test("registerRepo() persists signingPrincipal and returns it in entry", async () => {
+    const home = makeTempDir("freehold-mgr-test-");
+    const repoDir = makeTempDir("freehold-mgr-repo-");
+    await makeRepoGraph(repoDir);
+
+    const manager = await GraphManager.open(home);
+    const entry = await manager.registerRepo(repoDir, {
+      name: "My Repo",
+      signingPrincipal: "conner",
+    });
+
+    expect(entry.signingPrincipal).toBe("conner");
+
+    const fetched = await manager.getEntry(entry.id);
+    expect(fetched?.signingPrincipal).toBe("conner");
+  });
+
+  test("registerRepo() defaults signingPrincipal to 'owner' when not given", async () => {
+    const home = makeTempDir("freehold-mgr-test-");
+    const repoDir = makeTempDir("freehold-mgr-repo-");
+    await makeRepoGraph(repoDir);
+
+    const manager = await GraphManager.open(home);
+    const entry = await manager.registerRepo(repoDir);
+    expect(entry.signingPrincipal).toBe("owner");
+  });
+
+  test("getEntry() defaults signingPrincipal to 'owner' for legacy rows (NULL column)", async () => {
+    const home = makeTempDir("freehold-mgr-test-");
+    const manager = await GraphManager.open(home);
+
+    // Simulate a legacy row by inserting without the signing_principal column
+    await manager.db.pg.query("UPDATE graphs SET signing_principal = NULL WHERE id = $1", ["main"]);
+
+    const entry = await manager.getEntry("main");
+    expect(entry?.signingPrincipal).toBe("owner");
+  });
+
   test("registerRepo() indexes the graph — rows visible under its id", async () => {
     const home = makeTempDir("freehold-mgr-test-");
     const repoDir = makeTempDir("freehold-mgr-repo-");

@@ -35,6 +35,7 @@ export interface GraphEntry {
   embedder: "hash" | "semantic";
   allodGraphId: string;
   originRemote: string | null;
+  signingPrincipal: string;
 }
 
 /** Read the review ontology YAML bundled as an asset next to this file. */
@@ -80,6 +81,7 @@ function rowToEntry(row: {
   embedder: string;
   allod_graph_id: string;
   origin_remote: string | null;
+  signing_principal: string | null;
 }): GraphEntry {
   return {
     id: row.id,
@@ -90,6 +92,7 @@ function rowToEntry(row: {
     embedder: row.embedder as "hash" | "semantic",
     allodGraphId: row.allod_graph_id,
     originRemote: row.origin_remote,
+    signingPrincipal: row.signing_principal ?? "owner",
   };
 }
 
@@ -163,6 +166,7 @@ export class GraphManager {
       embedder: string;
       allod_graph_id: string;
       origin_remote: string | null;
+      signing_principal: string | null;
     }>("SELECT * FROM graphs WHERE id = $1", [id]);
     if (result.rows.length === 0) return null;
     return rowToEntry(result.rows[0]);
@@ -198,6 +202,7 @@ export class GraphManager {
       embedder: string;
       allod_graph_id: string;
       origin_remote: string | null;
+      signing_principal: string | null;
     }>("SELECT * FROM graphs ORDER BY id");
     return result.rows.map(rowToEntry);
   }
@@ -298,7 +303,12 @@ export class GraphManager {
    */
   async registerRepo(
     repoPath: string,
-    opts: { name?: string; id?: string; embedder?: "hash" | "semantic" } = {}
+    opts: {
+      name?: string;
+      id?: string;
+      embedder?: "hash" | "semantic";
+      signingPrincipal?: string;
+    } = {}
   ): Promise<GraphEntry> {
     // Validate .allod/graph.yaml exists BEFORE opening
     if (!existsSync(join(repoPath, ".allod", "graph.yaml"))) {
@@ -308,6 +318,7 @@ export class GraphManager {
     const id = opts.id ?? makeRepoId(repoPath);
     const name = opts.name ?? id;
     const embedder = opts.embedder ?? "hash";
+    const signingPrincipal = opts.signingPrincipal ?? "owner";
 
     // Check registry — reject duplicates BEFORE any side effects
     const existing = await this.db.pg.query<{ id: string }>("SELECT id FROM graphs WHERE id = $1", [
@@ -349,9 +360,9 @@ export class GraphManager {
 
     // Persist registry entry (no ON CONFLICT needed — we already checked above)
     await this.db.pg.query(
-      `INSERT INTO graphs (id, name, path, kind, auto_push_notes, embedder, allod_graph_id, origin_remote)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      [id, name, repoPath, "repo", false, embedder, allodGraphId, remote]
+      `INSERT INTO graphs (id, name, path, kind, auto_push_notes, embedder, allod_graph_id, origin_remote, signing_principal)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [id, name, repoPath, "repo", false, embedder, allodGraphId, remote, signingPrincipal]
     );
 
     // Cache the handle

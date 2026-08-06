@@ -14,6 +14,7 @@ vi.mock("~/lib/hooks", () => ({
   useEntity: vi.fn(),
   useGraphs: vi.fn().mockReturnValue({ graphs: [], defaultGraph: "main" }),
   useActiveGraph: vi.fn().mockReturnValue({ activeGraphId: "main", setActiveGraphId: vi.fn() }),
+  useActiveGraphPrincipal: vi.fn().mockReturnValue("owner"),
   useGitProposals: vi
     .fn()
     .mockReturnValue({ data: { proposals: [] }, isLoading: false, isError: false, error: null }),
@@ -518,18 +519,7 @@ describe("Inbox", () => {
         isError: false,
         error: null,
       } as unknown as ReturnType<typeof hooks.useGitProposals>);
-      vi.mocked(hooks.useSession).mockReturnValue({
-        data: {
-          owner: "alice",
-          defaultAgent: "claude",
-          port: 8710,
-          graphs: [],
-          defaultGraph: "main",
-        },
-        isLoading: false,
-        isError: false,
-        error: null,
-      } as unknown as ReturnType<typeof hooks.useSession>);
+      vi.mocked(hooks.useActiveGraphPrincipal).mockReturnValue("alice");
       vi.mocked(apiClient.postGitReview).mockResolvedValue({
         reviewId: "rv-1",
         commentIds: [],

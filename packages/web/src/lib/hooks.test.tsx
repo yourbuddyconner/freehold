@@ -19,7 +19,7 @@ vi.mock("~/lib/api", () => ({
 }));
 
 import * as api from "./api";
-import { useActiveGraph } from "./hooks";
+import { useActiveGraph, useActiveGraphPrincipal } from "./hooks";
 
 type GraphKind = "memory" | "repo";
 
@@ -117,5 +117,74 @@ describe("useActiveGraph — stale id recovery", () => {
     // Still holds the persisted value — recovery must not fire on empty list
     expect(result.current.activeGraphId).toBe("g-pending");
     expect(vi.mocked(api.setActiveGraph)).not.toHaveBeenCalled();
+  });
+});
+
+describe("useActiveGraphPrincipal", () => {
+  function makePrincipalWrapper(
+    graphId: string,
+    listGraphsData: {
+      graphs: {
+        id: string;
+        name: string;
+        path: string;
+        kind: "memory" | "repo";
+        autoPushNotes: boolean;
+        embedder: "hash" | "semantic";
+        allodGraphId: string;
+        originRemote: string | null;
+        signingPrincipal: string;
+      }[];
+    }
+  ) {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    // Seed session so useActiveGraph resolves the activeGraphId from localStorage
+    qc.setQueryData(["session"], {
+      defaultAgent: null,
+      embedder: "hash",
+      port: 8710,
+      owner: "test",
+      graphs: listGraphsData.graphs.map((g) => ({ id: g.id, name: g.name, kind: g.kind })),
+      defaultGraph: listGraphsData.graphs[0]?.id ?? "main",
+    });
+    // Seed list-graphs so useListGraphs returns signingPrincipal data
+    qc.setQueryData(["list-graphs"], listGraphsData);
+    // Set active graph in localStorage
+    localStore.set("freehold-graph", graphId);
+
+    function Wrapper({ children }: { children: React.ReactNode }) {
+      return <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
+    }
+    return { wrapper: Wrapper };
+  }
+
+  it("returns signingPrincipal of the active graph", () => {
+    const { wrapper } = makePrincipalWrapper("myrepo", {
+      graphs: [
+        {
+          id: "myrepo",
+          name: "My Repo",
+          path: "/p",
+          kind: "repo",
+          autoPushNotes: false,
+          embedder: "hash",
+          allodGraphId: "a",
+          originRemote: null,
+          signingPrincipal: "conner",
+        },
+      ],
+    });
+
+    const { result } = renderHook(() => useActiveGraphPrincipal(), { wrapper });
+    expect(result.current).toBe("conner");
+  });
+
+  it("falls back to 'owner' when graph not found", () => {
+    const { wrapper } = makePrincipalWrapper("missing", {
+      graphs: [],
+    });
+
+    const { result } = renderHook(() => useActiveGraphPrincipal(), { wrapper });
+    expect(result.current).toBe("owner");
   });
 });

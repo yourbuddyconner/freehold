@@ -481,6 +481,10 @@
           },
           "originRemote": {
             "type": ["string", "null"]
+          },
+          "signingPrincipal": {
+            "type": "string",
+            "description": "The principal name whose key signs decide/review operations on this graph"
           }
         },
         "required": [
@@ -491,7 +495,8 @@
           "autoPushNotes",
           "embedder",
           "allodGraphId",
-          "originRemote"
+          "originRemote",
+          "signingPrincipal"
         ]
       },
       "RegisterGraphBody": {
@@ -508,6 +513,10 @@
           "name": {
             "type": "string",
             "description": "Display name; defaults to id"
+          },
+          "signingPrincipal": {
+            "type": "string",
+            "description": "Signing principal; defaults to 'owner'"
           }
         },
         "required": ["path"]
