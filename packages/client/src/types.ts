@@ -1873,7 +1873,16 @@ export interface paths {
             };
             requestBody: {
                 content: {
-                    "application/json": components["schemas"]["PostCodeCommentBody"];
+                    "application/json": components["schemas"]["PostCodeCommentBody"] & {
+                        /** @description Repo-relative file path */
+                        path?: string;
+                        /** @description Line span, e.g. L10 or L10-L20 */
+                        span?: string;
+                        /** @description Comment text */
+                        body?: string;
+                        /** @description Principal name signing the comment */
+                        by?: string;
+                    };
                 };
             };
             responses: {
@@ -1883,7 +1892,12 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["PostCodeCommentResult"];
+                        "application/json": components["schemas"]["PostCodeCommentResult"] & {
+                            commentId: string;
+                            /** @enum {string} */
+                            status: "saved" | "pending";
+                            anchorSha: string;
+                        };
                     };
                 };
                 /** @description Not a repo graph or validation error */
@@ -2865,32 +2879,6 @@ export interface components {
             errors: string[];
             /** @description Number of items unchanged */
             unchanged: number;
-        };
-        CodeComment: {
-            commentId: string;
-            body: string;
-            span: string;
-            /** @enum {string} */
-            status: "open";
-            author: string;
-            anchorSha: string;
-            currentHead: boolean;
-        };
-        PostCodeCommentBody: {
-            /** @description Repo-relative file path */
-            path: string;
-            /** @description Line span, e.g. L10 or L10-L20 */
-            span: string;
-            /** @description Comment text */
-            body: string;
-            /** @description Principal name signing the comment */
-            by: string;
-        };
-        PostCodeCommentResult: {
-            commentId: string;
-            /** @enum {string} */
-            status: "saved" | "pending";
-            anchorSha: string;
         };
         GitProposalPath: {
             verb: string;
