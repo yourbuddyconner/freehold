@@ -31,6 +31,8 @@ import type React from "react";
 
 vi.mock("~/lib/hooks", () => ({
   useSession: vi.fn().mockReturnValue({ data: null }),
+  useActiveGraph: vi.fn().mockReturnValue({ activeGraphId: "main", setActiveGraphId: vi.fn() }),
+  keyFor: (graphId: string, ...parts: unknown[]) => ["graph", graphId, ...parts],
   useDecideProposal: vi.fn().mockReturnValue({
     decideMut: { mutate: vi.fn(), isPending: false, variables: undefined },
     decideOutcome: null,

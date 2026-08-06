@@ -6,7 +6,7 @@ import { useState } from "react";
 import { ApiError } from "~/lib/api";
 import { apiClient } from "~/lib/api";
 import { cn } from "~/lib/cn";
-import { useDecideProposal } from "~/lib/hooks";
+import { keyFor, useActiveGraph, useDecideProposal } from "~/lib/hooks";
 
 // ── Checklist row ─────────────────────────────────────────────────────────────
 
@@ -123,6 +123,7 @@ export function ReviewComposer({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const qc = useQueryClient();
+  const { activeGraphId } = useActiveGraph();
 
   const submitMut = useMutation({
     mutationFn: () => {
@@ -138,7 +139,7 @@ export function ReviewComposer({
     },
     onSuccess: (result) => {
       setStatus(result.status as "saved" | "pending");
-      qc.invalidateQueries({ queryKey: ["git-proposals"] });
+      qc.invalidateQueries({ queryKey: keyFor(activeGraphId, "git-proposals") });
       setTimeout(() => {
         onClose();
         setStatus(null);
@@ -307,13 +308,23 @@ export function ReviewComposer({
 interface GitProposalCardProps {
   proposal: GitProposal;
   by: string;
+  /** Number of commits in this branch bundle (1 = solo commit). */
+  bundleSize?: number;
+  /** Zero-based position of this commit within the bundle. */
+  bundleIndex?: number;
 }
 
-export function GitProposalCard({ proposal, by }: GitProposalCardProps) {
+export function GitProposalCard({
+  proposal,
+  by,
+  bundleSize = 1,
+  bundleIndex = 0,
+}: GitProposalCardProps) {
   const { sha, message, author, timestamp, checklist, unmet, decided, paths, ref } = proposal;
   const shortSha = sha.slice(0, 7);
 
   const qc = useQueryClient();
+  const { activeGraphId } = useActiveGraph();
 
   const [composerOpen, setComposerOpen] = useState(false);
 
@@ -326,6 +337,9 @@ export function GitProposalCard({ proposal, by }: GitProposalCardProps) {
     retrying,
     handleRetry,
   } = useDecideProposal(sha, by);
+
+  const isBundle = bundleSize > 1;
+  const isLastInBundle = bundleIndex === bundleSize - 1;
 
   const actionsDisabled = !!keyMissingReason || decided !== "undecided";
 
@@ -341,6 +355,17 @@ export function GitProposalCard({ proposal, by }: GitProposalCardProps) {
       className="reg-marks relative border border-(--border) p-4 space-y-3 bg-(--bg-subtle)"
       data-testid={`git-proposal-${shortSha}`}
     >
+      {/* Bundle left-rail: a vertical connector line for commits that belong to a multi-commit branch */}
+      {isBundle && (
+        <div
+          aria-hidden
+          className={cn(
+            "absolute left-0 top-0 bottom-0 w-0.5 bg-(--border)",
+            isLastInBundle && "bottom-4"
+          )}
+          data-testid="bundle-rail"
+        />
+      )}
       <div className="flex items-start gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
@@ -353,6 +378,14 @@ export function GitProposalCard({ proposal, by }: GitProposalCardProps) {
             <span className="font-mono text-[11px] text-(--fg-muted)">
               {ref.replace("refs/heads/", "")}
             </span>
+            {isBundle && bundleIndex === 0 && (
+              <span
+                data-testid="bundle-chip"
+                className="inline-flex items-center border border-(--border) bg-(--bg) px-1.5 py-0.5 text-[10px] font-mono text-(--fg-muted)"
+              >
+                {bundleSize} commits
+              </span>
+            )}
             <DecidedChip decided={decided} />
           </div>
           <p className="text-sm text-(--fg) mt-1 leading-snug">{message}</p>
@@ -569,7 +602,7 @@ export function GitProposalCard({ proposal, by }: GitProposalCardProps) {
         onClose={() => setComposerOpen(false)}
         onDone={() => {
           setComposerOpen(false);
-          qc.invalidateQueries({ queryKey: ["git-proposals"] });
+          qc.invalidateQueries({ queryKey: keyFor(activeGraphId, "git-proposals") });
         }}
       />
 

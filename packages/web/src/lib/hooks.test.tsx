@@ -19,7 +19,7 @@ vi.mock("~/lib/api", () => ({
 }));
 
 import * as api from "./api";
-import { useActiveGraph, useActiveGraphPrincipal } from "./hooks";
+import { keyFor, useActiveGraph, useActiveGraphPrincipal } from "./hooks";
 
 type GraphKind = "memory" | "repo";
 
@@ -186,5 +186,65 @@ describe("useActiveGraphPrincipal", () => {
 
     const { result } = renderHook(() => useActiveGraphPrincipal(), { wrapper });
     expect(result.current).toBe("owner");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// keyFor — graph-scoped query key factory
+// ---------------------------------------------------------------------------
+
+describe("keyFor — graph-scoped query key factory", () => {
+  it("includes the graph id as the second element", () => {
+    const key = keyFor("repo-1", "git-proposals");
+    expect(key[0]).toBe("graph");
+    expect(key[1]).toBe("repo-1");
+    expect(key[2]).toBe("git-proposals");
+  });
+
+  it("different graph ids produce different keys", () => {
+    const key1 = keyFor("graph-a", "proposals");
+    const key2 = keyFor("graph-b", "proposals");
+    expect(key1).not.toEqual(key2);
+    expect(key1[1]).toBe("graph-a");
+    expect(key2[1]).toBe("graph-b");
+  });
+
+  it("same graph id and same parts produce identical keys", () => {
+    const key1 = keyFor("main", "git-proposal", "abc1234");
+    const key2 = keyFor("main", "git-proposal", "abc1234");
+    expect(key1).toEqual(key2);
+  });
+
+  it("switching active graph changes the rendered key", async () => {
+    const graphs = [
+      { id: "graph-a", name: "A", kind: "memory" as GraphKind },
+      { id: "graph-b", name: "B", kind: "memory" as GraphKind },
+    ];
+    // Start with graph-a
+    localStore.set("freehold-graph", "graph-a");
+    const { wrapper, queryClient } = makeWrapper(graphs, "graph-a");
+
+    const { result } = renderHook(() => useActiveGraph(), { wrapper });
+    expect(result.current.activeGraphId).toBe("graph-a");
+
+    // The key for graph-a proposals
+    const keyA = keyFor(result.current.activeGraphId, "proposals");
+    expect(keyA).toEqual(["graph", "graph-a", "proposals"]);
+
+    // Switch to graph-b
+    await act(async () => {
+      result.current.setActiveGraphId("graph-b");
+    });
+
+    expect(result.current.activeGraphId).toBe("graph-b");
+
+    // The key for graph-b proposals is different
+    const keyB = keyFor(result.current.activeGraphId, "proposals");
+    expect(keyB).toEqual(["graph", "graph-b", "proposals"]);
+    expect(keyA).not.toEqual(keyB);
+
+    // Switching also invalidated all queries
+    expect(vi.mocked(api.setActiveGraph)).toHaveBeenCalledWith("graph-b");
+    queryClient.clear();
   });
 });

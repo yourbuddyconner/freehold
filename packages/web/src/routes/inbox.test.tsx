@@ -15,6 +15,7 @@ vi.mock("~/lib/hooks", () => ({
   useGraphs: vi.fn().mockReturnValue({ graphs: [], defaultGraph: "main" }),
   useActiveGraph: vi.fn().mockReturnValue({ activeGraphId: "main", setActiveGraphId: vi.fn() }),
   useActiveGraphPrincipal: vi.fn().mockReturnValue("owner"),
+  keyFor: (graphId: string, ...parts: unknown[]) => ["graph", graphId, ...parts],
   useGitProposals: vi
     .fn()
     .mockReturnValue({ data: { proposals: [] }, isLoading: false, isError: false, error: null }),
@@ -794,10 +795,142 @@ describe("Inbox", () => {
       fireEvent.click(dialogApproveBtn!);
     });
 
-    // Verify invalidateQueries was called with the proposals key
+    // Verify invalidateQueries was called with a graph-scoped proposals key.
+    // The key format is ["graph", <graphId>, "proposals"].
     expect(invalidateSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ queryKey: ["proposals"] })
+      expect.objectContaining({ queryKey: expect.arrayContaining(["proposals"]) })
     );
     invalidateSpy.mockRestore();
+  });
+
+  // ── Bundle display ────────────────────────────────────────────────────────
+
+  describe("Inbox — bundle display", () => {
+    const makeGitProposal = (
+      sha: string,
+      ref: string,
+      decided: "undecided" | "approved" | "rejected" = "undecided"
+    ) => ({
+      sha,
+      ref,
+      author: "alice",
+      timestamp: "2026-01-01T00:00:00Z",
+      message: `commit ${sha.slice(0, 7)}`,
+      target: ref,
+      matched: [] as string[],
+      checklist: [] as unknown[],
+      unmet: [] as string[],
+      decided,
+      paths: [] as { verb: string; path: string; regions: string[]; indexed: boolean }[],
+    });
+
+    function setupRepoGraphBundle(proposals: ReturnType<typeof makeGitProposal>[]) {
+      vi.mocked(hooks.useGraphs).mockReturnValue({
+        graphs: [{ id: "repo-1", name: "my-repo", kind: "repo" }],
+        defaultGraph: "repo-1",
+      });
+      vi.mocked(hooks.useActiveGraph).mockReturnValue({
+        activeGraphId: "repo-1",
+        setActiveGraphId: vi.fn(),
+      });
+      setupHooks([]);
+      vi.mocked(hooks.useGitProposals).mockReturnValue({
+        data: { proposals },
+        isLoading: false,
+        isError: false,
+        error: null,
+      } as unknown as ReturnType<typeof hooks.useGitProposals>);
+    }
+
+    async function renderBundleInbox(proposals: ReturnType<typeof makeGitProposal>[]) {
+      setupRepoGraphBundle(proposals);
+      const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      const router = createRouter({
+        routeTree,
+        history: createMemoryHistory({ initialEntries: ["/inbox"] }),
+      });
+      await act(async () => {
+        render(
+          <QueryClientProvider client={qc}>
+            <RouterProvider router={router} />
+          </QueryClientProvider>
+        );
+      });
+    }
+
+    it("shows bundle-chip with commit count on the first commit of a multi-commit branch", async () => {
+      const proposals = [
+        makeGitProposal("aaa1111111111111111111111111111111111111", "refs/heads/feat"),
+        makeGitProposal("bbb2222222222222222222222222222222222222", "refs/heads/feat"),
+        makeGitProposal("ccc3333333333333333333333333333333333333", "refs/heads/feat"),
+      ];
+      await renderBundleInbox(proposals);
+      const chips = screen.getAllByTestId("bundle-chip");
+      // Only the first commit in the bundle shows the chip
+      expect(chips).toHaveLength(1);
+      expect(chips[0]).toHaveTextContent("3 commits");
+    });
+
+    it("does not show bundle-chip for a solo commit", async () => {
+      const proposals = [
+        makeGitProposal("solo111111111111111111111111111111111111", "refs/heads/solo"),
+      ];
+      await renderBundleInbox(proposals);
+      expect(screen.queryByTestId("bundle-chip")).not.toBeInTheDocument();
+    });
+
+    it("hides decided bundles by default and shows toggle count", async () => {
+      const proposals = [
+        makeGitProposal("aaa1111111111111111111111111111111111111", "refs/heads/open"),
+        makeGitProposal("bbb2222222222222222222222222222222222222", "refs/heads/done", "approved"),
+      ];
+      await renderBundleInbox(proposals);
+      // The decided bundle is hidden — bbb sha is not in the DOM
+      expect(screen.queryByText("bbb2222")).not.toBeInTheDocument();
+      // The open bundle is visible
+      expect(screen.getByText("aaa1111")).toBeInTheDocument();
+      // The count line is shown
+      expect(screen.getByTestId("decided-hidden-line")).toBeInTheDocument();
+      expect(screen.getByTestId("decided-hidden-line")).toHaveTextContent(
+        "1 decided branch hidden"
+      );
+    });
+
+    it("toggle shows decided bundles when clicked", async () => {
+      const proposals = [
+        makeGitProposal("bbb2222222222222222222222222222222222222", "refs/heads/done", "approved"),
+      ];
+      await renderBundleInbox(proposals);
+      // Hidden initially
+      expect(screen.queryByText("bbb2222")).not.toBeInTheDocument();
+      // Click show
+      const toggleBtn = screen.getByTestId("toggle-decided");
+      await act(async () => {
+        fireEvent.click(toggleBtn);
+      });
+      // Now visible
+      expect(screen.getByText("bbb2222")).toBeInTheDocument();
+    });
+
+    it("a bundle with mixed decided/undecided commits is not hidden", async () => {
+      const proposals = [
+        makeGitProposal(
+          "aaa1111111111111111111111111111111111111",
+          "refs/heads/partial",
+          "approved"
+        ),
+        makeGitProposal(
+          "bbb2222222222222222222222222222222222222",
+          "refs/heads/partial",
+          "undecided"
+        ),
+      ];
+      await renderBundleInbox(proposals);
+      // Both commits should be visible because bundle is not fully decided
+      expect(screen.getByText("aaa1111")).toBeInTheDocument();
+      expect(screen.getByText("bbb2222")).toBeInTheDocument();
+      // No decided-hidden line
+      expect(screen.queryByTestId("decided-hidden-line")).not.toBeInTheDocument();
+    });
   });
 });
