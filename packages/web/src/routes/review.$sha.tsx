@@ -18,13 +18,13 @@ import { apiClient } from "~/lib/api";
 import { cn } from "~/lib/cn";
 import {
   useActiveGraph,
+  useActiveGraphPrincipal,
   useDecideProposal,
   useGitProposal,
   useGitProposalDiff,
   useGraphs,
   useListGraphs,
   useReviewsForSha,
-  useSession,
 } from "~/lib/hooks";
 import { type CommentDraft, clearDrafts, loadDrafts, saveDrafts } from "~/lib/reviewDrafts";
 import { Route as RootRoute } from "./__root";
@@ -104,8 +104,7 @@ export function ReviewPage({ sha }: { sha: string }) {
     error: diffError,
   } = useGitProposalDiff(sha, isRepoGraph);
 
-  const { data: sessionData } = useSession();
-  const by = sessionData?.owner ?? "owner";
+  const by = useActiveGraphPrincipal();
 
   const {
     decideMut,
@@ -638,6 +637,7 @@ export function ReviewPage({ sha }: { sha: string }) {
                 gitStatus={files.map((f) => ({ path: f.path, status: verbToStatus(f.verb) }))}
                 onSelect={(path) => scrollToFile(path)}
                 initialExpansion="open"
+                height={Math.min(600, 120 + files.length * 24)}
               />
             </aside>
 
