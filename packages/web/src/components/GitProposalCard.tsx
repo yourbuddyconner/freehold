@@ -181,7 +181,7 @@ export function ReviewComposer({
 
   return (
     <div className="border border-(--border) bg-(--bg-subtle) p-3 space-y-3">
-      <div className="flex gap-1" role="group" aria-label="Verdict">
+      <fieldset className="flex gap-1 border-0 p-0 m-0" aria-label="Verdict">
         {(
           [
             { value: "approve", label: "Approve" },
@@ -204,7 +204,7 @@ export function ReviewComposer({
             {label}
           </button>
         ))}
-      </div>
+      </fieldset>
       <textarea
         value={body}
         onChange={(e) => setBody(e.target.value)}
