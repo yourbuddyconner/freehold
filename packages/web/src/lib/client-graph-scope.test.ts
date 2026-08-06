@@ -163,3 +163,80 @@ describe("FreeholdClient — graph-scoped path prefixing", () => {
     expect(init.method).toBe("PATCH");
   });
 });
+
+// ---------------------------------------------------------------------------
+// FreeholdClient — error body parsing (flat vs nested shapes)
+// ---------------------------------------------------------------------------
+
+import { ApiError } from "@freehold/client";
+
+describe("FreeholdClient — error body parsing", () => {
+  let originalFetch: typeof globalThis.fetch;
+
+  beforeEach(() => {
+    originalFetch = globalThis.fetch;
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it("flat shape { error: string, code: string } — extracts code and message (gitreview 409)", async () => {
+    // This is the shape returned by gitreview.ts for key-missing 409s:
+    // c.json({ error: `no signing key for ${by}`, code: "key-missing" }, 409)
+    globalThis.fetch = makeMockFetch(409, {
+      error: "no signing key for conner",
+      code: "key-missing",
+    });
+
+    const client = new FreeholdClient({ baseUrl: "", token: "tok", graphId: "myrepo" });
+    let caught: unknown;
+    try {
+      await client.decideGitProposal("abc123", { verdict: "approve", by: "conner" });
+    } catch (err) {
+      caught = err;
+    }
+
+    expect(caught).toBeInstanceOf(ApiError);
+    const apiErr = caught as ApiError;
+    expect(apiErr.code).toBe("key-missing");
+    expect(apiErr.message).toBe("no signing key for conner");
+    expect(apiErr.status).toBe(409);
+  });
+
+  it("nested shape { error: { code, message } } — extracts code and message (governance routes)", async () => {
+    globalThis.fetch = makeMockFetch(400, {
+      error: { code: "validation-error", message: "invalid input" },
+    });
+
+    const client = new FreeholdClient({ baseUrl: "", token: "tok" });
+    let caught: unknown;
+    try {
+      await client.session();
+    } catch (err) {
+      caught = err;
+    }
+
+    expect(caught).toBeInstanceOf(ApiError);
+    const apiErr = caught as ApiError;
+    expect(apiErr.code).toBe("validation-error");
+    expect(apiErr.message).toBe("invalid input");
+  });
+
+  it("flat shape with no code field — falls back to http_error code", async () => {
+    globalThis.fetch = makeMockFetch(400, { error: "path is required" });
+
+    const client = new FreeholdClient({ baseUrl: "", token: "tok" });
+    let caught: unknown;
+    try {
+      await client.session();
+    } catch (err) {
+      caught = err;
+    }
+
+    expect(caught).toBeInstanceOf(ApiError);
+    const apiErr = caught as ApiError;
+    expect(apiErr.code).toBe("http_error");
+    expect(apiErr.message).toBe("path is required");
+  });
+});
