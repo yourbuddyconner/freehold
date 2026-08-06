@@ -13,7 +13,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { createRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
-import { ChecklistRow, DecidedChip, PathRow, ReviewComposer } from "~/components/GitProposalCard";
+import { ChecklistRow, DecidedChip, PathRow, PriorDecisionChip, ReviewComposer } from "~/components/GitProposalCard";
 import { PierreDiff } from "~/components/PierreDiff";
 import { PierreTree } from "~/components/PierreTree";
 import { apiClient } from "~/lib/api";
@@ -709,7 +709,7 @@ export function ReviewPage({ sha }: { sha: string }) {
     );
   }
 
-  const { message, author, timestamp, checklist, unmet, decided, paths, ref } = proposal;
+  const { message, author, timestamp, checklist, unmet, decided, paths, ref, priorDecision } = proposal;
   const shortSha = sha.slice(0, 7);
 
   const actionsDisabled = !!keyMissingReason || decided !== "undecided";
@@ -736,6 +736,9 @@ export function ReviewPage({ sha }: { sha: string }) {
             {ref.replace("refs/heads/", "")}
           </span>
           <DecidedChip decided={decided} />
+          {priorDecision && (
+            <PriorDecisionChip priorDecision={priorDecision} />
+          )}
         </div>
         <h1 className="text-xl font-semibold text-(--fg)">{message}</h1>
       </div>
@@ -839,7 +842,11 @@ export function ReviewPage({ sha }: { sha: string }) {
               disabled={actionsDisabled || decideMut.isPending}
               className="bg-(--fg) text-white font-mono text-[12px] uppercase tracking-wide px-3 py-1.5 disabled:opacity-50 transition-opacity"
             >
-              {decideMut.isPending && decideMut.variables === "approve" ? "Approving…" : "Approve"}
+              {decideMut.isPending && decideMut.variables === "approve"
+                ? "Approving…"
+                : priorDecision?.verdict === "approve"
+                  ? "Approve again"
+                  : "Approve"}
             </button>
           </Dialog.Trigger>
           <Dialog.Portal>
@@ -869,7 +876,7 @@ export function ReviewPage({ sha }: { sha: string }) {
                     onClick={() => submitReviewAndDecide("approve")}
                     className="bg-(--fg) text-white font-mono text-[12px] uppercase tracking-wide px-3 py-1.5"
                   >
-                    Approve
+                    {priorDecision?.verdict === "approve" ? "Approve again" : "Approve"}
                   </button>
                 </Dialog.Close>
               </div>

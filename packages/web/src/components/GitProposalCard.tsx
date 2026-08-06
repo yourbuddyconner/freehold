@@ -93,6 +93,34 @@ export function DecidedChip({ decided }: { decided: GitProposal["decided"] }) {
   );
 }
 
+// ── PriorDecisionChip ──────────────────────────────────────────────────────────
+
+/**
+ * Chip shown on undecided proposals when a decided commit has the same tree hash.
+ * Copy: "same content approved as <short-sha>" or "same content rejected as <short-sha>".
+ */
+export function PriorDecisionChip({
+  priorDecision,
+}: {
+  priorDecision: NonNullable<GitProposal["priorDecision"]>;
+}) {
+  const shortSha = priorDecision.sha.slice(0, 7);
+  const verb = priorDecision.verdict === "approve" ? "approved" : "rejected";
+  return (
+    <span
+      data-testid="prior-decision-chip"
+      className={cn(
+        "inline-flex items-center px-1.5 py-0.5 text-[10px] font-mono border",
+        priorDecision.verdict === "approve"
+          ? "border-green-400 bg-green-50 dark:bg-green-950 text-green-700 dark:text-green-300"
+          : "border-red-400 bg-red-50 dark:bg-red-950 text-red-600 dark:text-red-400"
+      )}
+    >
+      same content {verb} as {shortSha}
+    </span>
+  );
+}
+
 // ── Review composer ───────────────────────────────────────────────────────────
 
 interface ReviewComposerProps {
@@ -387,6 +415,9 @@ export function GitProposalCard({
               </span>
             )}
             <DecidedChip decided={decided} />
+            {proposal.priorDecision && (
+              <PriorDecisionChip priorDecision={proposal.priorDecision} />
+            )}
           </div>
           <p className="text-sm text-(--fg) mt-1 leading-snug">{message}</p>
         </div>
@@ -539,7 +570,11 @@ export function GitProposalCard({
               disabled={actionsDisabled || decideMut.isPending}
               className="bg-(--fg) text-white font-mono text-[12px] uppercase tracking-wide px-3 py-1.5 disabled:opacity-50 transition-opacity"
             >
-              {decideMut.isPending && decideMut.variables === "approve" ? "Approving…" : "Approve"}
+              {decideMut.isPending && decideMut.variables === "approve"
+                ? "Approving…"
+                : proposal.priorDecision?.verdict === "approve"
+                  ? "Approve again"
+                  : "Approve"}
             </button>
           </Dialog.Trigger>
           <Dialog.Portal>
@@ -566,7 +601,7 @@ export function GitProposalCard({
                     onClick={() => decideMut.mutate("approve")}
                     className="bg-(--fg) text-white font-mono text-[12px] uppercase tracking-wide px-3 py-1.5"
                   >
-                    Approve
+                    {proposal.priorDecision?.verdict === "approve" ? "Approve again" : "Approve"}
                   </button>
                 </Dialog.Close>
               </div>
