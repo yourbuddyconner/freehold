@@ -360,7 +360,9 @@ export function ReviewPage({ sha }: { sha: string }) {
     persistDrafts(drafts.filter((_, i) => i !== idx));
   }
 
-  // Submit review (with optional inline comments) then decide
+  // Submit review (with optional inline comments) then decide.
+  // When drafts exist: single postReview call with decide:true (server handles decide).
+  // When no drafts: direct decide via decideMut (unchanged path — no review artifact needed).
   async function submitReviewAndDecide(verdict: "approve" | "reject") {
     setReviewError(null);
     if (drafts.length > 0) {
@@ -375,12 +377,28 @@ export function ReviewPage({ sha }: { sha: string }) {
             anchor: anchor(d.path),
             span: d.span,
           })),
+          decide: true,
         });
       } catch (err) {
         setReviewError(err instanceof Error ? err.message : "Review post failed.");
         return;
       }
-      decideMut.mutate(verdict);
+      // postReview with decide:true handled the decide — update optimistic cache.
+      const optimisticDecided = verdict === "approve" ? "approved" : "rejected";
+      const listKey = ["graph", activeGraphId, "git-proposals"] as const;
+      const singleKey = ["graph", activeGraphId, "git-proposal", sha] as const;
+      const prevList = queryClient.getQueryData<{ proposals: import("~/lib/hooks").GitProposal[] }>(
+        listKey
+      );
+      if (prevList) {
+        queryClient.setQueryData(listKey, {
+          ...prevList,
+          proposals: prevList.proposals.map((p) =>
+            p.sha === sha ? { ...p, decided: optimisticDecided } : p
+          ),
+        });
+      }
+      queryClient.invalidateQueries({ queryKey: singleKey, refetchType: "none" });
       clearDrafts(sha);
       setDraftsState([]);
       queryClient.invalidateQueries({ queryKey: ["git-reviews", sha] });

@@ -145,6 +145,7 @@ export {
   postReview,
   evictProposalCache,
   proposalCacheKey,
+  matchesGlob,
 } from "./gitreview.js";
 export { branchHeads, pushNotes, commitDiff, decisionsTip } from "./git.js";
 export type { DiffFile } from "./git.js";
@@ -191,3 +192,7 @@ export {
   buildConnectorManifest,
 } from "./connector/app.js";
 export type { AppManifest } from "./connector/app.js";
+
+// Outbound GitHub commit status
+export { postCommitStatus, buildStatusPayload } from "./connector/github-status.js";
+export type { GitHubStatusResult } from "./connector/github-status.js";

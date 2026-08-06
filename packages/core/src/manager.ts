@@ -36,6 +36,11 @@ export interface GraphEntry {
   allodGraphId: string;
   originRemote: string | null;
   signingPrincipal: string;
+  /**
+   * Glob patterns matched against bare branch names (no refs/heads/ prefix).
+   * Matching branches are excluded from listGitProposals. Default: [].
+   */
+  ignoreBranches: string[];
 }
 
 /** Read the review ontology YAML bundled as an asset next to this file. */
@@ -82,7 +87,18 @@ function rowToEntry(row: {
   allod_graph_id: string;
   origin_remote: string | null;
   signing_principal: string | null;
+  ignore_branches: string | null;
 }): GraphEntry {
+  // ignore_branches stored as JSON array text (e.g. '["worktree-*"]')
+  let ignoreBranches: string[] = [];
+  if (row.ignore_branches) {
+    try {
+      const parsed = JSON.parse(row.ignore_branches);
+      if (Array.isArray(parsed)) ignoreBranches = parsed as string[];
+    } catch {
+      // treat malformed JSON as empty
+    }
+  }
   return {
     id: row.id,
     name: row.name,
@@ -93,6 +109,7 @@ function rowToEntry(row: {
     allodGraphId: row.allod_graph_id,
     originRemote: row.origin_remote,
     signingPrincipal: row.signing_principal ?? "owner",
+    ignoreBranches,
   };
 }
 
@@ -167,6 +184,7 @@ export class GraphManager {
       allod_graph_id: string;
       origin_remote: string | null;
       signing_principal: string | null;
+      ignore_branches: string | null;
     }>("SELECT * FROM graphs WHERE id = $1", [id]);
     if (result.rows.length === 0) return null;
     return rowToEntry(result.rows[0]);
@@ -203,6 +221,7 @@ export class GraphManager {
       allod_graph_id: string;
       origin_remote: string | null;
       signing_principal: string | null;
+      ignore_branches: string | null;
     }>("SELECT * FROM graphs ORDER BY id");
     return result.rows.map(rowToEntry);
   }
@@ -258,16 +277,29 @@ export class GraphManager {
    */
   async updateSettings(
     id: string,
-    patch: Partial<Pick<GraphEntry, "name" | "autoPushNotes" | "embedder" | "signingPrincipal">>
+    patch: Partial<
+      Pick<
+        GraphEntry,
+        "name" | "autoPushNotes" | "embedder" | "signingPrincipal" | "ignoreBranches"
+      >
+    >
   ): Promise<GraphEntry> {
     const e = await this.entry(id); // throws on unknown id
     const newName = patch.name ?? e.name;
     const newAutoPushNotes = patch.autoPushNotes ?? e.autoPushNotes;
     const newEmbedder = patch.embedder ?? e.embedder;
     const newSigningPrincipal = patch.signingPrincipal ?? e.signingPrincipal;
+    const newIgnoreBranches = patch.ignoreBranches ?? e.ignoreBranches;
     await this.db.pg.query(
-      "UPDATE graphs SET name = $1, auto_push_notes = $2, embedder = $3, signing_principal = $4 WHERE id = $5",
-      [newName, newAutoPushNotes, newEmbedder, newSigningPrincipal, id]
+      "UPDATE graphs SET name = $1, auto_push_notes = $2, embedder = $3, signing_principal = $4, ignore_branches = $5 WHERE id = $6",
+      [
+        newName,
+        newAutoPushNotes,
+        newEmbedder,
+        newSigningPrincipal,
+        JSON.stringify(newIgnoreBranches),
+        id,
+      ]
     );
     return this.entry(id);
   }

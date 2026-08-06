@@ -67,7 +67,16 @@ export interface GitProposal {
 // ── DecideResult ──────────────────────────────────────────────────────────────
 
 export type DecideResult =
-  | { outcome: "approved" | "rejected"; pushed: boolean; pushSkipped?: boolean; pushError?: string }
+  | {
+      outcome: "approved" | "rejected";
+      pushed: boolean;
+      pushSkipped?: boolean;
+      pushError?: string;
+      /** Present when a GitHub status post was attempted. */
+      statusPosted?: boolean;
+      /** Present when statusPosted is false and an error occurred. */
+      statusError?: string;
+    }
   | { outcome: "incomplete"; unmet: string[] };
 
 // ── Internal wasm cast helpers ────────────────────────────────────────────────
@@ -397,6 +406,38 @@ async function evaluateSha(
   return { ...core, checks };
 }
 
+// ── matchesGlob ──────────────────────────────────────────────────────────────
+
+/**
+ * Test whether a string matches a glob pattern.
+ * Supports `*` (any chars except `/`), `?` (single char except `/`), and `**`
+ * (any chars including `/`). Anchored to the full string.
+ *
+ * Used for ignoreBranches filtering — patterns are matched against bare branch
+ * names (no `refs/heads/` prefix).
+ */
+export function matchesGlob(pattern: string, str: string): boolean {
+  // Convert glob to a regex in a single pass to avoid control-character placeholders.
+  // We split on "**" first, then process each segment for "*" and "?" individually.
+  const escapedParts = pattern.split("**").map(
+    (seg) =>
+      seg
+        .replace(/[.+^${}()|[\]\\]/g, "\\$&") // escape regex specials
+        .replace(/\*/g, "[^/]*") // * → any chars except /
+        .replace(/\?/g, "[^/]") // ? → single char except /
+  );
+  // Join the parts back with ".*" (which is what ** expands to)
+  const reStr = escapedParts.join(".*");
+  return new RegExp(`^${reStr}$`).test(str);
+}
+
+/**
+ * Return true if the bare branch name matches any pattern in the list.
+ */
+function shouldIgnoreBranch(bareName: string, patterns: string[]): boolean {
+  return patterns.some((p) => matchesGlob(p, bareName));
+}
+
 // ── listGitProposals ──────────────────────────────────────────────────────────
 
 /**
@@ -405,12 +446,26 @@ async function evaluateSha(
  *
  * Performance: reads the decisions notes ref tip once, then uses it as a cache
  * key so repeated warm calls return in <50ms instead of 6s.
+ *
+ * Branch filtering: branches whose bare name (without refs/heads/) matches any
+ * pattern in `ignoreBranches` are excluded before evaluation.
  */
-export async function listGitProposals(fh: Freehold): Promise<GitProposal[]> {
+export async function listGitProposals(
+  fh: Freehold,
+  ignoreBranches: string[] = []
+): Promise<GitProposal[]> {
   const repoName = basename(fh.graphDir);
 
   // Collect branch heads and decisions tip in parallel — both are fast git calls
-  const [heads, tip] = await Promise.all([branchHeads(fh.graphDir), decisionsTip(fh.graphDir)]);
+  let [heads, tip] = await Promise.all([branchHeads(fh.graphDir), decisionsTip(fh.graphDir)]);
+
+  // Apply ignoreBranches filter: remove heads whose bare name matches any pattern.
+  if (ignoreBranches.length > 0) {
+    heads = heads.filter((h) => {
+      const bare = h.ref.replace(/^refs\/heads\//, "");
+      return !shouldIgnoreBranch(bare, ignoreBranches);
+    });
+  }
 
   // Also include HEAD if it differs from all branch heads
   const headRef = "HEAD";
@@ -495,7 +550,15 @@ export async function decideGit(
     allodGraphId: string;
     autoPushNotes: boolean;
     originRemote: string | null;
-  }
+  },
+  /**
+   * Optional fire-and-forget callback invoked after a successful decide.
+   * Used by the API route to post a GitHub commit status without coupling
+   * core to the connector module. Returns { statusPosted, statusError? }.
+   */
+  onDecided?: (
+    outcome: "approved" | "rejected"
+  ) => Promise<{ statusPosted: boolean; statusError?: string }>
 ): Promise<DecideResult> {
   const subject = `git:${sha}`;
 
@@ -576,17 +639,28 @@ export async function decideGit(
 
   // Attempt push
   const outcome = verdict === "approve" ? "approved" : "rejected";
-  if (entry.autoPushNotes && entry.originRemote) {
+
+  // Fire status post callback (fire-and-forget; result recorded in response).
+  let statusResult: { statusPosted?: boolean; statusError?: string } = {};
+  if (onDecided) {
     try {
-      await pushNotes(fh.graphDir, entry.originRemote);
-      return { outcome, pushed: true };
-    } catch (err: unknown) {
-      const pushError = err instanceof Error ? err.message : String(err);
-      return { outcome, pushed: false, pushError };
+      statusResult = await onDecided(outcome);
+    } catch {
+      // Never let a status-post failure propagate — silent.
     }
   }
 
-  return { outcome, pushed: false, pushSkipped: true };
+  if (entry.autoPushNotes && entry.originRemote) {
+    try {
+      await pushNotes(fh.graphDir, entry.originRemote);
+      return { outcome, pushed: true, ...statusResult };
+    } catch (err: unknown) {
+      const pushError = err instanceof Error ? err.message : String(err);
+      return { outcome, pushed: false, pushError, ...statusResult };
+    }
+  }
+
+  return { outcome, pushed: false, pushSkipped: true, ...statusResult };
 }
 
 // ── signedCommit — two-phase host-seam commit ─────────────────────────────────
@@ -708,12 +782,29 @@ export interface PostReviewInput {
   by: string;
   comments?: PostReviewComment[];
   allodGraphId: string;
+  /**
+   * When true (default) and the proposal is currently undecided, automatically
+   * call decideGit after committing the review artifacts. Verdict mapping:
+   *   approve | approve-with-comments → "approve"
+   *   request-changes → "reject"
+   *
+   * If the proposal already has a decision, the decide step is skipped and
+   * `alreadyDecided: true` is returned in the result.
+   */
+  decide?: boolean;
+  /** Required when decide=true (defaults true): push-notes config. */
+  autoPushNotes?: boolean;
+  originRemote?: string | null;
 }
 
 export interface PostReviewResult {
   reviewId: string;
   commentIds: string[];
   status: "saved" | "pending";
+  /** Present when decide=true was requested and a decision already existed. */
+  alreadyDecided?: boolean;
+  /** Present when decide=true and the decide ran successfully or partially. */
+  decideResult?: DecideResult;
 }
 
 // ── postReview ────────────────────────────────────────────────────────────────
@@ -729,7 +820,17 @@ export interface PostReviewResult {
  * @throws KeyMissingError if the key for `by` cannot be resolved
  */
 export async function postReview(fh: Freehold, input: PostReviewInput): Promise<PostReviewResult> {
-  const { sha, verdict, body: reviewBody, by, comments = [], allodGraphId } = input;
+  const {
+    sha,
+    verdict,
+    body: reviewBody,
+    by,
+    comments = [],
+    allodGraphId,
+    decide = true,
+    autoPushNotes = false,
+    originRemote = null,
+  } = input;
   const repoName = basename(fh.graphDir);
   const commitRef = `git:${repoName}#${sha}`;
   const entry = { allodGraphId };
@@ -792,6 +893,34 @@ export async function postReview(fh: Freehold, input: PostReviewInput): Promise<
     };
 
     await signedCommit(fh, by, `part_of edge for comment ${commentId}`, [edgeOp], entry);
+  }
+
+  // ── Optional auto-decide ───────────────────────────────────────────────────
+  if (decide) {
+    // Check whether this sha already has a decision before calling decideGit.
+    const existingDecisions = await readDecisions(fh.graphDir, sha);
+    const currentDecided = decidedStatus(existingDecisions);
+
+    if (currentDecided !== "undecided") {
+      return { reviewId, commentIds, status, alreadyDecided: true };
+    }
+
+    // Map review verdict to decide verdict
+    let decideVerdict: "approve" | "reject" | null = null;
+    if (verdict === "approve" || verdict === "approve-with-comments") {
+      decideVerdict = "approve";
+    } else if (verdict === "request-changes") {
+      decideVerdict = "reject";
+    }
+
+    if (decideVerdict !== null) {
+      const decideResult = await decideGit(fh, sha, decideVerdict, by, {
+        allodGraphId,
+        autoPushNotes,
+        originRemote,
+      });
+      return { reviewId, commentIds, status, decideResult };
+    }
   }
 
   return { reviewId, commentIds, status };

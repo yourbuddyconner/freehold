@@ -11,9 +11,11 @@ import {
   KeyMissingError,
   commitDiff,
   decideGit,
+  deriveEncKey,
   gitProposal,
   listGitProposals,
   listReviewsForSha,
+  postCommitStatus,
   postReview,
   pushNotes,
 } from "@freehold/core";
@@ -43,7 +45,10 @@ gitreviewRouter.get("/git/proposals", async (c) => {
   if (!repoOnly(fh)) {
     return c.json({ error: REPO_ONLY_ERROR }, 400);
   }
-  const proposals = await listGitProposals(fh);
+  const manager = c.get("manager");
+  const entry = await manager.getEntry(fh.graphId);
+  const ignoreBranches = entry?.ignoreBranches ?? [];
+  const proposals = await listGitProposals(fh, ignoreBranches);
   return c.json({ proposals });
 });
 
@@ -115,15 +120,36 @@ gitreviewRouter.post("/git/proposals/:sha/decide", async (c) => {
     return c.json({ error: "graph entry not found" }, 500);
   }
 
+  // Build the onDecided callback that posts a GitHub commit status (fire-and-forget).
+  const config = c.get("config");
+  const encKey = deriveEncKey(config.token);
+  const fetchFn = c.get("fetchFn") ?? globalThis.fetch;
+
+  // Build a target URL pointing at the local review page.
+  const targetUrl = `http://localhost:${config.port}/review/${sha}`;
+
+  const onDecided = async (
+    outcome: "approved" | "rejected"
+  ): Promise<{ statusPosted: boolean; statusError?: string }> => {
+    return postCommitStatus(fh, sha, outcome, by, encKey, targetUrl, fetchFn);
+  };
+
   try {
-    const result = await decideGit(fh, sha, verdict, by, {
-      allodGraphId: entry.allodGraphId,
-      autoPushNotes: entry.autoPushNotes,
-      originRemote: entry.originRemote,
-    });
+    const result = await decideGit(
+      fh,
+      sha,
+      verdict,
+      by,
+      {
+        allodGraphId: entry.allodGraphId,
+        autoPushNotes: entry.autoPushNotes,
+        originRemote: entry.originRemote,
+      },
+      onDecided
+    );
     // The decision moved the decisions-notes tip, which invalidates the whole
     // proposal cache. Re-warm in the background so the next list call is fast.
-    void listGitProposals(fh).catch(() => {});
+    void listGitProposals(fh, entry.ignoreBranches).catch(() => {});
     return c.json(result);
   } catch (err: unknown) {
     if (err instanceof KeyMissingError) {
@@ -147,6 +173,11 @@ const ReviewBody = z.object({
   body: z.string().optional(),
   by: z.string().min(1),
   comments: z.array(CommentSchema).optional(),
+  /**
+   * When true (default), automatically call decide after committing the review
+   * artifacts. If the proposal already has a decision, returns alreadyDecided:true.
+   */
+  decide: z.boolean().optional(),
 });
 
 gitreviewRouter.post("/git/proposals/:sha/reviews", async (c) => {
@@ -167,7 +198,7 @@ gitreviewRouter.post("/git/proposals/:sha/reviews", async (c) => {
     return c.json({ error: "verdict and by are required" }, 400);
   }
 
-  const { verdict, body: reviewBody, by, comments = [] } = parsed.data;
+  const { verdict, body: reviewBody, by, comments = [], decide = true } = parsed.data;
   const sha = c.req.param("sha");
   if (!validateSha(sha)) {
     return c.json({ error: "invalid commit sha" }, 400);
@@ -179,7 +210,7 @@ gitreviewRouter.post("/git/proposals/:sha/reviews", async (c) => {
     return c.json({ error: "proposal not found" }, 404);
   }
 
-  // Resolve the graph entry for allodGraphId (needed by postReview for key resolution)
+  // Resolve the graph entry for allodGraphId / autoPushNotes / originRemote
   const manager = c.get("manager");
   const entry = await manager.getEntry(fh.graphId);
   if (!entry) {
@@ -194,7 +225,14 @@ gitreviewRouter.post("/git/proposals/:sha/reviews", async (c) => {
       by,
       comments: comments.map((c) => ({ body: c.body, anchor: c.anchor, span: c.span })),
       allodGraphId: entry.allodGraphId,
+      decide,
+      autoPushNotes: entry.autoPushNotes,
+      originRemote: entry.originRemote,
     });
+    // Re-warm proposal cache in background when decide ran (same as the decide route).
+    if (decide && result.decideResult !== undefined) {
+      void listGitProposals(fh).catch(() => {});
+    }
     return c.json(result);
   } catch (err: unknown) {
     if (err instanceof KeyMissingError) {

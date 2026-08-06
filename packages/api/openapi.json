@@ -502,6 +502,13 @@
           "signingPrincipal": {
             "type": "string",
             "description": "The principal name whose key signs decide/review operations on this graph"
+          },
+          "ignoreBranches": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Glob patterns matched against bare branch names (no refs/heads/ prefix). Matching branches are excluded from proposal listings. Default: []."
           }
         },
         "required": [
@@ -513,7 +520,8 @@
           "embedder",
           "allodGraphId",
           "originRemote",
-          "signingPrincipal"
+          "signingPrincipal",
+          "ignoreBranches"
         ]
       },
       "RegisterGraphBody": {
@@ -550,8 +558,81 @@
           "embedder": {
             "type": "string",
             "enum": ["hash", "semantic"]
+          },
+          "ignoreBranches": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Glob patterns to exclude from proposal listings (matched against bare branch names). Placeholder: worktree-*."
           }
         }
+      },
+      "CodeComment": {
+        "type": "object",
+        "properties": {
+          "commentId": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string"
+          },
+          "span": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["open"]
+          },
+          "author": {
+            "type": "string"
+          },
+          "anchorSha": {
+            "type": "string"
+          },
+          "currentHead": {
+            "type": "boolean"
+          }
+        },
+        "required": ["commentId", "body", "span", "status", "author", "anchorSha", "currentHead"]
+      },
+      "PostCodeCommentBody": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Repo-relative file path being commented on"
+          },
+          "span": {
+            "type": "string",
+            "description": "Line span, e.g. L5 or L5-L9"
+          },
+          "body": {
+            "type": "string",
+            "description": "Comment body text"
+          },
+          "by": {
+            "type": "string",
+            "description": "Author principal"
+          },
+          "allodGraphId": {
+            "type": "string"
+          }
+        },
+        "required": ["path", "span", "body", "by"]
+      },
+      "PostCodeCommentResult": {
+        "type": "object",
+        "properties": {
+          "commentId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["saved", "pending"]
+          }
+        },
+        "required": ["commentId", "status"]
       },
       "CodeItem": {
         "type": "object",
@@ -1036,6 +1117,14 @@
               },
               "pushError": {
                 "type": "string"
+              },
+              "statusPosted": {
+                "type": "boolean",
+                "description": "True when a GitHub commit status was successfully posted."
+              },
+              "statusError": {
+                "type": "string",
+                "description": "Present when statusPosted is false due to an error."
               }
             },
             "required": ["outcome", "pushed"]
@@ -1092,6 +1181,10 @@
             "items": {
               "$ref": "#/components/schemas/ReviewCommentInput"
             }
+          },
+          "decide": {
+            "type": "boolean",
+            "description": "When true (default), automatically call decide after committing the review. Verdict mapping: approve/approve-with-comments → approve; request-changes → reject."
           }
         },
         "required": ["verdict", "by"]
@@ -1111,6 +1204,56 @@
           "status": {
             "type": "string",
             "enum": ["saved", "pending"]
+          },
+          "alreadyDecided": {
+            "type": "boolean",
+            "description": "True when decide=true was requested but a decision already existed."
+          },
+          "decideResult": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "outcome": {
+                    "type": "string",
+                    "enum": ["approved", "rejected"]
+                  },
+                  "pushed": {
+                    "type": "boolean"
+                  },
+                  "pushSkipped": {
+                    "type": "boolean"
+                  },
+                  "pushError": {
+                    "type": "string"
+                  },
+                  "statusPosted": {
+                    "type": "boolean"
+                  },
+                  "statusError": {
+                    "type": "string"
+                  }
+                },
+                "required": ["outcome", "pushed"]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "outcome": {
+                    "type": "string",
+                    "enum": ["incomplete"]
+                  },
+                  "unmet": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": ["outcome", "unmet"]
+              }
+            ],
+            "description": "Present when decide=true and the auto-decide ran."
           }
         },
         "required": ["reviewId", "commentIds", "status"]
