@@ -39,8 +39,9 @@ export function DocEditor({ initial, name = "memory.md", onSave, onCancel }: Doc
   const [draft, setDraft] = useState(initial);
   const debouncedDraft = useDebouncedValue(draft, 150);
 
-  const storedPane = (localStorage.getItem(PANE_KEY) as Pane | null) ?? "preview";
-  const [pane, setPaneState] = useState<Pane>(storedPane);
+  const [pane, setPaneState] = useState<Pane>(
+    () => (localStorage.getItem(PANE_KEY) as Pane | null) ?? "preview"
+  );
 
   function setPane(next: Pane) {
     setPaneState(next);

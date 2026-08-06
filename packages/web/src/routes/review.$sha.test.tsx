@@ -90,12 +90,21 @@ vi.mock("~/components/PierreTree", () => ({
 // Stub CodeView from @pierre/diffs/react — renders one pre per item keyed by id,
 // and supports renderAnnotation to surface annotation content in tests
 const mockCodeViewScrollTo = vi.fn();
+let mockOnSelectedLinesChange:
+  | ((
+      sel: {
+        id: string;
+        range: { start: number; end: number; side?: string };
+      } | null
+    ) => void)
+  | undefined;
 vi.mock("@pierre/diffs/react", () => ({
   CodeView: ({
     items,
     options,
     ref,
     renderAnnotation,
+    onSelectedLinesChange,
   }: {
     items: Array<{
       id: string;
@@ -112,7 +121,14 @@ vi.mock("@pierre/diffs/react", () => ({
       ann: { side: string; lineNumber: number; metadata: Record<string, unknown> },
       item: { id: string }
     ) => React.ReactNode;
+    onSelectedLinesChange?: (
+      sel: {
+        id: string;
+        range: { start: number; end: number; side?: string };
+      } | null
+    ) => void;
   }) => {
+    mockOnSelectedLinesChange = onSelectedLinesChange;
     if (ref && typeof ref === "object" && "current" in ref) {
       (
         ref as React.MutableRefObject<{ scrollTo: (target: { type: string; id: string }) => void }>
@@ -723,5 +739,64 @@ describe("/review/$sha", () => {
     });
     expect(screen.getByTestId("review-error")).toHaveTextContent("server error");
     expect(mutate).not.toHaveBeenCalled();
+  });
+
+  it("opens composer when a line range is selected", async () => {
+    setupDefaults();
+    await renderReviewPage();
+
+    // Fire the selection callback captured from the CodeView mock
+    await act(async () => {
+      mockOnSelectedLinesChange?.({
+        id: "src/lib.rs",
+        range: { start: 10, end: 15, side: "additions" },
+      });
+    });
+
+    // The composer should now be visible with the correct path and span
+    expect(screen.getByTestId("line-composer")).toBeInTheDocument();
+    expect(screen.getByTestId("line-composer")).toHaveTextContent("src/lib.rs");
+    expect(screen.getByTestId("line-composer")).toHaveTextContent("L10-L15");
+  });
+
+  it("Save-draft persists to localStorage after line selection", async () => {
+    setupDefaults();
+    await renderReviewPage();
+
+    // Open composer via selection callback
+    await act(async () => {
+      mockOnSelectedLinesChange?.({
+        id: "src/lib.rs",
+        range: { start: 7, end: 7, side: "deletions" },
+      });
+    });
+
+    // Fill in the comment body
+    const textarea = screen.getByRole("textbox", { name: /comment body/i });
+    await act(async () => {
+      textarea.focus();
+      // Use fireEvent-style property assignment since userEvent is not imported
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set?.call(
+        textarea,
+        "draft text"
+      );
+      textarea.dispatchEvent(new Event("input", { bubbles: true }));
+      (textarea as HTMLTextAreaElement).value = "draft text";
+      textarea.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    // Click Save draft
+    const saveDraftBtn = screen.getByRole("button", { name: /save draft/i });
+    await act(async () => {
+      saveDraftBtn.click();
+    });
+
+    // Assert localStorage has a draft entry for the path+span
+    const raw = localStore.get(`freehold:review-drafts:${SHA}`);
+    expect(raw).toBeDefined();
+    const drafts = JSON.parse(raw as string);
+    expect(drafts).toEqual(
+      expect.arrayContaining([expect.objectContaining({ path: "src/lib.rs", span: "old:L7" })])
+    );
   });
 });

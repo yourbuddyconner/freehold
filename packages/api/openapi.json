@@ -1040,6 +1040,12 @@
           },
           "status": {
             "type": "string"
+          },
+          "external_source": {
+            "type": "string"
+          },
+          "claimed_author": {
+            "type": "string"
           }
         },
         "required": ["commentId", "status"]

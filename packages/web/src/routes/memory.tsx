@@ -57,6 +57,7 @@ function MemoryLayout() {
 
   const [query, setQuery] = useState("");
   const [authorFilter, setAuthorFilter] = useState<string | undefined>();
+  const [initialExpandedPaths] = useState(() => loadExpandedPaths());
   const searching = query.length > 0;
 
   const { data: indexData, isLoading: indexLoading } = useMemoryIndex();
@@ -212,7 +213,7 @@ function MemoryLayout() {
               selectedPath={activeId ? paths.find((p) => idByPath.get(p) === activeId) : undefined}
               onSelect={handleSelect}
               initialExpansion={initialExpansion}
-              initialExpandedPaths={loadExpandedPaths()}
+              initialExpandedPaths={initialExpandedPaths}
               onExpansionChange={handleExpansionChange}
             />
           ) : null}

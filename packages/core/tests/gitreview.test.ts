@@ -24,7 +24,13 @@ import { openDb } from "../src/db.js";
 import { hashEmbedder } from "../src/embed.js";
 import { branchHeads } from "../src/git.js";
 import { readDecisions } from "../src/git.js";
-import { KeyMissingError, decideGit, gitProposal, listGitProposals } from "../src/gitreview.js";
+import {
+  KeyMissingError,
+  decideGit,
+  gitProposal,
+  listGitProposals,
+  listReviewsForSha,
+} from "../src/gitreview.js";
 import { approve } from "../src/governance.js";
 import { type Freehold, openFreehold } from "../src/graphs.js";
 import { syncIndex } from "../src/indexer.js";
@@ -508,5 +514,82 @@ describe("decideGit — push behavior", () => {
     // Local note must still exist
     const decisions = await readDecisions(repoDir, bogusSha);
     expect(decisions.length).toBeGreaterThan(0);
+  });
+});
+
+// ── listReviewsForSha — external_source / claimed_author round-trip ───────────
+
+describe("listReviewsForSha — round-trips external_source and claimed_author", () => {
+  beforeAll(async () => {
+    // Install the review ontology so review/Review@1 and review/ReviewComment@1 resolve
+    const reviewYaml = stripOntologyPreamble(assetYaml("review-ontology.yaml"));
+    const result = await installOntology(fh.graph, reviewYaml);
+    if (result.status === "pending" && result.hash) {
+      const d = await approve(fh.graph, "owner", result.hash);
+      expect(d.status).toBe("approved");
+    }
+  }, 60_000);
+
+  test("ingested comment attrs include external_source and claimed_author", async () => {
+    // Create a Review node for featureSha
+    const reviewId = crypto.randomUUID();
+    await commitAndApprove(fh.graph, "reviewer", `Review ${featureSha}`, [
+      {
+        create: {
+          kind: "node",
+          id: reviewId,
+          type: "review/Review@1",
+          attributes: {
+            verdict: "approve",
+            commit: featureSha,
+          },
+        },
+      },
+    ]);
+
+    // Create a ReviewComment node with external_source and claimed_author attrs
+    const commentId = crypto.randomUUID();
+    await commitAndApprove(fh.graph, "reviewer", `ReviewComment for ${featureSha}`, [
+      {
+        create: {
+          kind: "node",
+          id: commentId,
+          type: "review/ReviewComment@1",
+          attributes: {
+            body: "Looks good",
+            anchor: "src/lib.rs:10",
+            span: "10-12",
+            status: "open",
+            external_source: "pierre",
+            external_id: "comment:abc123",
+            claimed_author: "alice",
+          },
+        },
+      },
+    ]);
+
+    // Create the part_of edge linking comment → review
+    const edgeId = crypto.randomUUID();
+    await commitAndApprove(fh.graph, "reviewer", `part_of edge for comment ${commentId}`, [
+      {
+        create: {
+          kind: "edge",
+          id: edgeId,
+          type: "review/part_of@1",
+          from: `node:${commentId}`,
+          to: `node:${reviewId}`,
+        },
+      },
+    ]);
+
+    const reviews = await listReviewsForSha(fh, featureSha);
+    // Find the review we just created
+    const review = reviews.find((r) => r.reviewId === reviewId);
+    expect(review, "review not found in listReviewsForSha output").toBeDefined();
+
+    const comment = review?.comments.find((c) => c.commentId === commentId);
+    expect(comment, "comment not found in review").toBeDefined();
+    expect(comment?.external_source).toBe("pierre");
+    expect(comment?.claimed_author).toBe("alice");
   });
 });

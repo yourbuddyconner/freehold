@@ -171,9 +171,7 @@ export function ReviewPage({ sha }: { sha: string }) {
             body: comment.body ?? "",
             span: comment.span,
             path,
-            external_source: (comment as Record<string, unknown>).external_source as
-              | string
-              | undefined,
+            external_source: comment.external_source,
           },
         });
         map.set(path, arr);
@@ -606,7 +604,6 @@ export function ReviewPage({ sha }: { sha: string }) {
                 gitStatus={files.map((f) => ({ path: f.path, status: verbToStatus(f.verb) }))}
                 onSelect={(path) => scrollToFile(path)}
                 initialExpansion="open"
-                scrollToRef={undefined}
               />
             </aside>
 
@@ -635,6 +632,16 @@ export function ReviewPage({ sha }: { sha: string }) {
                   ref={codeViewRef}
                   items={codeViewItems}
                   renderAnnotation={renderAnnotation}
+                  onSelectedLinesChange={(selection) => {
+                    if (!selection) return;
+                    const { id: path, range } = selection;
+                    const side = range.side === "deletions" ? "old:" : "";
+                    const span =
+                      range.start === range.end
+                        ? `${side}L${range.start}`
+                        : `${side}L${range.start}-L${range.end}`;
+                    setComposerOpen({ path, span });
+                  }}
                   options={{
                     diffStyle,
                     lineDiffType: "word-alt",

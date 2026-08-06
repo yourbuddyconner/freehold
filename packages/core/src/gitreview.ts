@@ -484,6 +484,8 @@ export interface ReviewCommentEntry {
   anchor?: string;
   span?: string;
   status: string;
+  external_source?: string;
+  claimed_author?: string;
 }
 
 export interface ReviewEntry {
@@ -713,6 +715,8 @@ export async function listReviewsForSha(fh: Freehold, sha: string): Promise<Revi
           anchor: c.attrs.anchor as string | undefined,
           span: c.attrs.span as string | undefined,
           status: (c.attrs.status as string | undefined) ?? "open",
+          external_source: c.attrs.external_source as string | undefined,
+          claimed_author: c.attrs.claimed_author as string | undefined,
         });
       }
     }

@@ -1231,6 +1231,8 @@ function buildRegistry(): OpenAPIRegistry {
       anchor: z.string().optional(),
       span: z.string().optional(),
       status: z.string(),
+      external_source: z.string().optional(),
+      claimed_author: z.string().optional(),
     })
     .openapi("ReviewComment");
 

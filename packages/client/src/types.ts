@@ -2751,6 +2751,8 @@ export interface components {
             anchor?: string;
             span?: string;
             status: string;
+            external_source?: string;
+            claimed_author?: string;
         };
         ReviewEntry: {
             reviewId: string;
