@@ -612,13 +612,14 @@ function wasmCommitPayload(
   graph: unknown,
   author: string,
   intent: string,
-  ops: unknown[]
+  ops: unknown[],
+  keyId?: string
 ): CommitPayloadResult {
   return (
     graph as {
-      commit_payload(author: string, intent: string, ops: unknown[]): CommitPayloadResult;
+      commit_payload(author: string, intent: string, ops: unknown[], key_id?: string | null): CommitPayloadResult;
     }
-  ).commit_payload(author, intent, ops);
+  ).commit_payload(author, intent, ops, keyId ?? null);
 }
 
 async function wasmCommitSigned(
@@ -652,12 +653,7 @@ async function signedCommit(
   ops: unknown[],
   entry: { allodGraphId: string }
 ): Promise<unknown> {
-  // Phase 1: build unsigned changeset and get the payload hash to sign
-  const { changeset, hash } = await withGraph(fh.graph, () =>
-    wasmCommitPayload(fh.graph, author, intent, ops)
-  );
-
-  // Resolve key — wrap plain Error from resolveKey into KeyMissingError
+  // Resolve key first — wrap plain Error from resolveKey into KeyMissingError
   let resolvedKey: Awaited<ReturnType<typeof keys.resolveKey>>;
   try {
     resolvedKey = await keys.resolveKey(entry.allodGraphId, author, {
@@ -667,6 +663,17 @@ async function signedCommit(
     const msg = err instanceof Error ? err.message : String(err);
     throw new KeyMissingError(msg);
   }
+
+  // Get the key_id so wasm can stamp it into the changeset body
+  const keyId = await keys.keyIdFor(resolvedKey, entry.allodGraphId, {
+    repoDir: fh.graphDir,
+  });
+
+  // Phase 1: build unsigned changeset and get the payload hash to sign
+  // Pass key_id so wasm stamps it into the changeset body (avoids wasm-side key resolution)
+  const { changeset, hash } = await withGraph(fh.graph, () =>
+    wasmCommitPayload(fh.graph, author, intent, ops, keyId)
+  );
 
   // Sign the payload hash (host-side)
   const signature = await keys.signPayload(resolvedKey, hash, entry.allodGraphId, {

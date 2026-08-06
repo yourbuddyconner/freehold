@@ -255,3 +255,28 @@ describe("path matching — no suffix collisions", () => {
     expect(found2).toBeDefined();
   });
 });
+
+describe("postCodeComment — host-managed key (file-only, not in wasm store)", () => {
+  test("postCodeComment succeeds when key is only in ALLOD_KEYS_DIR", async () => {
+    // The fixture's owner key is already in ALLOD_KEYS_DIR (set in beforeAll).
+    // This test explicitly verifies that postCodeComment works even when the
+    // signing key is NOT in the graph's internal wasm store — the exact case
+    // that was broken before passing key_id to commit_payload.
+    const result = await postCodeComment(fh, {
+      path: "src/lib.rs",
+      span: "L1",
+      body: "host-managed key signing path verification",
+      by: "owner",
+    });
+
+    expect(result.commentId).toBeTruthy();
+    expect(["saved", "pending"]).toContain(result.status);
+    // anchorSha is HEAD at posting time; other tests may have advanced HEAD since initialSha
+    expect(result.anchorSha).toMatch(/^[0-9a-f]{40}$/);
+
+    const comments = await listCodeComments(fh, "src/lib.rs");
+    const found = comments.find((c) => c.commentId === result.commentId);
+    expect(found).toBeDefined();
+    expect(found?.body).toBe("host-managed key signing path verification");
+  });
+});
