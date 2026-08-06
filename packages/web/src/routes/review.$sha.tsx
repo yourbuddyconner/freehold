@@ -87,7 +87,7 @@ function verbToStatus(verb: string): "added" | "modified" | "deleted" | "renamed
 }
 
 interface AnnotationMeta {
-  kind: "saved" | "draft";
+  kind: "saved" | "draft" | "composer";
   status: string;
   author?: string;
   body: string;
@@ -111,6 +111,16 @@ function parseSpan(span: string): { side: "deletions" | "additions"; lineNumber:
   const m = s.match(/^L(\d+)/);
   const lineNumber = m ? Number.parseInt(m[1], 10) : 1;
   return { side: isOld ? "deletions" : "additions", lineNumber };
+}
+
+/** Extract the LAST line number from a span ("L5", "L5-L9", "old:L5-L9"). */
+function spanEndLine(span: string): number {
+  const s = span.startsWith("old:") ? span.slice(4) : span;
+  const m = s.match(/^L\d+(?:-L(\d+))?$/);
+  if (!m) return 1;
+  if (m[1]) return Number.parseInt(m[1], 10);
+  const start = s.match(/^L(\d+)/);
+  return start ? Number.parseInt(start[1], 10) : 1;
 }
 
 function spanLines(newContent: string, span: string): string {
@@ -295,6 +305,24 @@ export function ReviewPage({ sha }: { sha: string }) {
         const saved = savedAnnotationsByPath.get(f.path) ?? [];
         const draftAnns = draftAnnotationsByPath.get(f.path) ?? [];
         const annotations: DiffLineAnnotation<AnnotationMeta>[] = [...saved, ...draftAnns];
+
+        // Inject a synthetic composer annotation when this file is the active target
+        if (composerOpen && composerOpen.path === f.path) {
+          const { side } = parseSpan(composerOpen.span);
+          const lineNumber = spanEndLine(composerOpen.span);
+          annotations.push({
+            side,
+            lineNumber,
+            metadata: {
+              kind: "composer",
+              status: "pending",
+              body: "",
+              span: composerOpen.span,
+              path: f.path,
+            },
+          });
+        }
+
         return {
           id: f.path,
           type: "diff" as const,
@@ -305,7 +333,7 @@ export function ReviewPage({ sha }: { sha: string }) {
           ...(annotations.length > 0 ? { annotations } : {}),
         };
       });
-  }, [files, savedAnnotationsByPath, draftAnnotationsByPath]);
+  }, [files, savedAnnotationsByPath, draftAnnotationsByPath, composerOpen]);
 
   // Draft management helpers
   function persistDrafts(newDrafts: CommentDraft[]) {
@@ -367,6 +395,102 @@ export function ReviewPage({ sha }: { sha: string }) {
     _item: unknown
   ): React.ReactNode {
     const meta = ann.metadata;
+
+    if (meta.kind === "composer") {
+      return (
+        <div
+          className="border border-(--border) bg-(--bg-subtle) p-3 space-y-2"
+          data-testid="line-composer"
+        >
+          <div className="text-[11px] font-mono text-(--fg-muted)">
+            Comment on {meta.path} {meta.span}
+          </div>
+          <div className="flex gap-2 items-center">
+            {composerOpen && !composerOpen.span.startsWith("old:") && (
+              <button
+                type="button"
+                onClick={() => {
+                  const next = !suggestionMode;
+                  setSuggestionMode(next);
+                  if (next && composerOpen) {
+                    setSuggestionText(composerSpanLines);
+                    suggestionFileRef.current = {
+                      name: composerOpen.path,
+                      contents: composerSpanLines,
+                      cacheKey: `suggest-${composerOpen.path}-${composerOpen.span}`,
+                    };
+                  }
+                }}
+                className={cn(
+                  "border font-mono text-[11px] uppercase px-2 py-1",
+                  suggestionMode
+                    ? "border-(--border) bg-(--bg-subtle) text-(--fg)"
+                    : "border-(--border) text-(--fg-muted) hover:text-(--fg)"
+                )}
+                data-testid="suggest-toggle"
+              >
+                {suggestionMode ? "Suggesting" : "Suggest change"}
+              </button>
+            )}
+          </div>
+          <textarea
+            // biome-ignore lint/a11y/noAutofocus: intentional — composer opens on user gesture
+            autoFocus
+            value={composerBody}
+            onChange={(e) => setComposerBody(e.target.value)}
+            rows={3}
+            placeholder="Comment body"
+            className="w-full border border-(--border) bg-(--bg) px-2 py-1.5 text-xs text-(--fg) resize-none font-mono"
+            aria-label="Comment body"
+          />
+          {suggestionMode && suggestionFileRef.current && (
+            <div className="space-y-2" data-testid="suggestion-editor-area">
+              <div className="border border-(--border)" data-testid="suggestion-editor">
+                <EditProvider createEditor={createEditorForSuggestion}>
+                  <File
+                    file={suggestionFileRef.current}
+                    edit
+                    editorOptions={{
+                      onChange: (file: { contents: string }) => setSuggestionText(file.contents),
+                    }}
+                    options={{ disableFileHeader: true, overflow: "wrap" }}
+                  />
+                </EditProvider>
+              </div>
+              <div className="text-[10px] font-mono uppercase text-(--fg-muted)">
+                Suggested change
+              </div>
+              <PierreDiff
+                oldText={composerSpanLines}
+                newText={debouncedSuggestionText}
+                name={meta.path}
+              />
+            </div>
+          )}
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={handleSaveDraft}
+              className="bg-(--fg) text-white font-mono text-[11px] uppercase px-2 py-1"
+            >
+              Save draft
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setComposerOpen(null);
+                setSuggestionMode(false);
+                setSuggestionText("");
+              }}
+              className="border border-(--border) font-mono text-[11px] uppercase px-2 py-1 text-(--fg-muted)"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      );
+    }
+
     if (meta.kind === "draft") {
       const { prose, suggestion } =
         meta.suggestion !== undefined
@@ -854,98 +978,6 @@ export function ReviewPage({ sha }: { sha: string }) {
           </div>
         )}
       </div>
-
-      {/* Inline line-comment composer (opens when a line range is selected) */}
-      {composerOpen && (
-        <div
-          className="border border-(--border) bg-(--bg-subtle) p-3 space-y-2"
-          data-testid="line-composer"
-        >
-          <div className="text-[11px] font-mono text-(--fg-muted)">
-            Comment on {composerOpen.path} {composerOpen.span}
-          </div>
-          <div className="flex gap-2 items-center">
-            {!composerOpen.span.startsWith("old:") && (
-              <button
-                type="button"
-                onClick={() => {
-                  const next = !suggestionMode;
-                  setSuggestionMode(next);
-                  if (next) {
-                    setSuggestionText(composerSpanLines);
-                    suggestionFileRef.current = {
-                      name: composerOpen.path,
-                      contents: composerSpanLines,
-                      cacheKey: `suggest-${composerOpen.path}-${composerOpen.span}`,
-                    };
-                  }
-                }}
-                className={cn(
-                  "border font-mono text-[11px] uppercase px-2 py-1",
-                  suggestionMode
-                    ? "border-(--border) bg-(--bg-subtle) text-(--fg)"
-                    : "border-(--border) text-(--fg-muted) hover:text-(--fg)"
-                )}
-                data-testid="suggest-toggle"
-              >
-                {suggestionMode ? "Suggesting" : "Suggest change"}
-              </button>
-            )}
-          </div>
-          <textarea
-            value={composerBody}
-            onChange={(e) => setComposerBody(e.target.value)}
-            rows={3}
-            placeholder="Comment body"
-            className="w-full border border-(--border) bg-(--bg) px-2 py-1.5 text-xs text-(--fg) resize-none font-mono"
-            aria-label="Comment body"
-          />
-          {suggestionMode && suggestionFileRef.current && (
-            <div className="space-y-2" data-testid="suggestion-editor-area">
-              <div className="border border-(--border)" data-testid="suggestion-editor">
-                <EditProvider createEditor={createEditorForSuggestion}>
-                  <File
-                    file={suggestionFileRef.current}
-                    edit
-                    editorOptions={{
-                      onChange: (file: { contents: string }) => setSuggestionText(file.contents),
-                    }}
-                    options={{ disableFileHeader: true, overflow: "wrap" }}
-                  />
-                </EditProvider>
-              </div>
-              <div className="text-[10px] font-mono uppercase text-(--fg-muted)">
-                Suggested change
-              </div>
-              <PierreDiff
-                oldText={composerSpanLines}
-                newText={debouncedSuggestionText}
-                name={composerOpen.path}
-              />
-            </div>
-          )}
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={handleSaveDraft}
-              className="bg-(--fg) text-white font-mono text-[11px] uppercase px-2 py-1"
-            >
-              Save draft
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setComposerOpen(null);
-                setSuggestionMode(false);
-                setSuggestionText("");
-              }}
-              className="border border-(--border) font-mono text-[11px] uppercase px-2 py-1 text-(--fg-muted)"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
