@@ -1,5 +1,5 @@
-import { Link, Outlet, createRoute, useRouterState } from "@tanstack/react-router";
-import { useState } from "react";
+import { Link, Outlet, createRoute, useNavigate, useRouterState } from "@tanstack/react-router";
+import { PierreTree } from "~/components/PierreTree";
 import { useCodeRegions, useCodeTree } from "~/lib/hooks";
 import { Route as RootRoute } from "./__root";
 
@@ -26,81 +26,17 @@ interface RegionRule {
   paths: string[];
 }
 
-function FileNode({ node, depth = 0 }: { node: CodeTreeNode; depth?: number }) {
-  const [open, setOpen] = useState(true);
-  const { location } = useRouterState();
-  const activePath = new URLSearchParams(location.search).get("path") ?? "";
-
-  if (node.kind === "dir") {
-    return (
-      <li>
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          aria-expanded={open}
-          className="flex w-full items-center gap-1.5 py-1 text-left font-mono text-[11px] uppercase tracking-[0.08em] text-(--fg-muted) hover:text-(--fg)"
-          style={{ paddingLeft: 4 + depth * 12 }}
-        >
-          <span aria-hidden className="inline-block w-2 text-[9px]">
-            {open ? "▾" : "▸"}
-          </span>
-          <span className="min-w-0 flex-1 truncate">{node.name}</span>
-        </button>
-        {open && node.children && (
-          <ul>
-            {node.children.map((child) => (
-              <FileNode key={child.path} node={child} depth={depth + 1} />
-            ))}
-          </ul>
-        )}
-      </li>
-    );
+/** Depth-first traversal collecting only file paths. */
+function flattenTree(nodes: CodeTreeNode[]): string[] {
+  const result: string[] = [];
+  for (const node of nodes) {
+    if (node.kind === "file") {
+      result.push(node.path);
+    } else if (node.children) {
+      result.push(...flattenTree(node.children));
+    }
   }
-
-  const isActive = activePath === node.path;
-  return (
-    <li>
-      <Link
-        to="/code/file"
-        search={{ path: node.path }}
-        data-testid={`code-file-${node.path}`}
-        className={`flex items-center gap-1 py-1 text-xs hover:bg-(--bg-subtle) flex-wrap ${
-          isActive ? "bg-(--bg-subtle) text-(--fg)" : "text-(--fg-muted) hover:text-(--fg)"
-        }`}
-        style={{ paddingLeft: 6 + depth * 12 }}
-      >
-        <span className="min-w-0 flex-1 truncate">{node.name}</span>
-        {node.language && (
-          <span className="shrink-0 border border-(--border) px-1 font-mono text-[9px] text-(--fg-muted)">
-            {node.language}
-          </span>
-        )}
-        {(node.terms ?? []).map((t) => (
-          <span
-            key={t}
-            className="shrink-0 border border-(--border) px-1 font-mono text-[9px] text-(--fg-muted)"
-          >
-            {t.split("@")[0]}
-          </span>
-        ))}
-      </Link>
-    </li>
-  );
-}
-
-function CodeTree({ tree }: { tree: CodeTreeNode[] }) {
-  if (tree.length === 0) {
-    return <p className="text-xs text-(--fg-muted)">No files indexed.</p>;
-  }
-  return (
-    <nav aria-label="Code tree">
-      <ul className="space-y-0.5">
-        {tree.map((node) => (
-          <FileNode key={node.path} node={node} />
-        ))}
-      </ul>
-    </nav>
-  );
+  return result;
 }
 
 function RegionsPanel({ rules }: { rules: RegionRule[] }) {
@@ -176,9 +112,13 @@ function CodeLayout() {
 
   const { data: treeData, isLoading: treeLoading } = useCodeTree();
   const { data: regionsData } = useCodeRegions();
+  const navigate = useNavigate();
 
   const tree = (treeData?.tree ?? []) as CodeTreeNode[];
   const rules = (regionsData?.rules ?? []) as RegionRule[];
+  const paths = flattenTree(tree);
+
+  const activePath = new URLSearchParams(location.search).get("path") ?? undefined;
 
   return (
     <div>
@@ -203,8 +143,19 @@ function CodeLayout() {
         <aside className="w-72 shrink-0 border-r border-(--border) pr-4">
           {treeLoading ? (
             <p className="text-xs text-(--fg-muted)">Loading…</p>
+          ) : paths.length === 0 ? (
+            <p className="text-xs text-(--fg-muted)">No files indexed.</p>
           ) : (
-            <CodeTree tree={tree} />
+            <PierreTree
+              paths={paths}
+              selectedPath={activePath}
+              search
+              onSelect={(path, kind) => {
+                if (kind === "file") {
+                  void navigate({ to: "/code/file", search: { path } });
+                }
+              }}
+            />
           )}
           <RegionsPanel rules={rules} />
         </aside>
