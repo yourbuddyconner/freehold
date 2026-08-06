@@ -6,12 +6,12 @@
  */
 
 import { execFile } from "node:child_process";
-import { createPrivateKey, sign as cryptoSign } from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
+import { createHash, createPrivateKey, sign as cryptoSign, generateKeyPairSync } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { promisify } from "node:util";
-import { load as yamlLoad } from "js-yaml";
+import { dump as yamlDump, load as yamlLoad } from "js-yaml";
 
 const execFileAsync = promisify(execFile);
 
@@ -304,4 +304,72 @@ export async function publicHex(
   }
 
   throw new Error(`unknown backend: ${(key as ResolvedKey).backend}`);
+}
+
+// ─── generateKeyPair ──────────────────────────────────────────────────────────
+
+/**
+ * Generate a new Ed25519 keypair for `principal` within `allodGraphId`.
+ *
+ * Writes a plain-keypair YAML file to the XDG keys directory at
+ * `<keysDir>/<graphDirComponent>/<principal>.yaml`, mode 0600 inside a 0700 dir.
+ * Never overwrites an existing key file — returns the path regardless.
+ *
+ * Returns the path to the key file.
+ *
+ * Format written:
+ *   name: <principal>
+ *   key_id: sha256:<hex of SHA-256 of the 32-byte raw public key>
+ *   algorithm: ed25519
+ *   public: <hex, 32 bytes>
+ *   secret: <hex, 32 bytes — the Ed25519 seed>
+ */
+export function generateKeyPair(allodGraphId: string, principal: string): string {
+  const dir = join(keysDir(), graphDirComponent(allodGraphId));
+  const filePath = join(dir, `${principal}.yaml`);
+
+  if (existsSync(filePath)) {
+    return filePath;
+  }
+
+  // Generate Ed25519 keypair using node:crypto
+  const { privateKey, publicKey } = generateKeyPairSync("ed25519");
+
+  // Export raw 32-byte public key via JWK
+  const pubJwk = publicKey.export({ format: "jwk" }) as { x?: string };
+  if (!pubJwk.x) {
+    throw new Error("Failed to export public key JWK — unexpected node:crypto output");
+  }
+  const pubBytes = Buffer.from(pubJwk.x, "base64url");
+  if (pubBytes.length !== 32) {
+    throw new Error(`Expected 32-byte public key, got ${pubBytes.length}`);
+  }
+  const pubHex = pubBytes.toString("hex");
+
+  // Export raw 32-byte seed (secret) via PKCS8 DER
+  // PKCS8 for ed25519: 16-byte header + 32-byte seed = 48 bytes total
+  const privDer = privateKey.export({ format: "der", type: "pkcs8" }) as Buffer;
+  const seed = privDer.subarray(privDer.length - 32);
+  if (seed.length !== 32) {
+    throw new Error(`Expected 32-byte seed in PKCS8 DER, got ${seed.length}`);
+  }
+  const secretHex = seed.toString("hex");
+
+  // Compute key_id as sha256:<hex of SHA-256 of raw public bytes>
+  const keyId = `sha256:${createHash("sha256").update(pubBytes).digest("hex")}`;
+
+  const yaml: KeyYaml = {
+    name: principal,
+    key_id: keyId,
+    algorithm: "ed25519",
+    public: pubHex,
+    secret: secretHex,
+  };
+
+  // Ensure the directory exists with mode 0700
+  mkdirSync(dir, { recursive: true, mode: 0o700 });
+  // Write key file mode 0600
+  writeFileSync(filePath, yamlDump(yaml, { lineWidth: -1 }), { mode: 0o600 });
+
+  return filePath;
 }

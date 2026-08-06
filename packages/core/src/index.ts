@@ -143,6 +143,7 @@ export {
   listReviewsForSha,
   postReview,
   evictProposalCache,
+  evictSha,
   proposalCacheKey,
 } from "./gitreview.js";
 export { branchHeads, pushNotes, commitDiff, decisionsTip } from "./git.js";
@@ -190,3 +191,20 @@ export {
   buildConnectorManifest,
 } from "./connector/app.js";
 export type { AppManifest } from "./connector/app.js";
+
+// Keys — native Ed25519 key generation + resolution + signing
+export {
+  generateKeyPair,
+  graphDirComponent,
+  resolveKey,
+  signPayload,
+  keyIdFor,
+  publicHex,
+} from "./keys.js";
+
+// Repo onboarding
+export { onboardRepo } from "./onboarding.js";
+export type { OnboardResult, OnboardStep, OnboardOptions } from "./onboarding.js";
+
+// Auto-index runner
+export { queueAutoIndex, isAutoIndexInFlight } from "./autoindex.js";
