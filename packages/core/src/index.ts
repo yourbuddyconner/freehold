@@ -141,8 +141,10 @@ export {
   decideGit,
   KeyMissingError,
   listReviewsForSha,
+  evictProposalCache,
+  proposalCacheKey,
 } from "./gitreview.js";
-export { branchHeads, pushNotes, commitDiff } from "./git.js";
+export { branchHeads, pushNotes, commitDiff, decisionsTip } from "./git.js";
 export type { DiffFile } from "./git.js";
 export type { GitProposal, DecideResult, ReviewEntry, ReviewCommentEntry } from "./gitreview.js";
 

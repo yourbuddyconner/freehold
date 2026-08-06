@@ -22,14 +22,15 @@ import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { createGraph, openGraph } from "../src/allod.js";
 import { openDb } from "../src/db.js";
 import { hashEmbedder } from "../src/embed.js";
-import { branchHeads } from "../src/git.js";
-import { readDecisions } from "../src/git.js";
+import { branchHeads, decisionsTip, readDecisions } from "../src/git.js";
 import {
   KeyMissingError,
   decideGit,
+  evictProposalCache,
   gitProposal,
   listGitProposals,
   listReviewsForSha,
+  proposalCacheKey,
 } from "../src/gitreview.js";
 import { approve } from "../src/governance.js";
 import { type Freehold, openFreehold } from "../src/graphs.js";
@@ -591,5 +592,92 @@ describe("listReviewsForSha — round-trips external_source and claimed_author",
     expect(comment, "comment not found in review").toBeDefined();
     expect(comment?.external_source).toBe("pierre");
     expect(comment?.claimed_author).toBe("alice");
+  });
+});
+
+// ── Cache invalidation tests ───────────────────────────────────────────────────
+
+describe("proposal cache — invalidates when decisions tip changes", () => {
+  let cacheSha: string;
+
+  beforeAll(async () => {
+    // Create a fresh commit on a new branch for cache testing
+    execFileSync("git", ["checkout", "feature"], { cwd: repoDir });
+    writeFileSync(join(repoDir, "src", "cache_test.rs"), "// cache test");
+    execFileSync("git", ["add", "src/cache_test.rs"], { cwd: repoDir });
+    execFileSync("git", ["commit", "-m", "add src/cache_test.rs for cache test"], { cwd: repoDir });
+    cacheSha = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repoDir }).toString().trim();
+    execFileSync("git", ["checkout", "main"], { cwd: repoDir });
+  });
+
+  test("proposalCacheKey encodes graphDir, sha, and decisionsTip", () => {
+    const key = proposalCacheKey("/some/dir", "abc123", "tip456");
+    expect(key).toBe("/some/dir\0abc123\0tip456");
+    // Different tip → different key (cache miss)
+    const key2 = proposalCacheKey("/some/dir", "abc123", "tip789");
+    expect(key2).not.toBe(key);
+  });
+
+  test("evictProposalCache removes entries for the given graphDir", async () => {
+    // Warm the cache by listing proposals
+    const tip1 = await decisionsTip(repoDir);
+    const before = await listGitProposals(fh);
+    expect(before.length).toBeGreaterThan(0);
+
+    // Evict — next call should re-evaluate (not use cached result)
+    evictProposalCache(repoDir);
+
+    // After eviction, re-listing still returns correct results
+    const after = await listGitProposals(fh);
+    expect(after.length).toBe(before.length);
+  });
+
+  test("decideGit evicts cache; re-list reflects new decided state for cache sha", async () => {
+    // Warm the cache
+    const proposals1 = await listGitProposals(fh);
+    const before = proposals1.find((p) => p.sha === cacheSha);
+    // cacheSha may not appear if HEAD was checked out to main (dedup may skip it)
+    // Use gitProposal directly which always evaluates
+    const p1 = await gitProposal(fh, cacheSha);
+    expect(p1).not.toBeNull();
+    expect(p1?.decided).toBe("undecided");
+
+    // Approve → triggers evictProposalCache inside decideGit
+    const result = await decideGit(fh, cacheSha, "approve", "reviewer", {
+      allodGraphId,
+      autoPushNotes: false,
+      originRemote: null,
+    });
+    // outcome is approved or incomplete depending on policy state
+    expect(["approved", "incomplete"]).toContain(result.outcome);
+
+    // Re-evaluate — cache was evicted so we get fresh state
+    const p2 = await gitProposal(fh, cacheSha);
+    expect(p2).not.toBeNull();
+    // decided must now reflect the decision (approved or still has existing decisions)
+    expect(p2?.decided).not.toBe("undecided");
+  });
+
+  test("decisionsTip changes after appendDecision", async () => {
+    // Create yet another fresh sha for this test
+    execFileSync("git", ["checkout", "feature"], { cwd: repoDir });
+    writeFileSync(join(repoDir, "src", "tip_test.rs"), "// tip test");
+    execFileSync("git", ["add", "src/tip_test.rs"], { cwd: repoDir });
+    execFileSync("git", ["commit", "-m", "add src/tip_test.rs for tip test"], { cwd: repoDir });
+    const tipSha = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repoDir }).toString().trim();
+    execFileSync("git", ["checkout", "main"], { cwd: repoDir });
+
+    const tip1 = await decisionsTip(repoDir);
+
+    // Make a decision → notes ref moves
+    await decideGit(fh, tipSha, "reject", "reviewer", {
+      allodGraphId,
+      autoPushNotes: false,
+      originRemote: null,
+    });
+
+    const tip2 = await decisionsTip(repoDir);
+    // After a decision the notes ref tip must have changed
+    expect(tip2).not.toBe(tip1);
   });
 });

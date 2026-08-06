@@ -267,6 +267,7 @@ export function useGitProposals(enabled = true) {
     queryKey: ["git-proposals"],
     queryFn: () => apiClient.listGitProposals(),
     enabled,
+    staleTime: 30_000,
   });
 }
 
@@ -277,6 +278,7 @@ export function useGitProposal(sha: string | undefined) {
     queryFn: () => apiClient.getGitProposal(sha ?? ""),
     enabled: !!sha,
     retry: false,
+    staleTime: 30_000,
   });
 }
 
@@ -379,6 +381,7 @@ export function useGitProposalDiff(sha: string | undefined, enabled = true) {
     queryFn: () => apiClient.gitProposalDiff(sha ?? ""),
     enabled: enabled && !!sha,
     retry: false,
+    staleTime: 30_000,
   });
 }
 
@@ -389,6 +392,7 @@ export function useReviewsForSha(sha: string | undefined) {
     queryFn: () => apiClient.listGitReviews(sha ?? ""),
     enabled: !!sha,
     retry: false,
+    staleTime: 30_000,
   });
 }
 
