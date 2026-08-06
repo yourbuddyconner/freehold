@@ -33,6 +33,8 @@ export interface CodeItem {
   signature?: string;
   span?: string;
   terms: string[];
+  /** File path of the source file that declares this item. Present on caller/callee rows in CodeItemView. */
+  filePath?: string;
 }
 
 export interface CodeFileView {
@@ -307,8 +309,36 @@ export async function codeItem(fh: Freehold, nodeId: string): Promise<CodeItemVi
        WHERE graph_id = $1 AND kind = 'node' AND id IN (${placeholders})`,
       [fh.graphId, ...ids]
     );
+    // Build a map from item id → declaring file path using the already-loaded edges
+    const itemFileMap = new Map<string, string>();
+    const declaredByMap = new Map<string, string>(); // item_id → file_id
+    for (const e of edges) {
+      if (edgeBaseType(e.type) === "declares") {
+        declaredByMap.set(e.to_id, e.from_id);
+      }
+    }
+    // Resolve file paths for these specific items
+    const fileIdsNeeded = new Set<string>();
+    for (const row of r.rows) {
+      const fileId = declaredByMap.get(row.id);
+      if (fileId) fileIdsNeeded.add(fileId);
+    }
+    if (fileIdsNeeded.size > 0) {
+      const fp = Array.from(fileIdsNeeded);
+      const fpPlaceholders = fp.map((_, i) => `$${i + 2}`).join(", ");
+      const fileResult = await fh.db.pg.query<SourceFileRow>(
+        `SELECT id, content FROM objects WHERE graph_id = $1 AND id IN (${fpPlaceholders})`,
+        [fh.graphId, ...fp]
+      );
+      for (const fr of fileResult.rows) {
+        const p = fr.content?.attributes?.path;
+        if (p) itemFileMap.set(fr.id, p);
+      }
+    }
     return r.rows.map((item) => {
       const a = item.content?.attributes ?? {};
+      const fileId = declaredByMap.get(item.id);
+      const itemFilePath = fileId ? itemFileMap.get(fileId) : undefined;
       return {
         nodeId: item.id,
         type: item.type,
@@ -316,6 +346,7 @@ export async function codeItem(fh: Freehold, nodeId: string): Promise<CodeItemVi
         signature: a.signature,
         span: a.span,
         terms: termsById.get(item.id) ?? [],
+        filePath: itemFilePath,
       };
     });
   }
