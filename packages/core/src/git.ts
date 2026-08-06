@@ -149,6 +149,23 @@ export async function diffTreeOps(repoDir: string, sha: string): Promise<Array<[
 }
 
 /**
+ * Return the commit SHA of the allod-decisions notes ref, or "" if no
+ * decisions have been recorded yet (ref does not exist).
+ *
+ * Used as a cache-key component: as long as no new decision is appended
+ * the tip stays the same and cached proposal evaluations remain valid.
+ */
+export async function decisionsTip(repoDir: string): Promise<string> {
+  try {
+    const out = await git(repoDir, ["rev-parse", "refs/notes/allod-decisions"]);
+    return out.trim();
+  } catch {
+    // ref doesn't exist yet — no decisions recorded
+    return "";
+  }
+}
+
+/**
  * Read the allod-decisions git note for a commit SHA.
  * Returns [] if no note exists.
  */

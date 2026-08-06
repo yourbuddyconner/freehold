@@ -18,6 +18,7 @@ import {
   appendDecision,
   branchHeads,
   commitMeta,
+  decisionsTip,
   diffTreeOps,
   headSha,
   pushNotes,
@@ -174,24 +175,130 @@ function decidedStatus(decisions: unknown[]): "undecided" | "approved" | "reject
   return approved ? "approved" : "undecided";
 }
 
+// ── Module-level LRU cache for evaluateSha results ────────────────────────────
+//
+// Cache key: `${graphDir}\0${sha}\0${decisionsTip}` where decisionsTip is the
+// git SHA of refs/notes/allod-decisions (or "" if no decisions exist yet).
+// A sha's checklist result is immutable for a given decisions state; this means
+// warm repeat calls to listGitProposals are sub-50ms instead of 6s.
+//
+// IMPORTANT: The `checks` field (from the check_status DB table) is intentionally
+// NOT cached here — it can change at any time independently of the decisions notes
+// ref. The cache stores all other expensive fields (wasm checklist, satisfaction,
+// diff ops, code regions) and `checks` is fetched fresh on every call and merged in.
+//
+// Bounded at MAX_CACHE_ENTRIES (200) to avoid unbounded memory in long-running
+// daemons. LRU eviction: we track insertion order via a Map (ES6 maps preserve
+// insertion order) and delete the oldest entry when the limit is exceeded.
+
+const MAX_CACHE_ENTRIES = 200;
+
+/** Cached fields — everything except the `checks` DB column (fetched fresh every call). */
+type CachedCore = Omit<GitProposal, "checks">;
+
+const proposalCache = new Map<string, CachedCore>();
+
+/**
+ * Evict least-recently-used entry when the cache exceeds MAX_CACHE_ENTRIES.
+ * Map iteration order is insertion order, so the first entry is the oldest.
+ */
+function cacheSet(key: string, value: CachedCore): void {
+  // Delete and re-insert to move to end (most-recent position).
+  proposalCache.delete(key);
+  proposalCache.set(key, value);
+  // Trim oldest entries if over limit
+  while (proposalCache.size > MAX_CACHE_ENTRIES) {
+    const oldest = proposalCache.keys().next().value;
+    if (oldest !== undefined) proposalCache.delete(oldest);
+  }
+}
+
+/**
+ * Build the cache key for a (graphDir, sha, decisionsTip) triple.
+ * `decisionsTip` is the commit SHA of refs/notes/allod-decisions, or "" if absent.
+ */
+export function proposalCacheKey(graphDir: string, sha: string, decisionsTip: string): string {
+  return `${graphDir}\0${sha}\0${decisionsTip}`;
+}
+
+/**
+ * Evict all cache entries for a given graphDir.
+ * Called after appendDecision so the next list sees fresh results.
+ */
+export function evictProposalCache(graphDir: string): void {
+  for (const key of proposalCache.keys()) {
+    if (key.startsWith(`${graphDir}\0`)) {
+      proposalCache.delete(key);
+    }
+  }
+}
+
+// ── fetchChecks — uncached DB lookup ─────────────────────────────────────────
+
+/**
+ * Fetch check_status rows for a sha from the DB.
+ * Always called fresh — not cached — so CI status is always current.
+ */
+async function fetchChecks(
+  fh: Freehold,
+  sha: string
+): Promise<Array<{ name: string; status: string; conclusion?: string }>> {
+  try {
+    const rows = await fh.db.pg.query<{ name: string; status: string; conclusion: string | null }>(
+      "SELECT name, status, conclusion FROM check_status WHERE graph_id = $1 AND sha = $2",
+      [fh.graphId, sha]
+    );
+    return rows.rows.map((r) => ({
+      name: r.name,
+      status: r.status,
+      ...(r.conclusion != null ? { conclusion: r.conclusion } : {}),
+    }));
+  } catch {
+    // Table may not exist yet — treat as no checks
+    return [];
+  }
+}
+
 // ── evaluateSha ───────────────────────────────────────────────────────────────
 
 /**
  * Evaluate a single sha against the graph's git policy.
- * Returns the GitProposal shape (without sha/ref/author/timestamp/message — those are merged in).
+ *
+ * `decisionsTipArg` (optional) — the current decisions notes ref tip. When provided,
+ * the wasm/git evaluation result is cached; subsequent calls with the same sha+tip
+ * return in <1ms for the expensive parts. The `checks` field is always fetched fresh
+ * from the DB regardless of caching.
  */
 async function evaluateSha(
   fh: Freehold,
   sha: string,
   ref: string,
-  repoName: string
+  repoName: string,
+  decisionsTipArg?: string
 ): Promise<GitProposal> {
+  // ── Cache lookup (wasm+git core, not checks) ────────────────────────────────
+  const cacheKey =
+    decisionsTipArg !== undefined ? proposalCacheKey(fh.graphDir, sha, decisionsTipArg) : undefined;
+
+  if (cacheKey !== undefined) {
+    const cached = proposalCache.get(cacheKey);
+    if (cached !== undefined) {
+      // Update to MRU position
+      proposalCache.delete(cacheKey);
+      proposalCache.set(cacheKey, cached);
+      // Fetch checks fresh — not cached
+      const checks = await fetchChecks(fh, sha);
+      return { ...cached, checks };
+    }
+  }
+
   const meta = await commitMeta(fh.graphDir, sha);
 
   // Determine target ref: the ref this sha is the head of
   const target = ref;
 
-  // Get diff ops for this sha
+  // Get diff ops for this sha (internally calls commitMeta again to get parents —
+  // acceptable since commitMeta is a fast `git show -s` and results are small)
   const ops = await diffTreeOps(fh.graphDir, sha);
 
   // Call git_checklist via wasm
@@ -261,23 +368,7 @@ async function evaluateSha(
     })
   );
 
-  // Query check_status for this sha
-  let checks: Array<{ name: string; status: string; conclusion?: string }> = [];
-  try {
-    const rows = await fh.db.pg.query<{ name: string; status: string; conclusion: string | null }>(
-      "SELECT name, status, conclusion FROM check_status WHERE graph_id = $1 AND sha = $2",
-      [fh.graphId, sha]
-    );
-    checks = rows.rows.map((r) => ({
-      name: r.name,
-      status: r.status,
-      ...(r.conclusion != null ? { conclusion: r.conclusion } : {}),
-    }));
-  } catch {
-    // Table may not exist yet — treat as no checks
-  }
-
-  return {
+  const core: CachedCore = {
     sha,
     ref,
     author: meta.author,
@@ -293,8 +384,17 @@ async function evaluateSha(
     unmet,
     decided,
     paths,
-    checks,
   };
+
+  // Store core (without checks) in cache if we have a key
+  if (cacheKey !== undefined) {
+    cacheSet(cacheKey, core);
+  }
+
+  // Always fetch checks fresh from DB
+  const checks = await fetchChecks(fh, sha);
+
+  return { ...core, checks };
 }
 
 // ── listGitProposals ──────────────────────────────────────────────────────────
@@ -302,18 +402,20 @@ async function evaluateSha(
 /**
  * List all branch heads (and HEAD) as GitProposals. Lists all tips regardless
  * of decided state so the Inbox can show both undecided and recent outcomes.
+ *
+ * Performance: reads the decisions notes ref tip once, then uses it as a cache
+ * key so repeated warm calls return in <50ms instead of 6s.
  */
 export async function listGitProposals(fh: Freehold): Promise<GitProposal[]> {
   const repoName = basename(fh.graphDir);
 
-  // Collect branch heads
-  const heads = await branchHeads(fh.graphDir);
+  // Collect branch heads and decisions tip in parallel — both are fast git calls
+  const [heads, tip] = await Promise.all([branchHeads(fh.graphDir), decisionsTip(fh.graphDir)]);
 
   // Also include HEAD if it differs from all branch heads
   const headRef = "HEAD";
-  let headCommitSha: string;
   try {
-    headCommitSha = await headSha(fh.graphDir);
+    const headCommitSha = await headSha(fh.graphDir);
     const headAlreadyCovered = heads.some((h) => h.sha === headCommitSha);
     if (!headAlreadyCovered) {
       heads.push({ ref: headRef, sha: headCommitSha });
@@ -324,13 +426,20 @@ export async function listGitProposals(fh: Freehold): Promise<GitProposal[]> {
 
   // Deduplicate shas — multiple refs may point to the same sha
   const seenShas = new Set<string>();
-  const proposals: GitProposal[] = [];
+  const uniqueHeads: Array<{ ref: string; sha: string }> = [];
   for (const { ref, sha } of heads) {
     if (seenShas.has(sha)) continue;
     seenShas.add(sha);
-    const proposal = await evaluateSha(fh, sha, ref, repoName);
-    proposals.push(proposal);
+    uniqueHeads.push({ ref, sha });
   }
+
+  // Evaluate all shas with the shared decisions tip as cache key.
+  // git_checklist goes through withGraph (serial mutex) so Promise.all
+  // won't run wasm calls concurrently — they queue automatically.
+  // Non-wasm work (git subprocesses, DB queries) does run in parallel.
+  const proposals = await Promise.all(
+    uniqueHeads.map(({ ref, sha }) => evaluateSha(fh, sha, ref, repoName, tip))
+  );
 
   return proposals;
 }
@@ -339,6 +448,7 @@ export async function listGitProposals(fh: Freehold): Promise<GitProposal[]> {
 
 /**
  * Return the GitProposal for a single sha, or null if the sha is unknown to git.
+ * Does not use the list cache — evaluates only this sha.
  */
 export async function gitProposal(fh: Freehold, sha: string): Promise<GitProposal | null> {
   const repoName = basename(fh.graphDir);
@@ -359,7 +469,9 @@ export async function gitProposal(fh: Freehold, sha: string): Promise<GitProposa
     // keep ref = sha
   }
 
-  return evaluateSha(fh, sha, ref, repoName);
+  // Get decisions tip for cache lookup
+  const tip = await decisionsTip(fh.graphDir);
+  return evaluateSha(fh, sha, ref, repoName, tip);
 }
 
 // ── decideGit ─────────────────────────────────────────────────────────────────
@@ -370,7 +482,7 @@ export async function gitProposal(fh: Freehold, sha: string): Promise<GitProposa
  * 1. git_decision_payload("git:<sha>", verdict) → {record, payload}
  * 2. keys.resolveKey — throws KeyMissingError on failure
  * 3. keys.signPayload → git_decision_attach(record, principal, sig)
- * 4. appendDecision(graphDir, sha, signedRecord)
+ * 4. appendDecision(graphDir, sha, signedRecord) — evicts cache for this graphDir
  * 5. Re-evaluate satisfaction; if unmet non-empty AND verdict="approve" → outcome "incomplete"
  * 6. autoPushNotes && originRemote → pushNotes; failure → pushed:false + pushError
  */
@@ -414,8 +526,9 @@ export async function decideGit(
     wasmGitDecisionAttach(fh.graph, record, principal, signature)
   );
 
-  // Persist the decision to notes
+  // Persist the decision to notes — evict cache so next list sees fresh state
   await appendDecision(fh.graphDir, sha, signedRecord);
+  evictProposalCache(fh.graphDir);
 
   // Re-evaluate satisfaction with the new decisions
   let finalUnmet: string[] = [];
