@@ -8,7 +8,12 @@
  */
 
 import {
+  BinaryFileError,
+  BranchMovedError,
+  InvalidSpanError,
   KeyMissingError,
+  OldSideSpanError,
+  applySuggestion,
   commitDiff,
   decideGit,
   gitProposal,
@@ -274,5 +279,75 @@ gitreviewRouter.post("/git/proposals/:sha/push-notes", async (c) => {
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     return c.json({ pushed: false, pushError: msg });
+  }
+});
+
+// ── POST /git/proposals/:sha/suggestions/apply ────────────────────────────
+
+const ApplySuggestionBody = z.object({
+  branch: z.string().min(1),
+  path: z.string().min(1),
+  span: z.string().min(1),
+  suggestion: z.string(),
+  by: z.string().min(1),
+});
+
+gitreviewRouter.post("/git/proposals/:sha/suggestions/apply", async (c) => {
+  const fh = c.get("freehold");
+  if (!repoOnly(fh)) {
+    return c.json({ error: REPO_ONLY_ERROR }, 400);
+  }
+
+  let rawBody: unknown;
+  try {
+    rawBody = await c.req.json();
+  } catch {
+    return c.json({ error: "invalid JSON body" }, 400);
+  }
+
+  const parsed = ApplySuggestionBody.safeParse(rawBody);
+  if (!parsed.success) {
+    return c.json({ error: "branch, path, span, suggestion, and by are required" }, 400);
+  }
+
+  const { branch, path, span, suggestion, by } = parsed.data;
+
+  const sha = c.req.param("sha");
+  if (!validateSha(sha)) {
+    return c.json({ error: "invalid commit sha" }, 400);
+  }
+
+  // Verify sha exists as a known git proposal
+  const proposal = await gitProposal(fh, sha);
+  if (!proposal) {
+    return c.json({ error: "proposal not found" }, 404);
+  }
+
+  try {
+    const result = await applySuggestion(fh.graphDir, {
+      branch,
+      path,
+      span,
+      suggestion,
+      by,
+      expectedTip: sha,
+    });
+    return c.json({ newSha: result.newSha });
+  } catch (err: unknown) {
+    if (err instanceof BranchMovedError) {
+      return c.json({ error: err.message, code: "branch-moved" }, 409);
+    }
+    if (
+      err instanceof BinaryFileError ||
+      err instanceof OldSideSpanError ||
+      err instanceof InvalidSpanError
+    ) {
+      return c.json({ error: err.message, code: (err as { code: string }).code }, 422);
+    }
+    if (err instanceof KeyMissingError) {
+      return c.json({ error: `no signing key for ${by}`, code: "key-missing" }, 409);
+    }
+    const msg = err instanceof Error ? err.message : String(err);
+    return c.json({ error: msg }, 500);
   }
 });
