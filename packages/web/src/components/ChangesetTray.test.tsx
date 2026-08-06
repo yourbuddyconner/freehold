@@ -1,10 +1,10 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { ChangesetProvider, useChangeset } from "~/lib/changeset";
-import { apiClient } from "~/lib/api";
-import { ChangesetTray } from "./ChangesetTray";
 import type React from "react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { apiClient } from "~/lib/api";
+import { ChangesetProvider, useChangeset } from "~/lib/changeset";
+import { ChangesetTray } from "./ChangesetTray";
 
 vi.mock("~/lib/api", () => ({
   apiClient: {
@@ -38,21 +38,14 @@ function renderTray(initialEntries?: { kind: string; label: string; payload: unk
 }
 
 // Helper to stage entries via the context before rendering the tray.
-function renderTrayWithEntries(
-  entries: Array<{ kind: string; label: string; payload: unknown }>
-) {
+function renderTrayWithEntries(entries: Array<{ kind: string; label: string; payload: unknown }>) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
   // Use a wrapper component that exposes stage via a test button
   function TestHarness() {
     const { stage } = useChangeset();
     return (
-      <button
-        data-testid="stage-btn"
-        onClick={() =>
-          entries.forEach((e) => stage(e))
-        }
-      >
+      <button data-testid="stage-btn" onClick={() => entries.forEach((e) => stage(e))}>
         stage
       </button>
     );
@@ -120,7 +113,11 @@ describe("ChangesetTray", () => {
   it("Commit button posts the final policy payload and shows success", async () => {
     const finalDef = { policy: "x", version: 1, rules: [{ name: "last" }] };
     renderTrayWithEntries([
-      { kind: "policy", label: "policy: edit rule a", payload: { policy: "x", version: 1, rules: [{ name: "first" }] } },
+      {
+        kind: "policy",
+        label: "policy: edit rule a",
+        payload: { policy: "x", version: 1, rules: [{ name: "first" }] },
+      },
       { kind: "policy", label: "policy: edit rule b", payload: finalDef },
     ]);
 
@@ -156,9 +153,7 @@ describe("ChangesetTray", () => {
 
   it("does not call proposePolicy if no policy entries are staged", async () => {
     // Stage a non-policy entry — tray should show but commit is a no-op
-    renderTrayWithEntries([
-      { kind: "other", label: "some other thing", payload: null },
-    ]);
+    renderTrayWithEntries([{ kind: "other", label: "some other thing", payload: null }]);
     const commitBtn = screen.getByTestId("commit-btn");
     await act(async () => {
       fireEvent.click(commitBtn);

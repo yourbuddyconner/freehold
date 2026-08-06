@@ -638,7 +638,9 @@ function AddRuleCard({ definition }: { definition: PolicyDefinition }) {
             />
           </div>
           <div className="space-y-0.5">
-            <label className="block font-mono text-[10px] uppercase text-(--fg-muted)">Quorum</label>
+            <label className="block font-mono text-[10px] uppercase text-(--fg-muted)">
+              Quorum
+            </label>
             <input
               type="number"
               min={1}
@@ -651,7 +653,9 @@ function AddRuleCard({ definition }: { definition: PolicyDefinition }) {
       )}
       {requireKind === "attestation" && (
         <div className="space-y-0.5">
-          <label className="block font-mono text-[10px] uppercase text-(--fg-muted)">Attester class</label>
+          <label className="block font-mono text-[10px] uppercase text-(--fg-muted)">
+            Attester class
+          </label>
           <input
             type="text"
             value={attesterClass}
@@ -698,8 +702,8 @@ function PolicyPage() {
       (e) =>
         e.kind === "policy" &&
         (e.label === `policy: edit rule ${ruleName}` ||
-         e.label === `policy: delete rule ${ruleName}` ||
-         e.label === `policy: add rule ${ruleName}`)
+          e.label === `policy: delete rule ${ruleName}` ||
+          e.label === `policy: add rule ${ruleName}`)
     );
   }
 

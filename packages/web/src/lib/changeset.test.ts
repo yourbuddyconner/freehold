@@ -1,7 +1,7 @@
 import { act, renderHook } from "@testing-library/react";
+import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ChangesetProvider, useChangeset } from "./changeset";
-import React from "react";
 
 const GRAPH_ID = "test-graph";
 const STORAGE_KEY = `freehold:changeset:${GRAPH_ID}`;
@@ -38,7 +38,11 @@ describe("changeset store", () => {
   it("stage adds an entry with a generated id", () => {
     const { result } = renderHook(() => useChangeset(), { wrapper });
     act(() => {
-      result.current.stage({ kind: "policy", label: "policy: edit rule foo", payload: { rules: [] } });
+      result.current.stage({
+        kind: "policy",
+        label: "policy: edit rule foo",
+        payload: { rules: [] },
+      });
     });
     expect(result.current.entries).toHaveLength(1);
     expect(result.current.entries[0].label).toBe("policy: edit rule foo");

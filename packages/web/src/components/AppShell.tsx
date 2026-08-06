@@ -1,8 +1,8 @@
 import { Link, Outlet } from "@tanstack/react-router";
 import { Archive, BookOpen, Code, GitBranch, Settings, Shield, SquareCheck } from "lucide-react";
 import type React from "react";
-import { cn } from "~/lib/cn";
 import { ChangesetProvider } from "~/lib/changeset";
+import { cn } from "~/lib/cn";
 import { useActiveGraph, useGitProposals, useGraphs, usePending } from "~/lib/hooks";
 import { ChangesetTray } from "./ChangesetTray";
 
