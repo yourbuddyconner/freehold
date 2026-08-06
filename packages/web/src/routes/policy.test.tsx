@@ -367,4 +367,38 @@ describe("Policy structured editor + staging", () => {
     expect(payload.rules.find((r) => r.name === "scratch-is-free")).toBeUndefined();
     expect(apiClient.proposePolicy).not.toHaveBeenCalled();
   });
+
+  it("staging a new rule appends it to the definition", async () => {
+    const mockStage = vi.fn();
+    vi.mocked(changesetModule.useChangeset).mockReturnValue(
+      makeChangesetStore({ stage: mockStage }) as ReturnType<typeof changesetModule.useChangeset>
+    );
+
+    await renderPolicy();
+
+    // Click "Add rule" button
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("add-rule-btn"));
+    });
+
+    // Fill in the name
+    const nameInput = screen.getByLabelText("New rule name");
+    await act(async () => {
+      fireEvent.change(nameInput, { target: { value: "new-test-rule" } });
+    });
+
+    // Click "Stage add"
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("stage-add-rule-btn"));
+    });
+
+    expect(mockStage).toHaveBeenCalledTimes(1);
+    const call = mockStage.mock.calls[0][0];
+    expect(call.kind).toBe("policy");
+    expect(call.label).toBe("policy: add rule new-test-rule");
+    const payload = call.payload as { rules: Array<{ name: string }> };
+    expect(payload.rules.some((r) => r.name === "new-test-rule")).toBe(true);
+    // Existing rules are preserved
+    expect(payload.rules.some((r) => r.name === "scratch-is-free")).toBe(true);
+  });
 });

@@ -554,6 +554,135 @@ function PolicyRuleEditor({ rule, definition, isStaged }: PolicyRuleEditorProps)
 }
 
 // ---------------------------------------------------------------------------
+// Add rule card — stages a new rule appended to the definition
+// ---------------------------------------------------------------------------
+
+function AddRuleCard({ definition }: { definition: PolicyDefinition }) {
+  const { stage } = useChangeset();
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [requireKind, setRequireKind] = useState<RequireKind>("saves");
+  const [role, setRole] = useState("owner");
+  const [quorum, setQuorum] = useState(1);
+  const [attesterClass, setAttesterClass] = useState("indexer");
+
+  function handleStage() {
+    const newRequire = buildRequireFromKind(requireKind, quorum, role, attesterClass);
+    const newRule: PolicyRule = {
+      name,
+      ...(newRequire ? { require: newRequire } : {}),
+    };
+    const nextDefinition: PolicyDefinition = {
+      ...definition,
+      rules: [...(definition.rules ?? []), newRule],
+    };
+    stage({
+      kind: "policy",
+      label: `policy: add rule ${name}`,
+      payload: nextDefinition,
+    });
+    setOpen(false);
+    setName("");
+  }
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        data-testid="add-rule-btn"
+        onClick={() => setOpen(true)}
+        className="border border-dashed border-(--border) px-4 py-2 text-xs text-(--fg-muted) hover:text-(--fg) w-full text-left"
+      >
+        + Add rule
+      </button>
+    );
+  }
+
+  return (
+    <div className="border border-(--border) bg-(--bg) p-4 space-y-3" data-testid="add-rule-form">
+      <div className="space-y-1">
+        <label className="block font-mono text-[10px] uppercase tracking-[0.08em] text-(--fg-muted)">
+          Rule name
+        </label>
+        <input
+          type="text"
+          aria-label="New rule name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          className="w-full border border-(--border) bg-(--bg-subtle) px-2.5 py-1.5 font-mono text-[11px] text-(--fg) focus:outline-none focus:ring-1 focus:ring-(--border)"
+        />
+      </div>
+      <div className="space-y-1">
+        <label className="block font-mono text-[10px] uppercase tracking-[0.08em] text-(--fg-muted)">
+          Requirement
+        </label>
+        <select
+          value={requireKind}
+          onChange={(e) => setRequireKind(e.target.value as RequireKind)}
+          className="border border-(--border) bg-(--bg-subtle) px-2.5 py-1 font-mono text-[10px] text-(--fg) focus:outline-none"
+        >
+          <option value="saves">Saves instantly</option>
+          <option value="review">Goes to Inbox</option>
+          <option value="attestation">Needs proof</option>
+        </select>
+      </div>
+      {requireKind === "review" && (
+        <div className="flex gap-3">
+          <div className="space-y-0.5">
+            <label className="block font-mono text-[10px] uppercase text-(--fg-muted)">Role</label>
+            <input
+              type="text"
+              value={role}
+              onChange={(e) => setRole(e.target.value)}
+              className="border border-(--border) bg-(--bg-subtle) px-2 py-1 font-mono text-[10px] text-(--fg) w-24"
+            />
+          </div>
+          <div className="space-y-0.5">
+            <label className="block font-mono text-[10px] uppercase text-(--fg-muted)">Quorum</label>
+            <input
+              type="number"
+              min={1}
+              value={quorum}
+              onChange={(e) => setQuorum(Number(e.target.value))}
+              className="border border-(--border) bg-(--bg-subtle) px-2 py-1 font-mono text-[10px] text-(--fg) w-16"
+            />
+          </div>
+        </div>
+      )}
+      {requireKind === "attestation" && (
+        <div className="space-y-0.5">
+          <label className="block font-mono text-[10px] uppercase text-(--fg-muted)">Attester class</label>
+          <input
+            type="text"
+            value={attesterClass}
+            onChange={(e) => setAttesterClass(e.target.value)}
+            className="border border-(--border) bg-(--bg-subtle) px-2 py-1 font-mono text-[10px] text-(--fg) w-40"
+          />
+        </div>
+      )}
+      <div className="flex gap-2">
+        <button
+          type="button"
+          data-testid="stage-add-rule-btn"
+          disabled={!name.trim()}
+          onClick={handleStage}
+          className="border border-[var(--color-accent)] bg-[var(--color-accent)] px-3 py-1 font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-accent-fg)] disabled:opacity-50"
+        >
+          Stage add
+        </button>
+        <button
+          type="button"
+          onClick={() => setOpen(false)}
+          className="border border-(--border) px-3 py-1 font-mono text-[10px] uppercase tracking-[0.08em] text-(--fg-muted)"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 
@@ -565,7 +694,7 @@ function PolicyPage() {
   const policyName = (data as { name?: string } | undefined)?.name ?? definition?.policy ?? "";
 
   function isRuleStaged(ruleName: string): boolean {
-    return entries.some((e) => e.kind === "policy" && e.label.includes(ruleName));
+    return entries.some((e) => e.kind === "policy" && e.label.includes(`rule ${ruleName}`));
   }
 
   return (
@@ -655,6 +784,8 @@ function PolicyPage() {
               </section>
             );
           })}
+
+          <AddRuleCard definition={definition ?? {}} />
 
           {/* The catch-all: what happens when nothing matches */}
           {definition?.default_posture && (
