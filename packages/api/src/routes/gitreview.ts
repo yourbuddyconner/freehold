@@ -7,7 +7,6 @@
  * Review artifacts are written through the existing commit path.
  */
 
-import { basename } from "node:path";
 import {
   KeyMissingError,
   commitDiff,
@@ -15,9 +14,9 @@ import {
   gitProposal,
   listGitProposals,
   listReviewsForSha,
+  postReview,
   pushNotes,
 } from "@freehold/core";
-import { withGraph } from "@freehold/core";
 import { Hono } from "hono";
 import { z } from "zod";
 import type { AppEnv } from "../types.js";
@@ -180,86 +179,30 @@ gitreviewRouter.post("/git/proposals/:sha/reviews", async (c) => {
     return c.json({ error: "proposal not found" }, 404);
   }
 
-  const reviewId = crypto.randomUUID();
+  // Resolve the graph entry for allodGraphId (needed by postReview for key resolution)
+  const manager = c.get("manager");
+  const entry = await manager.getEntry(fh.graphId);
+  if (!entry) {
+    return c.json({ error: "graph entry not found" }, 500);
+  }
 
-  // Canonical external-ref format: git:<repo>#<sha>
-  const repoName = basename(fh.graphDir);
-  const commitRef = `git:${repoName}#${sha}`;
-
-  // Commit 1: create the Review node
-  // Engine invariant: endpoints must be admitted before edges — so Review node first.
-  const reviewOp = {
-    create: {
-      kind: "node",
-      id: reviewId,
-      type: "review/Review@1",
-      attributes: {
-        verdict,
-        ...(reviewBody !== undefined ? { body: reviewBody } : {}),
-        commit: commitRef,
-      },
-    },
-  };
-
-  let reviewStatus: "saved" | "pending" = "pending";
-
-  const reviewAdmission = await withGraph(fh.graph, async () =>
-    fh.graph.commit(by, `Review ${sha}`, [reviewOp], [], true)
-  );
-
-  if (reviewAdmission && typeof reviewAdmission === "object") {
-    if ("Admitted" in reviewAdmission) {
-      reviewStatus = "saved";
-    } else {
-      reviewStatus = "pending";
+  try {
+    const result = await postReview(fh, {
+      sha,
+      verdict,
+      body: reviewBody,
+      by,
+      comments: comments.map((c) => ({ body: c.body, anchor: c.anchor, span: c.span })),
+      allodGraphId: entry.allodGraphId,
+    });
+    return c.json(result);
+  } catch (err: unknown) {
+    if (err instanceof KeyMissingError) {
+      return c.json({ error: `no signing key for ${by}`, code: "key-missing" }, 409);
     }
+    const msg = err instanceof Error ? err.message : String(err);
+    return c.json({ error: msg }, 500);
   }
-
-  // Commit 2+: create each ReviewComment node, then the part_of edge
-  // Endpoints-before-edges: commit comment node first, then part_of edge
-  const commentIds: string[] = [];
-
-  for (const comment of comments) {
-    const commentId = crypto.randomUUID();
-    commentIds.push(commentId);
-
-    const commentOp = {
-      create: {
-        kind: "node",
-        id: commentId,
-        type: "review/ReviewComment@1",
-        attributes: {
-          body: comment.body,
-          ...(comment.anchor !== undefined ? { anchor: comment.anchor } : {}),
-          ...(comment.span !== undefined ? { span: comment.span } : {}),
-          status: "open",
-        },
-      },
-    };
-
-    // Commit the comment node
-    await withGraph(fh.graph, async () =>
-      fh.graph.commit(by, `ReviewComment for ${sha}`, [commentOp], [], true)
-    );
-
-    // Commit the part_of edge (comment → review)
-    const edgeId = crypto.randomUUID();
-    const edgeOp = {
-      create: {
-        kind: "edge",
-        id: edgeId,
-        type: "review/part_of@1",
-        from: `node:${commentId}`,
-        to: `node:${reviewId}`,
-      },
-    };
-
-    await withGraph(fh.graph, async () =>
-      fh.graph.commit(by, `part_of edge for comment ${commentId}`, [edgeOp], [], true)
-    );
-  }
-
-  return c.json({ reviewId, commentIds, status: reviewStatus });
 });
 
 // ── GET /git/proposals/:sha/reviews ──────────────────────────────────────────

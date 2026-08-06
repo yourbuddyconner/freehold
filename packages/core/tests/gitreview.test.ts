@@ -30,6 +30,7 @@ import {
   gitProposal,
   listGitProposals,
   listReviewsForSha,
+  postReview,
   proposalCacheKey,
 } from "../src/gitreview.js";
 import { approve } from "../src/governance.js";
@@ -679,5 +680,117 @@ describe("proposal cache — invalidates when decisions tip changes", () => {
     const tip2 = await decisionsTip(repoDir);
     // After a decision the notes ref tip must have changed
     expect(tip2).not.toBe(tip1);
+  });
+});
+
+// ── postReview tests ──────────────────────────────────────────────────────────
+//
+// postReview performs the two-phase signed commit: commit_payload → host sign →
+// commit_signed. These tests verify that the signed flow succeeds and that the
+// resulting artifacts are visible via listReviewsForSha.
+
+describe("postReview — two-phase signed commit", () => {
+  // Install the review ontology once for this suite (may already be installed
+  // from listReviewsForSha suite; installOntology is idempotent).
+  beforeAll(async () => {
+    const reviewYaml = stripOntologyPreamble(assetYaml("review-ontology.yaml"));
+    const result = await installOntology(fh.graph, reviewYaml);
+    if (result.status === "pending" && result.hash) {
+      const d = await approve(fh.graph, "owner", result.hash);
+      expect(d.status).toBe("approved");
+    }
+  }, 60_000);
+
+  test("postReview succeeds and returns reviewId + commentIds", async () => {
+    const result = await postReview(fh, {
+      sha: mainSha,
+      verdict: "approve",
+      body: "LGTM",
+      by: "reviewer",
+      comments: [{ body: "Nice", anchor: "README.md:1" }],
+      allodGraphId,
+    });
+
+    expect(typeof result.reviewId).toBe("string");
+    expect(result.commentIds).toHaveLength(1);
+    expect(["saved", "pending"]).toContain(result.status);
+  });
+
+  test("postReview artifacts appear in listReviewsForSha", async () => {
+    // Create a review with a recognizable body so we can find it
+    const marker = `postReview-test-${Date.now()}`;
+    const result = await postReview(fh, {
+      sha: mainSha,
+      verdict: "request-changes",
+      body: marker,
+      by: "reviewer",
+      comments: [],
+      allodGraphId,
+    });
+
+    const reviews = await listReviewsForSha(fh, mainSha);
+    const found = reviews.find((r) => r.reviewId === result.reviewId);
+    expect(found, "review not found in listReviewsForSha").toBeDefined();
+    expect(found?.verdict).toBe("request-changes");
+    expect(found?.body).toBe(marker);
+    expect(["saved", "pending"]).toContain(found?.status);
+  });
+
+  test("postReview with comments: comment appears in review.comments", async () => {
+    const result = await postReview(fh, {
+      sha: mainSha,
+      verdict: "approve",
+      body: "All good",
+      by: "reviewer",
+      comments: [{ body: "Correct logic", anchor: "src/lib.rs:42", span: "42-45" }],
+      allodGraphId,
+    });
+
+    expect(result.commentIds).toHaveLength(1);
+
+    const reviews = await listReviewsForSha(fh, mainSha);
+    const found = reviews.find((r) => r.reviewId === result.reviewId);
+    expect(found, "review not found").toBeDefined();
+    expect(found?.comments).toHaveLength(1);
+    expect(found?.comments[0].body).toBe("Correct logic");
+    expect(found?.comments[0].anchor).toBe("src/lib.rs:42");
+    expect(found?.comments[0].span).toBe("42-45");
+  });
+
+  test("postReview with missing host key throws KeyMissingError", async () => {
+    // Add a graph principal, then delete all key files so resolveKey cannot find a key.
+    // commit_payload succeeds (principal exists in graph), but resolveKey fails →
+    // signedCommit wraps the failure as KeyMissingError.
+    const { rmSync } = await import("node:fs");
+    await fh.graph.principal_add("keyless-reviewer", "agent", "owner");
+
+    // principal_add writes the key to .allod/keys/<name>.yaml (legacy fallback location).
+    // Delete it so resolveKey finds nothing in any location.
+    const legacyKeyPath = join(repoDir, ".allod", "keys", "keyless-reviewer.yaml");
+    try {
+      rmSync(legacyKeyPath);
+    } catch {
+      // Already absent — test is still valid
+    }
+    // Also ensure it's not in ALLOD_KEYS_DIR (it wasn't written there)
+    const graphComp = graphDirComponent(allodGraphId);
+    const xdgKeyPath = join(keysDir, graphComp, "keyless-reviewer.yaml");
+    try {
+      rmSync(xdgKeyPath);
+    } catch {
+      // Already absent
+    }
+
+    await expect(
+      postReview(fh, {
+        sha: mainSha,
+        verdict: "approve",
+        by: "keyless-reviewer",
+        comments: [],
+        allodGraphId,
+      })
+    ).rejects.toSatisfy((err: unknown) => {
+      return err instanceof Error && (err as Error & { code?: string }).code === "key-missing";
+    });
   });
 });
