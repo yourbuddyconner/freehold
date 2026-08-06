@@ -99,10 +99,21 @@ interface ReviewComposerProps {
   sha: string;
   paths: GitProposal["paths"];
   by: string;
+  open: boolean;
+  onOpen: () => void;
+  onClose: () => void;
   onDone: () => void;
 }
 
-export function ReviewComposer({ sha, paths, by, onDone }: ReviewComposerProps) {
+export function ReviewComposer({
+  sha,
+  paths,
+  by,
+  open,
+  onOpen,
+  onClose,
+  onDone,
+}: ReviewComposerProps) {
   const [verdict, setVerdict] = useState<"approve" | "approve-with-comments" | "request-changes">(
     "approve"
   );
@@ -110,7 +121,6 @@ export function ReviewComposer({ sha, paths, by, onDone }: ReviewComposerProps) 
   const [comments, setComments] = useState<{ path: string; anchor: string; body: string }[]>([]);
   const [status, setStatus] = useState<null | "saved" | "pending" | "error">(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [open, setOpen] = useState(false);
 
   const qc = useQueryClient();
 
@@ -130,7 +140,7 @@ export function ReviewComposer({ sha, paths, by, onDone }: ReviewComposerProps) 
       setStatus(result.status as "saved" | "pending");
       qc.invalidateQueries({ queryKey: ["git-proposals"] });
       setTimeout(() => {
-        setOpen(false);
+        onClose();
         setStatus(null);
         setBody("");
         setComments([]);
@@ -161,7 +171,7 @@ export function ReviewComposer({ sha, paths, by, onDone }: ReviewComposerProps) 
     return (
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={onOpen}
         className="border border-(--border) font-mono text-[12px] uppercase tracking-wide px-3 py-1.5 text-(--fg-muted) hover:text-(--fg) transition-colors"
       >
         Write review
@@ -171,25 +181,36 @@ export function ReviewComposer({ sha, paths, by, onDone }: ReviewComposerProps) 
 
   return (
     <div className="border border-(--border) bg-(--bg-subtle) p-3 space-y-3">
-      <div className="flex items-center gap-2">
-        <span className="text-[11px] font-mono uppercase text-(--fg-muted) shrink-0">Verdict</span>
-        <select
-          value={verdict}
-          onChange={(e) => setVerdict(e.target.value as typeof verdict)}
-          className="text-xs border border-(--border) bg-(--bg) px-2 py-1 text-(--fg)"
-          aria-label="Verdict"
-        >
-          <option value="approve">Approve</option>
-          <option value="approve-with-comments">Approve with comments</option>
-          <option value="request-changes">Request changes</option>
-        </select>
+      <div className="flex gap-1" aria-label="Verdict">
+        {(
+          [
+            { value: "approve", label: "Approve" },
+            { value: "approve-with-comments", label: "Approve with comments" },
+            { value: "request-changes", label: "Request changes" },
+          ] as const
+        ).map(({ value, label }) => (
+          <button
+            key={value}
+            type="button"
+            aria-pressed={verdict === value}
+            onClick={() => setVerdict(value)}
+            className={cn(
+              "border font-mono text-[11px] uppercase px-2 py-0.5 transition-colors",
+              verdict === value
+                ? "border-(--border) text-(--fg) bg-(--bg-subtle)"
+                : "border-(--border) text-(--fg-muted) hover:text-(--fg)"
+            )}
+          >
+            {label}
+          </button>
+        ))}
       </div>
       <textarea
         value={body}
         onChange={(e) => setBody(e.target.value)}
         placeholder="Review body (optional)"
         rows={3}
-        className="w-full border border-(--border) bg-(--bg) px-2 py-1.5 text-xs text-(--fg) resize-none font-mono"
+        className="w-full border border-(--border) bg-(--bg) px-3 py-2 text-xs text-(--fg) resize-none font-mono"
         aria-label="Review body"
       />
       {comments.map((comment, idx) => (
@@ -254,7 +275,7 @@ export function ReviewComposer({ sha, paths, by, onDone }: ReviewComposerProps) 
         <button
           type="button"
           onClick={() => {
-            setOpen(false);
+            onClose();
             setStatus(null);
           }}
           className="border border-(--border) text-(--fg-muted) font-mono text-[12px] uppercase px-3 py-1.5 hover:text-(--fg)"
@@ -293,6 +314,8 @@ export function GitProposalCard({ proposal, by }: GitProposalCardProps) {
   const shortSha = sha.slice(0, 7);
 
   const qc = useQueryClient();
+
+  const [composerOpen, setComposerOpen] = useState(false);
 
   const {
     decideMut,
@@ -471,7 +494,11 @@ export function GitProposalCard({ proposal, by }: GitProposalCardProps) {
         </div>
       )}
 
-      <div className="flex flex-wrap gap-2 pt-1">
+      <div
+        className={cn("flex flex-wrap gap-2 pt-1", composerOpen && "invisible pointer-events-none")}
+        aria-hidden={composerOpen || undefined}
+        style={composerOpen ? { opacity: 0, pointerEvents: "none" } : undefined}
+      >
         <Dialog.Root>
           <Dialog.Trigger asChild>
             <button
@@ -531,14 +558,20 @@ export function GitProposalCard({ proposal, by }: GitProposalCardProps) {
         >
           Review
         </Link>
-
-        <ReviewComposer
-          sha={sha}
-          paths={paths}
-          by={by}
-          onDone={() => qc.invalidateQueries({ queryKey: ["git-proposals"] })}
-        />
       </div>
+
+      <ReviewComposer
+        sha={sha}
+        paths={paths}
+        by={by}
+        open={composerOpen}
+        onOpen={() => setComposerOpen(true)}
+        onClose={() => setComposerOpen(false)}
+        onDone={() => {
+          setComposerOpen(false);
+          qc.invalidateQueries({ queryKey: ["git-proposals"] });
+        }}
+      />
 
       <span className="reg-mark-bl" aria-hidden />
       <span className="reg-mark-br" aria-hidden />

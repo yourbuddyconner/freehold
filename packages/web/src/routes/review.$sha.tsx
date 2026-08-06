@@ -134,6 +134,8 @@ export function ReviewPage({ sha }: { sha: string }) {
   const [composerOpen, setComposerOpen] = useState<{ path: string; span: string } | null>(null);
   const [composerBody, setComposerBody] = useState("");
   const [reviewError, setReviewError] = useState<string | null>(null);
+  // Review composer open state (lifted from ReviewComposer)
+  const [reviewComposerOpen, setReviewComposerOpen] = useState(false);
 
   // Diff view style — split (default) or unified; persisted
   const [diffStyle, setDiffStyle] = useState<"split" | "unified">(readDiffStyle);
@@ -549,7 +551,11 @@ export function ReviewPage({ sha }: { sha: string }) {
           sha={sha}
           paths={paths}
           by={by}
+          open={reviewComposerOpen}
+          onOpen={() => setReviewComposerOpen(true)}
+          onClose={() => setReviewComposerOpen(false)}
           onDone={() => {
+            setReviewComposerOpen(false);
             // No-op — could invalidate diff query in future
           }}
         />
