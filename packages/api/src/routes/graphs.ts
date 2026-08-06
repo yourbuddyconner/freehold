@@ -56,7 +56,12 @@ graphsRouter.patch("/graphs/:id", async (c) => {
   const manager = c.get("manager");
   const id = c.req.param("id");
 
-  let body: { name?: string; autoPushNotes?: boolean; embedder?: "hash" | "semantic" };
+  let body: {
+    name?: string;
+    autoPushNotes?: boolean;
+    embedder?: "hash" | "semantic";
+    signingPrincipal?: string;
+  };
   try {
     body = await c.req.json();
   } catch {
@@ -68,6 +73,7 @@ graphsRouter.patch("/graphs/:id", async (c) => {
       name: body.name,
       autoPushNotes: body.autoPushNotes,
       embedder: body.embedder,
+      signingPrincipal: body.signingPrincipal,
     });
     return c.json(entry);
   } catch (err) {

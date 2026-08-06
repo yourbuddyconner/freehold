@@ -258,15 +258,16 @@ export class GraphManager {
    */
   async updateSettings(
     id: string,
-    patch: Partial<Pick<GraphEntry, "name" | "autoPushNotes" | "embedder">>
+    patch: Partial<Pick<GraphEntry, "name" | "autoPushNotes" | "embedder" | "signingPrincipal">>
   ): Promise<GraphEntry> {
     const e = await this.entry(id); // throws on unknown id
     const newName = patch.name ?? e.name;
     const newAutoPushNotes = patch.autoPushNotes ?? e.autoPushNotes;
     const newEmbedder = patch.embedder ?? e.embedder;
+    const newSigningPrincipal = patch.signingPrincipal ?? e.signingPrincipal;
     await this.db.pg.query(
-      "UPDATE graphs SET name = $1, auto_push_notes = $2, embedder = $3 WHERE id = $4",
-      [newName, newAutoPushNotes, newEmbedder, id]
+      "UPDATE graphs SET name = $1, auto_push_notes = $2, embedder = $3, signing_principal = $4 WHERE id = $5",
+      [newName, newAutoPushNotes, newEmbedder, newSigningPrincipal, id]
     );
     return this.entry(id);
   }
