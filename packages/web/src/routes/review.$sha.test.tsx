@@ -816,9 +816,62 @@ describe("/review/$sha", () => {
     });
 
     // The composer should now be visible with the correct path and span
+    const composer = screen.getByTestId("line-composer");
+    expect(composer).toBeInTheDocument();
+    expect(composer).toHaveTextContent("src/lib.rs");
+    expect(composer).toHaveTextContent("L10-L15");
+
+    // Composer renders as an annotation inside CodeView, not at the page bottom
+    const codeView = screen.getByTestId("code-view");
+    expect(codeView).toContainElement(composer);
+  });
+
+  it("composer cancel hides the composer annotation", async () => {
+    setupDefaults();
+    await renderReviewPage();
+
+    await act(async () => {
+      mockOnSelectedLinesChange?.({
+        id: "src/lib.rs",
+        range: { start: 3, end: 3, side: "additions" },
+      });
+    });
     expect(screen.getByTestId("line-composer")).toBeInTheDocument();
-    expect(screen.getByTestId("line-composer")).toHaveTextContent("src/lib.rs");
-    expect(screen.getByTestId("line-composer")).toHaveTextContent("L10-L15");
+
+    const cancelBtn = screen.getByRole("button", { name: /cancel/i });
+    await act(async () => {
+      cancelBtn.click();
+    });
+    expect(screen.queryByTestId("line-composer")).not.toBeInTheDocument();
+  });
+
+  it("composer save-draft via annotation saves and hides the composer", async () => {
+    setupDefaults();
+    await renderReviewPage();
+
+    await act(async () => {
+      mockOnSelectedLinesChange?.({
+        id: "src/lib.rs",
+        range: { start: 2, end: 2, side: "additions" },
+      });
+    });
+
+    const textarea = screen.getByRole("textbox", { name: /comment body/i });
+    fireEvent.change(textarea, { target: { value: "inline comment" } });
+
+    await act(async () => {
+      screen.getByRole("button", { name: /save draft/i }).click();
+    });
+
+    // Composer should be gone after saving
+    expect(screen.queryByTestId("line-composer")).not.toBeInTheDocument();
+    // Draft should be persisted
+    const raw = localStore.get(`freehold:review-drafts:${SHA}`);
+    expect(raw).toBeDefined();
+    const drafts = JSON.parse(raw as string);
+    expect(drafts).toEqual(
+      expect.arrayContaining([expect.objectContaining({ path: "src/lib.rs", span: "L2" })])
+    );
   });
 
   it("diff fetch failure renders diff-error notice", async () => {
