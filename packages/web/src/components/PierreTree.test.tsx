@@ -59,15 +59,26 @@ const mockUseFileTree = vi.fn((options: Record<string, unknown>) => {
 // Track the last value returned by useFileTreeSelector so we can honor the equality fn.
 let lastSelectorResult: unknown = undefined;
 
+const capturedFileTreeProps: Record<string, unknown>[] = [];
+
 vi.mock("@pierre/trees/react", () => ({
   useFileTree: (options: Record<string, unknown>) => mockUseFileTree(options),
   FileTree: ({
     "data-testid": testId,
     header,
+    style,
   }: {
     "data-testid"?: string;
     header?: React.ReactNode;
-  }) => <div data-testid={testId ?? "pierre-tree"}>{header}</div>,
+    style?: React.CSSProperties;
+  }) => {
+    capturedFileTreeProps.push({ style });
+    return (
+      <div data-testid={testId ?? "pierre-tree"} style={style}>
+        {header}
+      </div>
+    );
+  },
   // Mirror the real hook signature: selector is called each render; if isEqual says the
   // new result equals the previous one, return the previous reference (stable identity).
   useFileTreeSelector: <TSelected,>(
@@ -102,6 +113,7 @@ describe("PierreTree", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     capturedOptions.length = 0;
+    capturedFileTreeProps.length = 0;
     lastSelectorResult = undefined;
   });
 
@@ -203,6 +215,23 @@ describe("PierreTree", () => {
       />
     );
     expect(screen.getByTestId("custom-header")).toBeInTheDocument();
+  });
+
+  it("passes colored standard icons to useFileTree", () => {
+    render(<PierreTree paths={defaultPaths} onSelect={defaultOnSelect} />);
+    expect(capturedOptions[0]).toMatchObject({
+      icons: { set: "standard", colored: true },
+    });
+  });
+
+  it("passes default height '100%' to FileTree style", () => {
+    render(<PierreTree paths={defaultPaths} onSelect={defaultOnSelect} />);
+    expect(capturedFileTreeProps[0]).toMatchObject({ style: { height: "100%" } });
+  });
+
+  it("passes custom height to FileTree style when height prop is provided", () => {
+    render(<PierreTree paths={defaultPaths} onSelect={defaultOnSelect} height="400px" />);
+    expect(capturedFileTreeProps[0]).toMatchObject({ style: { height: "400px" } });
   });
 
   it("exposes scrollToPath via scrollToRef", async () => {

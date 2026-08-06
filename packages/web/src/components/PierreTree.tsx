@@ -24,6 +24,11 @@ export interface PierreTreeProps {
   search?: boolean;
   header?: React.ReactNode;
   scrollToRef?: React.Ref<{ scrollToPath: (path: string) => void }>;
+  /**
+   * Height applied to the FileTree host element so the internal virtualized list renders.
+   * Defaults to "100%" — wrap the component in a sized container to control the height.
+   */
+  height?: React.CSSProperties["height"];
 }
 
 function activeTheme(): "dark" | "light" {
@@ -46,6 +51,7 @@ export function PierreTree({
   header,
   selectedPath,
   scrollToRef,
+  height = "100%",
 }: PierreTreeProps): React.JSX.Element {
   const [themeStyles, setThemeStyles] = useState(() =>
     themeToTreeStyles(buildThemeInput(activeTheme()))
@@ -72,6 +78,7 @@ export function PierreTree({
     ...(selectedPath ? { initialSelectedPaths: [selectedPath] } : {}),
     search,
     gitStatus,
+    icons: { set: "standard", colored: true },
     onSelectionChange: (selectedPaths: readonly string[]) => {
       const path = selectedPaths[0];
       if (!path) return;
@@ -151,7 +158,7 @@ export function PierreTree({
       className="text-sm"
       style={themeStyles as React.CSSProperties}
     >
-      <FileTree model={model} header={header} />
+      <FileTree model={model} header={header} style={{ height }} />
     </div>
   );
 }

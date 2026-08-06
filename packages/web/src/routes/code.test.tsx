@@ -5,6 +5,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as hooks from "~/lib/hooks";
 import { routeTree } from "~/routes/../routeTree.gen";
 
+// Mock @pierre/diffs/react File component — renders contents as a <pre> so tests can
+// assert on source content without the web-component shadow DOM.
+vi.mock("@pierre/diffs/react", () => ({
+  File: ({ file }: { file: { name: string; contents: string } }) => (
+    <pre data-testid="pierre-file">{file.contents}</pre>
+  ),
+}));
+
 // Route-level mock for PierreTree — renders a flat button per path so tests can
 // assert on paths prop and simulate file selection without @pierre/trees internals.
 vi.mock("~/components/PierreTree", () => ({
@@ -383,12 +391,10 @@ describe("Code workspace", () => {
       expect(screen.getByText(/allod git index/)).toBeInTheDocument();
     });
 
-    it("renders source with line numbers when source data is present", async () => {
+    it("renders source with syntax highlighting when source data is present", async () => {
       await renderCode({}, "/code/file?path=src%2Fmain.ts");
       // Source section heading
       expect(screen.getByText("Source")).toBeInTheDocument();
-      // Line number 1
-      expect(screen.getByText("1")).toBeInTheDocument();
       // Some code content — scoped to source panel to avoid matching item signature
       const sourcePanel = screen.getByTestId("source-panel");
       const { getByText } = within(sourcePanel);

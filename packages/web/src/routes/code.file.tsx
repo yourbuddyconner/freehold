@@ -1,7 +1,13 @@
+import { File as PierreFile } from "@pierre/diffs/react";
 import { Link, createRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { useClassify, useCodeFile, useCodeSource, useGitHubBlobUrl } from "~/lib/hooks";
 import { Route as RootRoute } from "./__root";
+
+function activeTheme(): "dark" | "light" {
+  if (typeof document === "undefined") return "light";
+  return document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light";
+}
 
 export const Route = createRoute({
   getParentRoute: () => RootRoute,
@@ -81,10 +87,12 @@ interface SourcePanelProps {
   binary: boolean;
   truncated: boolean;
   content: string;
+  /** Filename drives syntax highlighting; defaults to plain text. */
+  name?: string;
 }
 
-/** Line-numbered source code panel. */
-function SourcePanel({ isLoading, binary, truncated, content }: SourcePanelProps) {
+/** Syntax-highlighted source panel. */
+function SourcePanel({ isLoading, binary, truncated, content, name = "" }: SourcePanelProps) {
   if (isLoading) {
     return <p className="text-xs text-(--fg-muted)">Loading source…</p>;
   }
@@ -95,30 +103,18 @@ function SourcePanel({ isLoading, binary, truncated, content }: SourcePanelProps
       </p>
     );
   }
-  const lines = content.split("\n");
-  // Remove trailing empty line created by a trailing newline
-  if (lines.length > 0 && lines[lines.length - 1] === "") {
-    lines.pop();
-  }
-  const lineCount = lines.length;
-  const gutterWidth = String(lineCount).length;
   return (
     <div className="space-y-1" data-testid="source-panel">
-      <pre className="overflow-x-auto border border-(--border) bg-(--bg-subtle) p-3 font-mono text-xs leading-5 text-(--fg)">
-        {lines.map((line, i) => (
-          // biome-ignore lint/suspicious/noArrayIndexKey: line numbers are positional
-          <div key={i} className="flex">
-            <span
-              className="select-none pr-4 text-right text-(--fg-muted)"
-              style={{ minWidth: `${gutterWidth + 1}ch` }}
-              aria-hidden
-            >
-              {i + 1}
-            </span>
-            <span>{line}</span>
-          </div>
-        ))}
-      </pre>
+      <div className="border border-(--border) text-sm overflow-hidden">
+        <PierreFile
+          file={{ name, contents: content }}
+          options={{
+            themeType: activeTheme(),
+            disableFileHeader: true,
+            overflow: "scroll",
+          }}
+        />
+      </div>
       {truncated && <p className="font-mono text-[11px] text-(--fg-muted)">truncated at 512 KB</p>}
     </div>
   );
@@ -244,6 +240,7 @@ export function CodeFilePage({ filePath }: { filePath?: string }) {
               binary={sourceData.binary}
               truncated={sourceData.truncated}
               content={sourceData.content}
+              name={filePath}
             />
           ) : null}
         </section>
