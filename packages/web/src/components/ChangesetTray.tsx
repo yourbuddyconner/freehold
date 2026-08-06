@@ -41,6 +41,7 @@ export function ChangesetTray(): React.JSX.Element | null {
 
   if (entries.length === 0) return null;
 
+  // intent is not included in the POST body — POST /policy has no message field
   async function handleCommit() {
     setError(null);
     const payload = lastPolicyPayload(entries);

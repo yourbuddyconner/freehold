@@ -194,8 +194,8 @@ function buildRequireFromKind(
   quorum: number,
   role: string,
   attesterClass: string
-): Record<string, unknown> | undefined {
-  if (kind === "saves") return undefined;
+): Record<string, unknown> {
+  if (kind === "saves") return { schema_valid: true };
   if (kind === "review") {
     return { reviewers: { quorum, role } };
   }
@@ -279,7 +279,7 @@ function PolicyRuleEditor({ rule, definition, isStaged }: PolicyRuleEditorProps)
     return {
       name: draftName,
       ...(select ? { select } : {}),
-      ...(updatedRequire ? { require: updatedRequire } : {}),
+      require: updatedRequire,
     };
   }
 
@@ -570,7 +570,7 @@ function AddRuleCard({ definition }: { definition: PolicyDefinition }) {
     const newRequire = buildRequireFromKind(requireKind, quorum, role, attesterClass);
     const newRule: PolicyRule = {
       name,
-      ...(newRequire ? { require: newRequire } : {}),
+      require: newRequire,
     };
     const nextDefinition: PolicyDefinition = {
       ...definition,
@@ -694,7 +694,13 @@ function PolicyPage() {
   const policyName = (data as { name?: string } | undefined)?.name ?? definition?.policy ?? "";
 
   function isRuleStaged(ruleName: string): boolean {
-    return entries.some((e) => e.kind === "policy" && e.label.includes(`rule ${ruleName}`));
+    return entries.some(
+      (e) =>
+        e.kind === "policy" &&
+        (e.label === `policy: edit rule ${ruleName}` ||
+         e.label === `policy: delete rule ${ruleName}` ||
+         e.label === `policy: add rule ${ruleName}`)
+    );
   }
 
   return (

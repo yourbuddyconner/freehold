@@ -268,6 +268,30 @@ describe("Policy", () => {
     });
     expect(screen.getByTestId("stage-rule-scratch-is-free")).toBeDisabled();
   });
+
+  it("stages a saves-type rule with schema_valid: true in require", async () => {
+    const mockStage = vi.fn();
+    vi.mocked(changesetModule.useChangeset).mockReturnValue(
+      makeChangesetStore({ stage: mockStage }) as ReturnType<typeof changesetModule.useChangeset>
+    );
+
+    await renderPolicy();
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("edit-rule-scratch-is-free"));
+    });
+
+    // Keep it as "saves" kind (default)
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("stage-rule-scratch-is-free"));
+    });
+
+    expect(mockStage).toHaveBeenCalledTimes(1);
+    const payload = mockStage.mock.calls[0][0].payload as {
+      rules: Array<{ name: string; require: unknown }>;
+    };
+    const rule = payload.rules.find((r) => r.name === "scratch-is-free");
+    expect((rule?.require as { schema_valid?: boolean })?.schema_valid).toBe(true);
+  });
 });
 
 describe("Policy structured editor + staging", () => {
@@ -342,6 +366,26 @@ describe("Policy structured editor + staging", () => {
     await renderPolicy();
     const card = screen.getByTestId("rule-scratch-is-free");
     expect(card).toHaveTextContent(/staged/i);
+  });
+
+  it("does not show staged chip due to substring match (exact label match only)", async () => {
+    vi.mocked(changesetModule.useChangeset).mockReturnValue(
+      makeChangesetStore({
+        entries: [
+          {
+            id: "e1",
+            kind: "policy",
+            label: "policy: edit rule scratch-is-free-v2",
+            payload: { rules: [{ name: "scratch-is-free-v2" }] },
+          },
+        ],
+      }) as ReturnType<typeof changesetModule.useChangeset>
+    );
+
+    await renderPolicy();
+    const card = screen.getByTestId("rule-scratch-is-free");
+    // Should NOT show staged chip because the label doesn't exactly match
+    expect(card).not.toHaveTextContent(/staged/i);
   });
 
   it("delete rule stages a definition without that rule", async () => {
