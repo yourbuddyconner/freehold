@@ -279,7 +279,7 @@ export function ReviewPage({ sha }: { sha: string }) {
   }
 
   function handleSaveDraft() {
-    if (!composerOpen || !composerBody.trim() && !suggestionMode) return;
+    if (!composerOpen || (!composerBody.trim() && !suggestionMode)) return;
     const newDraft: CommentDraft = {
       path: composerOpen.path,
       span: composerOpen.span,
