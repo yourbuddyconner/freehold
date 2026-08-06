@@ -408,7 +408,6 @@ export function ReviewPage({ sha }: { sha: string }) {
                   />
                 </div>
               )}
-              {suggestion === null && <div className="text-(--fg)">{meta.body}</div>}
             </>
           ))()}
         </div>
@@ -470,7 +469,6 @@ export function ReviewPage({ sha }: { sha: string }) {
                   </button>
                 </div>
               )}
-              {suggestion === null && <div className="text-(--fg)">{meta.body}</div>}
             </>
           ))()}
         </div>
