@@ -4,9 +4,25 @@
  * Proposal lifecycle, principal management, and graph verification.
  */
 
+import { join } from "node:path";
 import type { AllodGraph } from "@allod/core";
+import { graphDirComponent } from "./keys.js";
 import { withGraph } from "./lock.js";
 import type { AttributeDiff, PrincipalView, ProposalView, VerifyReport } from "./types.js";
+
+// ---- Key path helper ----
+
+function keysBaseDir(): string {
+  if (process.env.ALLOD_KEYS_DIR) return process.env.ALLOD_KEYS_DIR;
+  if (process.env.XDG_DATA_HOME) return join(process.env.XDG_DATA_HOME, "allod", "keys");
+  return join(
+    process.env.HOME ?? process.env.USERPROFILE ?? "~",
+    ".local",
+    "share",
+    "allod",
+    "keys"
+  );
+}
 
 // ---- Raw Allod shapes ----
 
@@ -462,4 +478,46 @@ export async function registerAgent(
     );
     return { name: agentName, mcpSnippet };
   });
+}
+
+export interface AddPrincipalResult {
+  name: string;
+  kind: string;
+  keyPath: string;
+  admission: string;
+}
+
+/**
+ * Register a new principal (user, agent, or service) in the graph.
+ *
+ * The allod wasm layer generates a fresh keypair and stores it in
+ * ALLOD_KEYS_DIR/<graphDirComponent(allodGraphId)>/<name>.yaml. The caller
+ * (CLI or route) receives the key path so it can instruct the operator to
+ * copy the file to the reviewer's machine.
+ *
+ * @param graph         - open AllodGraph instance
+ * @param name          - bare principal name (no "principal:" prefix)
+ * @param kind          - "user" | "agent" | "service"
+ * @param by            - signing principal (graph owner)
+ * @param allodGraphId  - graph id used to compute the key storage path
+ */
+export async function addPrincipal(
+  graph: AllodGraph,
+  name: string,
+  kind: "user" | "agent" | "service",
+  by: string,
+  allodGraphId: string
+): Promise<AddPrincipalResult> {
+  const raw = await withGraph(graph, async () => {
+    return graph.principal_add(name, kind, by);
+  });
+  const result = raw as { node_id?: string; admission?: unknown };
+  const admissionStatus =
+    result.admission &&
+    typeof result.admission === "object" &&
+    "Admitted" in (result.admission as object)
+      ? "saved"
+      : "pending";
+  const keyPath = join(keysBaseDir(), graphDirComponent(allodGraphId), `${name}.yaml`);
+  return { name, kind, keyPath, admission: admissionStatus };
 }

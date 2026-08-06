@@ -1,4 +1,5 @@
 import {
+  addPrincipal,
   approve,
   pending,
   principals,
@@ -94,6 +95,38 @@ governanceRouter.get("/principals", async (c) => {
   const fh = c.get("freehold");
   const list = await principals(fh.graph);
   return c.json({ principals: list });
+});
+
+const AddPrincipalBody = z.object({
+  name: z.string(),
+  kind: z.enum(["user", "agent", "service"]).optional().default("user"),
+  role: z.string().optional(),
+});
+
+governanceRouter.post("/principals", async (c) => {
+  const body = await c.req.json().catch(() => null);
+  const parsed = AddPrincipalBody.safeParse(body);
+  if (!parsed.success) {
+    return apiError(c, 400, ERROR_CODES.VALIDATION, "Invalid request body");
+  }
+  const fh = c.get("freehold");
+  const manager = c.get("manager");
+  const entry = await manager.getEntry(fh.graphId);
+  if (!entry) {
+    return apiError(c, 500, ERROR_CODES.INTERNAL, "Graph entry not found");
+  }
+
+  const { name, kind } = parsed.data;
+  const by = entry.signingPrincipal;
+  const result = await addPrincipal(fh.graph, name, kind ?? "user", by, entry.allodGraphId);
+
+  return c.json({
+    name: result.name,
+    kind: result.kind,
+    admission: result.admission,
+    keyPath: result.keyPath,
+    instruction: `Copy ${result.keyPath} to the reviewer's machine under the same path.`,
+  });
 });
 
 const RegisterAgentBody = z.object({

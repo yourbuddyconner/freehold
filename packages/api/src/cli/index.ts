@@ -20,6 +20,7 @@ import * as path from "node:path";
 import { runApprove } from "./commands/approve.js";
 import { runMcp } from "./commands/mcp.js";
 import { runPending } from "./commands/pending.js";
+import { runPrincipalAdd } from "./commands/principal.js";
 import { runRecall } from "./commands/recall.js";
 import { runReindex } from "./commands/reindex.js";
 import { runReject } from "./commands/reject.js";
@@ -50,6 +51,9 @@ Commands:
   reject <hash>               Reject a pending proposal
   verify                      Verify graph integrity
   reindex                     Rebuild the search index
+  principal add <name>        Register a new principal in the active graph
+    --kind <kind>             Principal kind: user, agent, or service (default: user)
+    --role <role>             Optional role hint (informational; policy roles require a policy amendment)
   mcp setup [claude-code]     Configure MCP integration
     --print                   Print config instead of writing
 
@@ -162,6 +166,41 @@ async function main() {
     case "reindex":
       await runReindex({ baseUrl, token, json: jsonMode });
       break;
+
+    case "principal": {
+      const subcommand = rest[0];
+      if (subcommand === "add") {
+        const nameArg = rest.find(
+          (a, i) =>
+            i > 0 && !a.startsWith("--") && rest[i - 1] !== "--kind" && rest[i - 1] !== "--role"
+        );
+        const name = rest[1] && !rest[1].startsWith("--") ? rest[1] : undefined;
+        if (!name) {
+          console.error("Error: `principal add` requires a <name> argument");
+          process.exit(1);
+        }
+        let kind: "user" | "agent" | "service" | undefined;
+        let role: string | undefined;
+        for (let i = 2; i < rest.length; i++) {
+          if (rest[i] === "--kind" && rest[i + 1]) {
+            const k = rest[i + 1];
+            if (k === "user" || k === "agent" || k === "service") kind = k;
+            i++;
+          } else if (rest[i] === "--role" && rest[i + 1]) {
+            role = rest[i + 1];
+            i++;
+          }
+        }
+        await runPrincipalAdd({ baseUrl, token, json: jsonMode, name, kind, role });
+      } else {
+        console.error(`Unknown principal subcommand: ${subcommand ?? "(none)"}`);
+        console.error(
+          "Usage: freehold principal add <name> [--kind user|agent|service] [--role <role>]"
+        );
+        process.exit(1);
+      }
+      break;
+    }
 
     case "mcp": {
       const subcommand = rest[0] ?? "setup";

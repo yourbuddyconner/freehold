@@ -62,8 +62,9 @@ export {
   verifyGraph,
   principals,
   registerAgent,
+  addPrincipal,
 } from "./governance.js";
-export type { ApproveResult, RejectResult } from "./governance.js";
+export type { ApproveResult, RejectResult, AddPrincipalResult } from "./governance.js";
 
 // Retrieval operations
 export { getEntity, traverse, entitiesOfType, changesetDirFor } from "./retrieval.js";

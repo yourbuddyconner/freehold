@@ -193,6 +193,30 @@ describe("Core flow (daemon + CLI)", () => {
     const parsed = JSON.parse(stdout.trim());
     expect(parsed).toHaveProperty("status");
   });
+
+  test("principal add registers a new user principal", () => {
+    const { code, stdout } = runCli(
+      ["--json", "principal", "add", "reviewer-demo", "--kind", "user"],
+      { FREEHOLD_HOME: home }
+    );
+    expect(code).toBe(0);
+    const parsed = JSON.parse(stdout.trim());
+    expect(parsed.name).toBe("reviewer-demo");
+    expect(parsed.kind).toBe("user");
+    expect(parsed.keyPath).toMatch(/reviewer-demo\.yaml$/);
+    expect(typeof parsed.instruction).toBe("string");
+  });
+
+  test("principal add: registered principal appears in GET /principals", async () => {
+    // principal add is already called in the previous test; just verify the list
+    const resp = await fetch(`http://127.0.0.1:${port}/api/v1/principals`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(resp.ok).toBe(true);
+    const body = (await resp.json()) as { principals: { name: string }[] };
+    const names = body.principals.map((p) => p.name);
+    expect(names).toContain("reviewer-demo");
+  });
 });
 
 // ---------------------------------------------------------------------------

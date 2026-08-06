@@ -281,6 +281,152 @@ function RegisterAgentSection() {
 }
 
 // ---------------------------------------------------------------------------
+// Add principal section
+// ---------------------------------------------------------------------------
+
+interface AddPrincipalResult {
+  name: string;
+  kind: string;
+  admission: string;
+  keyPath: string;
+  instruction: string;
+}
+
+function AddPrincipalSection({ onAdded }: { onAdded: () => void }) {
+  const [name, setName] = useState("");
+  const [kind, setKind] = useState<"user" | "agent" | "service">("user");
+  const [result, setResult] = useState<AddPrincipalResult | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const addMutation = useMutation({
+    mutationFn: () => apiClient.addPrincipal({ name: name.trim(), kind }),
+    onSuccess: (data: unknown) => {
+      const r = data as AddPrincipalResult;
+      setResult(r);
+      setName("");
+      onAdded();
+    },
+  });
+
+  function handleCopy(text: string) {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  }
+
+  const KIND_OPTIONS: { value: "user" | "agent" | "service"; label: string }[] = [
+    { value: "user", label: "user" },
+    { value: "agent", label: "agent" },
+    { value: "service", label: "service" },
+  ];
+
+  if (result) {
+    return (
+      <div className="border-t border-(--border) pt-3 space-y-3">
+        <p className="text-xs text-green-700 dark:text-green-400">
+          Principal <strong>{result.name}</strong> ({result.kind}) registered. Admission:{" "}
+          {result.admission}.
+        </p>
+        <dl className="border border-(--border) bg-(--bg-subtle) p-3 space-y-2 text-xs">
+          <div className="flex gap-2">
+            <dt className="text-(--fg-muted) w-20 shrink-0">Key file</dt>
+            <dd className="font-mono text-(--fg) break-all" data-testid="principal-key-path">
+              {result.keyPath}
+            </dd>
+          </div>
+          <div className="flex gap-2">
+            <dt className="text-(--fg-muted) w-20 shrink-0">Next step</dt>
+            <dd className="text-(--fg)">{result.instruction}</dd>
+          </div>
+        </dl>
+        <div className="relative">
+          <code
+            className="block border border-(--border) bg-(--bg-subtle) px-3 py-2 font-mono text-xs text-(--fg) overflow-auto break-all pr-20"
+            data-testid="principal-copy-path"
+          >
+            {result.keyPath}
+          </code>
+          <button
+            type="button"
+            onClick={() => handleCopy(result.keyPath)}
+            aria-label="Copy key file path"
+            className="absolute top-1.5 right-2 flex items-center gap-1 border border-(--border) bg-white dark:bg-neutral-900 px-2 py-1 text-[10px] text-(--fg-muted) hover:text-(--fg) transition-colors"
+          >
+            {copied ? (
+              <Check className="h-3 w-3 text-green-600" aria-hidden />
+            ) : (
+              <Copy className="h-3 w-3" aria-hidden />
+            )}
+            {copied ? "Copied!" : "Copy"}
+          </button>
+        </div>
+        <button
+          type="button"
+          onClick={() => setResult(null)}
+          className="text-xs text-(--fg-muted) underline underline-offset-2 hover:text-(--fg) transition-colors"
+          data-testid="add-principal-another"
+        >
+          Add another
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="border-t border-(--border) pt-3 space-y-3">
+      <p className="text-xs text-(--fg-muted)">Add a reviewer or second principal to this graph.</p>
+      <div className="flex gap-2 flex-wrap">
+        <input
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Principal name (e.g. reviewer)"
+          className="flex-1 min-w-0 border border-(--border) bg-white dark:bg-neutral-900 px-3 py-1.5 text-xs text-(--fg) placeholder:text-(--fg-muted) focus:outline-none focus:ring-2 focus:ring-(--fg)/20"
+          data-testid="principal-name-input"
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && name.trim()) addMutation.mutate();
+          }}
+        />
+        <div className="flex gap-1">
+          {KIND_OPTIONS.map(({ value, label }) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setKind(value)}
+              aria-pressed={kind === value}
+              data-testid={`principal-kind-${value}`}
+              className={cn(
+                "border px-2 py-1.5 text-xs font-mono transition-colors",
+                kind === value
+                  ? "border-(--fg) text-(--fg) bg-(--border)"
+                  : "border-(--border) text-(--fg-muted) hover:text-(--fg)"
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={() => addMutation.mutate()}
+          disabled={!name.trim() || addMutation.isPending}
+          className="bg-(--fg) text-white font-mono text-[12px] uppercase tracking-wide px-3 py-1.5 disabled:opacity-50 transition-opacity"
+          data-testid="add-principal-btn"
+        >
+          {addMutation.isPending ? "Adding…" : "Add"}
+        </button>
+      </div>
+      {addMutation.isError && (
+        <p className="text-xs text-red-600 dark:text-red-400" role="alert">
+          {addMutation.error instanceof Error ? addMutation.error.message : "Add failed"}
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Ontology install section
 // ---------------------------------------------------------------------------
 
@@ -801,6 +947,8 @@ function SettingsPage() {
             ))}
           </ul>
         )}
+
+        <AddPrincipalSection onAdded={() => qc.invalidateQueries({ queryKey: ["principals"] })} />
       </section>
 
       {/* Revocation confirmation dialog */}

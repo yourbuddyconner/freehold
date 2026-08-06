@@ -49,6 +49,7 @@ vi.mock("~/lib/api", () => {
       getPolicy: vi.fn(),
       log: vi.fn(),
       principals: vi.fn(),
+      addPrincipal: vi.fn(),
       proposePolicy: vi.fn().mockResolvedValue({}),
       registerAgent: vi.fn(),
       installOntology: vi.fn().mockResolvedValue({}),
@@ -266,6 +267,45 @@ describe("Settings", () => {
   it("shows empty state when no principals", async () => {
     await renderSettings({ principals: [] });
     expect(screen.getByText(/no principals registered/i)).toBeInTheDocument();
+  });
+
+  it("Add principal form is present", async () => {
+    await renderSettings();
+    expect(screen.getByTestId("principal-name-input")).toBeInTheDocument();
+    expect(screen.getByTestId("add-principal-btn")).toBeInTheDocument();
+  });
+
+  it("Add principal btn is disabled when name is empty", async () => {
+    await renderSettings();
+    const btn = screen.getByTestId("add-principal-btn");
+    expect(btn).toBeDisabled();
+  });
+
+  it("Add principal submits and shows key path result", async () => {
+    vi.mocked(apiClient.addPrincipal).mockResolvedValue({
+      name: "reviewer-demo",
+      kind: "user",
+      admission: "saved",
+      keyPath: "/home/user/.local/share/allod/keys/abc123/reviewer-demo.yaml",
+      instruction:
+        "Copy /home/user/.local/share/allod/keys/abc123/reviewer-demo.yaml to the reviewer's machine under the same path.",
+    });
+
+    await renderSettings();
+
+    const input = screen.getByTestId("principal-name-input");
+    await act(async () => {
+      fireEvent.change(input, { target: { value: "reviewer-demo" } });
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("add-principal-btn"));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("principal-key-path")).toBeInTheDocument();
+    });
+    expect(screen.getByTestId("principal-key-path")).toHaveTextContent("reviewer-demo.yaml");
   });
 });
 

@@ -356,6 +356,21 @@ export class FreeholdClient {
     return this.fetch<unknown>("GET", "/api/v1/principals");
   }
 
+  /** POST /api/v1/principals */
+  async addPrincipal(body: {
+    name: string;
+    kind?: "user" | "agent" | "service";
+    role?: string;
+  }): Promise<{
+    name: string;
+    kind: string;
+    admission: string;
+    keyPath: string;
+    instruction: string;
+  }> {
+    return this.fetch("POST", "/api/v1/principals", { body });
+  }
+
   /** POST /api/v1/agents */
   async registerAgent(body: RegisterAgentBody): Promise<unknown> {
     return this.fetch<unknown>("POST", "/api/v1/agents", { body });
