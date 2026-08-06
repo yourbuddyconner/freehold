@@ -73,7 +73,9 @@ function annotationsFingerprint(
 ): string {
   if (!annotations || annotations.length === 0) return "0";
   return annotations
-    .map((a) => `${a.side[0]}${a.lineNumber}:${a.metadata?.kind ?? ""}:${a.metadata?.body.length ?? 0}`)
+    .map(
+      (a) => `${a.side[0]}${a.lineNumber}:${a.metadata?.kind ?? ""}:${a.metadata?.body.length ?? 0}`
+    )
     .join("|");
 }
 
