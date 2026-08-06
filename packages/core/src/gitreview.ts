@@ -20,6 +20,7 @@ import {
   commitMeta,
   decisionsTip,
   diffTreeOps,
+  git,
   headSha,
   pushNotes,
   readDecisions,
@@ -62,6 +63,21 @@ export interface GitProposal {
   paths: Array<{ verb: string; path: string; regions: string[]; indexed: boolean }>;
   /** CI check runs from the check_status table for this sha. */
   checks: Array<{ name: string; status: string; conclusion?: string }>;
+  /**
+   * Present on undecided proposals when a decided commit shares the same tree hash.
+   * Fields are taken directly from the existing decision record — only those that
+   * are present in the stored note are included.
+   */
+  priorDecision?: {
+    /** The decided commit sha. */
+    sha: string;
+    /** The verdict from the decision record ("approve" | "reject"). */
+    verdict: string;
+    /** The principal who decided, if recorded in the note. */
+    decidedBy?: string;
+    /** ISO timestamp of the decision, if recorded in the note. */
+    decidedAt?: string;
+  };
 }
 
 // ── DecideResult ──────────────────────────────────────────────────────────────
@@ -256,6 +272,94 @@ export function evictSha(graphDir: string, sha: string): void {
   }
 }
 
+// ── Module-level tree hash cache ──────────────────────────────────────────────
+//
+// Key: `${graphDir}\0${sha}` → tree hash string (from `git rev-parse <sha>^{tree}`)
+// Value: "" when the sha is unresolvable (force-pushed away, pruned, unknown).
+//
+// This cache is intentionally unbounded and never evicted — tree hashes are
+// content-addressed (a sha always maps to the same tree hash or remains
+// unresolvable). Evicting the proposal cache does NOT invalidate this map.
+//
+// NOTE on semantics: tree hash equality means the working-tree content is identical.
+// A suggestion-apply or amend CHANGES the tree hash, so those shas never match.
+// This heuristic only fires for true content-identical cases: rebase without
+// content changes, branch recreation, or cherry-pick that produces the same tree.
+// Do not "fix" this to match on parent changes — the point is identical content.
+
+const treeHashCache = new Map<string, string>();
+
+/**
+ * Resolve `git rev-parse <sha>^{tree}` for `sha`, caching the result.
+ * Returns "" on failure (sha unreachable after force-push or pruning).
+ */
+async function resolveTreeHash(graphDir: string, sha: string): Promise<string> {
+  const key = `${graphDir}\0${sha}`;
+  const cached = treeHashCache.get(key);
+  if (cached !== undefined) return cached;
+  try {
+    const out = await git(graphDir, ["rev-parse", `${sha}^{tree}`]);
+    const hash = out.trim();
+    treeHashCache.set(key, hash);
+    return hash;
+  } catch {
+    // sha unreachable — cache the empty string so we don't retry
+    treeHashCache.set(key, "");
+    return "";
+  }
+}
+
+// ── resolvePriorDecision ──────────────────────────────────────────────────────
+
+/**
+ * Given the tree hash of an undecided commit and the set of all decided shas
+ * (read from the allod-decisions notes ref), resolve whether any decided sha
+ * has an identical tree hash.
+ *
+ * Tree hashes are resolved lazily via resolveTreeHash (cached). Decided shas
+ * that cannot be resolved (unreachable after force-push) are silently skipped.
+ *
+ * Returns the matched priorDecision or undefined.
+ */
+async function resolvePriorDecision(
+  graphDir: string,
+  currentTreeHash: string,
+  decidedShas: Array<{ sha: string; decisions: unknown[] }>
+): Promise<GitProposal["priorDecision"] | undefined> {
+  if (!currentTreeHash) return undefined;
+  for (const { sha, decisions } of decidedShas) {
+    const tree = await resolveTreeHash(graphDir, sha);
+    if (!tree || tree !== currentTreeHash) continue;
+    // Found a match — extract fields from the first decision record that has a verdict
+    const record = decisions.find((d): d is Record<string, unknown> => {
+      if (!d || typeof d !== "object" || Array.isArray(d)) return false;
+      return typeof (d as Record<string, unknown>).verdict === "string";
+    }) as Record<string, unknown> | undefined;
+    if (!record) continue;
+    const verdict = record.verdict as string;
+    // Extract optional fields only if they exist in the stored record
+    const decidedBy =
+      typeof record.decidedBy === "string"
+        ? record.decidedBy
+        : typeof record.by === "string"
+          ? record.by
+          : undefined;
+    const decidedAt =
+      typeof record.decidedAt === "string"
+        ? record.decidedAt
+        : typeof record.timestamp === "string"
+          ? record.timestamp
+          : undefined;
+    return {
+      sha,
+      verdict,
+      ...(decidedBy !== undefined ? { decidedBy } : {}),
+      ...(decidedAt !== undefined ? { decidedAt } : {}),
+    };
+  }
+  return undefined;
+}
+
 // ── fetchChecks — uncached DB lookup ─────────────────────────────────────────
 
 /**
@@ -404,6 +508,52 @@ async function evaluateSha(
     onUnindexedPaths(fh.graphDir, sha);
   }
 
+  // ── Carry-forward: same-tree heuristic (section 6a) ──────────────────────
+  // Compute this sha's tree hash and check whether any decided sha shares it.
+  // Only applied to undecided proposals — decided ones need no carry-forward.
+  let priorDecision: GitProposal["priorDecision"];
+  if (decided === "undecided") {
+    let currentTree = "";
+    let decidedShasWithDecisions: Array<{ sha: string; decisions: unknown[] }> = [];
+    try {
+      const notesListOut = await git(fh.graphDir, [
+        "notes",
+        "--ref=allod-decisions",
+        "list",
+      ]);
+      const notedShas = notesListOut
+        .trim()
+        .split("\n")
+        .filter(Boolean)
+        .map((line) => line.trim().split(/\s+/)[1])
+        .filter((s): s is string => !!s && s.length === 40);
+
+      // Resolve decisions for noted shas that are decided
+      const withDecisions = await Promise.all(
+        notedShas.map(async (s) => {
+          const ds = await readDecisions(fh.graphDir, s);
+          const status = decidedStatus(ds);
+          return status !== "undecided" ? { sha: s, decisions: ds } : null;
+        })
+      );
+      decidedShasWithDecisions = withDecisions.filter(
+        (x): x is { sha: string; decisions: unknown[] } => x !== null
+      );
+
+      currentTree = await resolveTreeHash(fh.graphDir, sha);
+    } catch {
+      // git notes list may fail on empty repo — skip carry-forward silently
+    }
+
+    if (currentTree && decidedShasWithDecisions.length > 0) {
+      priorDecision = await resolvePriorDecision(
+        fh.graphDir,
+        currentTree,
+        decidedShasWithDecisions
+      );
+    }
+  }
+
   const core: CachedCore = {
     sha,
     ref,
@@ -420,6 +570,7 @@ async function evaluateSha(
     unmet,
     decided,
     paths,
+    ...(priorDecision !== undefined ? { priorDecision } : {}),
   };
 
   // Store core (without checks) in cache if we have a key

@@ -47,7 +47,7 @@ function assertSafeRef(ref: string, label: string): void {
   }
 }
 
-async function git(repoDir: string, args: string[]): Promise<string> {
+export async function git(repoDir: string, args: string[]): Promise<string> {
   try {
     const { stdout } = await execFileAsync("git", args, { cwd: repoDir });
     return stdout;
