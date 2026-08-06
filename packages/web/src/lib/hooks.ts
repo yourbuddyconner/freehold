@@ -382,6 +382,16 @@ export function useGitProposalDiff(sha: string | undefined, enabled = true) {
   });
 }
 
+/** Reviews posted for a given commit sha. */
+export function useReviewsForSha(sha: string | undefined) {
+  return useQuery({
+    queryKey: ["git-reviews", sha],
+    queryFn: () => apiClient.listGitReviews(sha ?? ""),
+    enabled: !!sha,
+    retry: false,
+  });
+}
+
 // Re-export types for convenience in route components
 export type { CodeFileView, CodeItemView, CodeNeighborhood, RegionRule, CodeSource };
 export type { DiffResponse };

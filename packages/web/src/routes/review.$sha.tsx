@@ -6,12 +6,15 @@
  */
 
 import { parseDiffFromFile } from "@pierre/diffs";
-import { CodeView, type CodeViewHandle } from "@pierre/diffs/react";
+import { type DiffLineAnnotation, CodeView, type CodeViewHandle } from "@pierre/diffs/react";
 import * as Dialog from "@radix-ui/react-dialog";
+import { useQueryClient } from "@tanstack/react-query";
 import { createRoute } from "@tanstack/react-router";
 import { useCallback, useMemo, useRef, useState } from "react";
+import type React from "react";
 import { ChecklistRow, DecidedChip, PathRow, ReviewComposer } from "~/components/GitProposalCard";
 import { PierreTree } from "~/components/PierreTree";
+import { apiClient } from "~/lib/api";
 import { cn } from "~/lib/cn";
 import {
   useActiveGraph,
@@ -19,8 +22,11 @@ import {
   useGitProposal,
   useGitProposalDiff,
   useGraphs,
+  useListGraphs,
+  useReviewsForSha,
   useSession,
 } from "~/lib/hooks";
+import { type CommentDraft, clearDrafts, loadDrafts, saveDrafts } from "~/lib/reviewDrafts";
 import { Route as RootRoute } from "./__root";
 
 export const Route = createRoute({
@@ -58,6 +64,32 @@ function verbToStatus(verb: string): "added" | "modified" | "deleted" | "renamed
   return "modified";
 }
 
+interface AnnotationMeta {
+  kind: "saved" | "draft";
+  status: string;
+  author?: string;
+  body: string;
+  span: string;
+  path: string;
+  draftIndex?: number;
+  external_source?: string;
+}
+
+function parseAnchorPath(anchor: string | undefined): string | null {
+  if (!anchor) return null;
+  // git:<repo>#<sha>:<path>
+  const m = anchor.match(/^git:[^#]+#[^:]+:(.+)$/);
+  return m ? m[1] : null;
+}
+
+function parseSpan(span: string): { side: "deletions" | "additions"; lineNumber: number } {
+  const isOld = span.startsWith("old:");
+  const s = isOld ? span.slice(4) : span;
+  const m = s.match(/^L(\d+)/);
+  const lineNumber = m ? Number.parseInt(m[1], 10) : 1;
+  return { side: isOld ? "deletions" : "additions", lineNumber };
+}
+
 // Exported for testing
 export function ReviewPage({ sha }: { sha: string }) {
   const { data: proposal, isLoading } = useGitProposal(sha);
@@ -81,6 +113,24 @@ export function ReviewPage({ sha }: { sha: string }) {
     handleRetry,
   } = useDecideProposal(sha, by);
 
+  const queryClient = useQueryClient();
+
+  // Reviews already posted for this commit
+  const { data: reviewsData } = useReviewsForSha(sha);
+
+  // Full graph list for repo name derivation
+  const { data: listGraphsData } = useListGraphs();
+  const activeGraphInfo = listGraphsData?.graphs.find((g) => g.id === activeGraphId) ?? null;
+  const repoName = activeGraphInfo
+    ? (activeGraphInfo.path.split("/").pop() ?? activeGraphInfo.name)
+    : "repo";
+
+  // Draft line comments (persisted to localStorage)
+  const [drafts, setDraftsState] = useState<CommentDraft[]>(() => loadDrafts(sha));
+  const [composerOpen, setComposerOpen] = useState<{ path: string; span: string } | null>(null);
+  const [composerBody, setComposerBody] = useState("");
+  const [reviewError, setReviewError] = useState<string | null>(null);
+
   // Diff view style — split (default) or unified; persisted
   const [diffStyle, setDiffStyle] = useState<"split" | "unified">(readDiffStyle);
 
@@ -94,7 +144,7 @@ export function ReviewPage({ sha }: { sha: string }) {
   }, []);
 
   // Refs for CodeView scrolling from tree selection
-  const codeViewRef = useRef<CodeViewHandle<undefined>>(null);
+  const codeViewRef = useRef<CodeViewHandle<AnnotationMeta>>(null);
 
   const scrollToFile = useCallback((path: string) => {
     codeViewRef.current?.scrollTo({ type: "item", id: path });
@@ -102,19 +152,182 @@ export function ReviewPage({ sha }: { sha: string }) {
 
   const files = diffData?.files ?? [];
 
+  // Annotations from saved/pending reviews
+  const savedAnnotationsByPath = useMemo(() => {
+    const map = new Map<string, DiffLineAnnotation<AnnotationMeta>[]>();
+    for (const review of reviewsData?.reviews ?? []) {
+      for (const comment of review.comments) {
+        const path = parseAnchorPath(comment.anchor);
+        if (!path || !comment.span) continue;
+        const { side, lineNumber } = parseSpan(comment.span);
+        const arr = map.get(path) ?? [];
+        arr.push({
+          side,
+          lineNumber,
+          metadata: {
+            kind: "saved",
+            status: review.status,
+            author: review.author,
+            body: comment.body ?? "",
+            span: comment.span,
+            path,
+            external_source: (comment as Record<string, unknown>).external_source as
+              | string
+              | undefined,
+          },
+        });
+        map.set(path, arr);
+      }
+    }
+    return map;
+  }, [reviewsData]);
+
+  // Annotations from local drafts
+  const draftAnnotationsByPath = useMemo(() => {
+    const map = new Map<string, DiffLineAnnotation<AnnotationMeta>[]>();
+    drafts.forEach((draft, draftIndex) => {
+      const { side, lineNumber } = parseSpan(draft.span);
+      const arr = map.get(draft.path) ?? [];
+      arr.push({
+        side,
+        lineNumber,
+        metadata: {
+          kind: "draft",
+          status: "pending",
+          body: draft.body,
+          span: draft.span,
+          path: draft.path,
+          draftIndex,
+        },
+      });
+      map.set(draft.path, arr);
+    });
+    return map;
+  }, [drafts]);
+
   // Build CodeView items for non-binary, non-truncated files
   const codeViewItems = useMemo(() => {
     return files
       .filter((f) => !f.binary && !f.truncated)
-      .map((f) => ({
-        id: f.path,
-        type: "diff" as const,
-        fileDiff: parseDiffFromFile(
-          { name: f.oldPath ?? f.path, contents: f.oldContent },
-          { name: f.path, contents: f.newContent }
-        ),
-      }));
-  }, [files]);
+      .map((f) => {
+        const saved = savedAnnotationsByPath.get(f.path) ?? [];
+        const draftAnns = draftAnnotationsByPath.get(f.path) ?? [];
+        const annotations: DiffLineAnnotation<AnnotationMeta>[] = [...saved, ...draftAnns];
+        return {
+          id: f.path,
+          type: "diff" as const,
+          fileDiff: parseDiffFromFile(
+            { name: f.oldPath ?? f.path, contents: f.oldContent },
+            { name: f.path, contents: f.newContent }
+          ),
+          ...(annotations.length > 0 ? { annotations } : {}),
+        };
+      });
+  }, [files, savedAnnotationsByPath, draftAnnotationsByPath]);
+
+  // Draft management helpers
+  function persistDrafts(newDrafts: CommentDraft[]) {
+    setDraftsState(newDrafts);
+    saveDrafts(sha, newDrafts);
+  }
+
+  function handleSaveDraft() {
+    if (!composerOpen || !composerBody.trim()) return;
+    persistDrafts([
+      ...drafts,
+      { path: composerOpen.path, span: composerOpen.span, body: composerBody.trim() },
+    ]);
+    setComposerBody("");
+    setComposerOpen(null);
+  }
+
+  function handleRemoveDraft(idx: number) {
+    persistDrafts(drafts.filter((_, i) => i !== idx));
+  }
+
+  // Submit review (with optional inline comments) then decide
+  async function submitReviewAndDecide(verdict: "approve" | "reject") {
+    setReviewError(null);
+    if (drafts.length > 0) {
+      const apiVerdict = verdict === "approve" ? "approve-with-comments" : "request-changes";
+      const anchor = (path: string) => `git:${repoName}#${sha}:${path}`;
+      try {
+        await apiClient.postGitReview(sha, {
+          verdict: apiVerdict,
+          by,
+          comments: drafts.map((d) => ({ body: d.body, anchor: anchor(d.path), span: d.span })),
+        });
+      } catch (err) {
+        setReviewError(err instanceof Error ? err.message : "Review post failed.");
+        return;
+      }
+      decideMut.mutate(verdict);
+      clearDrafts(sha);
+      setDraftsState([]);
+      queryClient.invalidateQueries({ queryKey: ["git-reviews", sha] });
+    } else {
+      decideMut.mutate(verdict);
+    }
+  }
+
+  // Render a single annotation in CodeView
+  function renderAnnotation(
+    ann: DiffLineAnnotation<AnnotationMeta>,
+    _item: unknown
+  ): React.ReactNode {
+    const meta = ann.metadata;
+    if (meta.kind === "draft") {
+      return (
+        <div
+          className="border border-(--border) bg-(--bg-subtle) p-2 text-xs space-y-1"
+          data-testid="annotation"
+          data-path={meta.path}
+          data-span={meta.span}
+          data-status="pending"
+        >
+          <div className="flex items-center justify-between gap-2">
+            <span className="font-mono text-[10px] uppercase text-(--fg-muted)">pending</span>
+            <button
+              type="button"
+              onClick={() => {
+                if (meta.draftIndex !== undefined) handleRemoveDraft(meta.draftIndex);
+              }}
+              className="text-(--fg-muted) hover:text-(--fg) text-[11px]"
+            >
+              Remove
+            </button>
+          </div>
+          <div className="text-(--fg)">{meta.body}</div>
+        </div>
+      );
+    }
+    return (
+      <div
+        className="border border-(--border) bg-(--bg-subtle) p-2 text-xs space-y-1"
+        data-testid="annotation"
+        data-path={meta.path}
+        data-span={meta.span}
+        data-status={meta.status}
+        data-author={meta.author}
+      >
+        <div className="flex items-center gap-2">
+          <span className="font-mono text-[10px] text-(--fg-muted)">{meta.author}</span>
+          <span
+            className={cn(
+              "font-mono text-[10px] uppercase px-1",
+              meta.status === "saved" ? "text-green-600" : "text-amber-600"
+            )}
+          >
+            {meta.status}
+          </span>
+          {meta.external_source && (
+            <span className="font-mono text-[10px] text-(--fg-muted)">via github</span>
+          )}
+        </div>
+        <div className="text-(--fg)">{meta.body}</div>
+      </div>
+    );
+  }
 
   if (!isRepoGraph) {
     return (
@@ -180,6 +393,16 @@ export function ReviewPage({ sha }: { sha: string }) {
           className="border border-amber-300 bg-amber-50 dark:bg-amber-950 px-3 py-2 text-xs text-amber-700 dark:text-amber-300"
         >
           Governance actions disabled: {keyMissingReason}
+        </div>
+      )}
+
+      {/* Review post error */}
+      {reviewError && (
+        <div
+          data-testid="review-error"
+          className="border border-red-300 bg-red-50 dark:bg-red-950 px-3 py-2 text-xs text-red-700 dark:text-red-300"
+        >
+          {reviewError}
         </div>
       )}
 
@@ -254,7 +477,7 @@ export function ReviewPage({ sha }: { sha: string }) {
       )}
 
       {/* Governance actions */}
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <Dialog.Root>
           <Dialog.Trigger asChild>
             <button
@@ -270,6 +493,9 @@ export function ReviewPage({ sha }: { sha: string }) {
             <Dialog.Content className="fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 w-full max-w-sm bg-white dark:bg-neutral-900 border border-(--border) p-6 shadow-none space-y-4">
               <Dialog.Title className="text-base font-semibold text-(--fg)">
                 Approve commit
+                {drafts.length > 0
+                  ? ` — ${drafts.length} comment${drafts.length === 1 ? "" : "s"} pending`
+                  : ""}
               </Dialog.Title>
               <Dialog.Description className="text-sm text-(--fg-muted)">
                 This signs a decision record with your key.
@@ -286,7 +512,7 @@ export function ReviewPage({ sha }: { sha: string }) {
                 <Dialog.Close asChild>
                   <button
                     type="button"
-                    onClick={() => decideMut.mutate("approve")}
+                    onClick={() => submitReviewAndDecide("approve")}
                     className="bg-(--fg) text-white font-mono text-[12px] uppercase tracking-wide px-3 py-1.5"
                   >
                     Approve
@@ -299,15 +525,21 @@ export function ReviewPage({ sha }: { sha: string }) {
 
         <button
           type="button"
-          onClick={() => decideMut.mutate("reject")}
+          onClick={() => submitReviewAndDecide("reject")}
           disabled={actionsDisabled || decideMut.isPending}
           className="border border-(--border) font-mono text-[12px] uppercase tracking-wide px-3 py-1.5 text-(--fg-muted) hover:text-(--fg) disabled:opacity-50 transition-colors"
         >
           {decideMut.isPending && decideMut.variables === "reject" ? "Rejecting…" : "Reject"}
         </button>
+
+        {drafts.length > 0 && (
+          <span className="text-xs text-(--fg-muted)" data-testid="pending-count">
+            {drafts.length} comment{drafts.length === 1 ? "" : "s"} pending
+          </span>
+        )}
       </div>
 
-      {/* Review composer */}
+      {/* Review composer (legacy path-level) */}
       <div data-testid="review-composer">
         <ReviewComposer
           sha={sha}
@@ -402,6 +634,7 @@ export function ReviewPage({ sha }: { sha: string }) {
                 <CodeView
                   ref={codeViewRef}
                   items={codeViewItems}
+                  renderAnnotation={renderAnnotation}
                   options={{
                     diffStyle,
                     lineDiffType: "word-alt",
@@ -415,6 +648,42 @@ export function ReviewPage({ sha }: { sha: string }) {
           </div>
         )}
       </div>
+
+      {/* Inline line-comment composer (opens when a line range is selected) */}
+      {composerOpen && (
+        <div
+          className="border border-(--border) bg-(--bg-subtle) p-3 space-y-2"
+          data-testid="line-composer"
+        >
+          <div className="text-[11px] font-mono text-(--fg-muted)">
+            Comment on {composerOpen.path} {composerOpen.span}
+          </div>
+          <textarea
+            value={composerBody}
+            onChange={(e) => setComposerBody(e.target.value)}
+            rows={3}
+            placeholder="Comment body"
+            className="w-full border border-(--border) bg-(--bg) px-2 py-1.5 text-xs text-(--fg) resize-none font-mono"
+            aria-label="Comment body"
+          />
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={handleSaveDraft}
+              className="bg-(--fg) text-white font-mono text-[11px] uppercase px-2 py-1"
+            >
+              Save draft
+            </button>
+            <button
+              type="button"
+              onClick={() => setComposerOpen(null)}
+              className="border border-(--border) font-mono text-[11px] uppercase px-2 py-1 text-(--fg-muted)"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

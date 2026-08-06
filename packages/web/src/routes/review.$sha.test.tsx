@@ -4,8 +4,8 @@
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider, createMemoryHistory, createRouter } from "@tanstack/react-router";
-import { act, render, screen } from "@testing-library/react";
-import type React from "react";
+import { act, render, screen, waitFor } from "@testing-library/react";
+import React from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as hooks from "~/lib/hooks";
 import { routeTree } from "~/routes/../routeTree.gen";
@@ -18,12 +18,14 @@ vi.mock("~/lib/hooks", () => ({
   useSession: vi.fn(),
   useActiveGraph: vi.fn(),
   useGraphs: vi.fn(),
+  useReviewsForSha: vi.fn(),
+  useListGraphs: vi.fn(),
   // AppShell uses these:
   usePending: vi.fn().mockReturnValue({ data: { proposals: [] }, isLoading: false }),
   useGitProposals: vi.fn().mockReturnValue({ data: { proposals: [] }, isLoading: false }),
 }));
 
-// Mock api (needed by ReviewComposer)
+// Mock api (needed by ReviewComposer and the review page submit flow)
 vi.mock("~/lib/api", () => ({
   GRAPH_STORAGE_KEY: "freehold-graph",
   setActiveGraph: vi.fn(),
@@ -40,6 +42,7 @@ vi.mock("~/lib/api", () => ({
     postGitReview: vi.fn().mockResolvedValue({ reviewId: "rv-1", commentIds: [], status: "saved" }),
     decideGitProposal: vi.fn().mockResolvedValue({ outcome: "approved", pushed: true }),
     pushGitNotes: vi.fn().mockResolvedValue({ pushed: true }),
+    listGitReviews: vi.fn().mockResolvedValue({ reviews: [] }),
   },
 }));
 
@@ -84,17 +87,31 @@ vi.mock("~/components/PierreTree", () => ({
   },
 }));
 
-// Stub CodeView from @pierre/diffs/react — renders one pre per item keyed by id
+// Stub CodeView from @pierre/diffs/react — renders one pre per item keyed by id,
+// and supports renderAnnotation to surface annotation content in tests
 const mockCodeViewScrollTo = vi.fn();
 vi.mock("@pierre/diffs/react", () => ({
   CodeView: ({
     items,
     options,
     ref,
+    renderAnnotation,
   }: {
-    items: Array<{ id: string; type: string }>;
+    items: Array<{
+      id: string;
+      type: string;
+      annotations?: Array<{
+        side: string;
+        lineNumber: number;
+        metadata: Record<string, unknown>;
+      }>;
+    }>;
     options?: { diffStyle?: string };
     ref?: React.Ref<{ scrollTo: (target: { type: string; id: string }) => void }>;
+    renderAnnotation?: (
+      ann: { side: string; lineNumber: number; metadata: Record<string, unknown> },
+      item: { id: string }
+    ) => React.ReactNode;
   }) => {
     if (ref && typeof ref === "object" && "current" in ref) {
       (
@@ -104,9 +121,27 @@ vi.mock("@pierre/diffs/react", () => ({
     return (
       <div data-testid="code-view" data-diff-style={options?.diffStyle ?? "split"}>
         {(items ?? []).map((i) => (
-          <pre key={i.id} data-testid="diff-file">
-            {i.id}
-          </pre>
+          <div key={i.id}>
+            <pre data-testid="diff-file">{i.id}</pre>
+            {i.annotations?.map((ann, idx) =>
+              renderAnnotation ? (
+                // biome-ignore lint/suspicious/noArrayIndexKey: test mock
+                <React.Fragment key={idx}>{renderAnnotation(ann as never, i as never)}</React.Fragment>
+              ) : (
+                <div
+                  // biome-ignore lint/suspicious/noArrayIndexKey: test mock
+                  key={idx}
+                  data-testid="annotation"
+                  data-path={i.id}
+                  data-span={ann.metadata?.span}
+                  data-status={ann.metadata?.status}
+                  data-author={ann.metadata?.author}
+                >
+                  {String(ann.metadata?.body ?? "")}
+                </div>
+              )
+            )}
+          </div>
         ))}
       </div>
     );
@@ -163,6 +198,8 @@ function setupDefaults(
     kind?: string;
     // biome-ignore lint/suspicious/noExplicitAny: test helper, flexible shape
     decide?: Record<string, any>;
+    reviews?: { reviews: unknown[] };
+    graphs?: { graphs: unknown[] };
   } = {}
 ) {
   const proposal = overrides.proposal !== undefined ? overrides.proposal : baseProposal;
@@ -204,6 +241,22 @@ function setupDefaults(
     ...defaultDecideMock,
     ...overrides.decide,
   } as unknown as ReturnType<typeof hooks.useDecideProposal>);
+
+  vi.mocked(hooks.useReviewsForSha).mockReturnValue({
+    data: overrides.reviews ?? { reviews: [] },
+    isLoading: false,
+    isError: false,
+    error: null,
+  } as unknown as ReturnType<typeof hooks.useReviewsForSha>);
+
+  vi.mocked(hooks.useListGraphs).mockReturnValue({
+    data: overrides.graphs ?? {
+      graphs: [{ id: "repo-1", name: "my-repo", path: "/repos/my-repo", kind: "repo" }],
+    },
+    isLoading: false,
+    isError: false,
+    error: null,
+  } as unknown as ReturnType<typeof hooks.useListGraphs>);
 }
 
 async function renderReviewPage() {
@@ -435,5 +488,238 @@ describe("/review/$sha", () => {
     expect(mockCodeViewScrollTo).toHaveBeenCalledWith(
       expect.objectContaining({ type: "item", id: "src/lib.rs" })
     );
+  });
+
+  // ---- New tests: saved review comments as annotations ----
+
+  it("saved review comments render as annotations on the correct file", async () => {
+    setupDefaults({
+      reviews: {
+        reviews: [
+          {
+            reviewId: "rv-1",
+            verdict: "approve",
+            commit: `git:my-repo#${SHA}`,
+            author: "bob",
+            status: "saved",
+            comments: [
+              {
+                commentId: "c-1",
+                body: "looks good",
+                anchor: `git:my-repo#${SHA}:src/lib.rs`,
+                span: "L5",
+                status: "saved",
+              },
+            ],
+          },
+        ],
+      },
+    });
+    await renderReviewPage();
+    const annotation = screen.getByTestId("annotation");
+    expect(annotation).toHaveAttribute("data-path", "src/lib.rs");
+    expect(annotation).toHaveAttribute("data-span", "L5");
+    expect(annotation).toHaveAttribute("data-status", "saved");
+    expect(annotation).toHaveAttribute("data-author", "bob");
+    expect(annotation).toHaveTextContent("looks good");
+  });
+
+  it("saved comment with external_source shows 'via github'", async () => {
+    setupDefaults({
+      reviews: {
+        reviews: [
+          {
+            reviewId: "rv-2",
+            verdict: "request-changes",
+            commit: `git:my-repo#${SHA}`,
+            author: "external-bot",
+            status: "saved",
+            comments: [
+              {
+                commentId: "c-2",
+                body: "style fix needed",
+                anchor: `git:my-repo#${SHA}:src/lib.rs`,
+                span: "L10",
+                status: "saved",
+                external_source: "github",
+              },
+            ],
+          },
+        ],
+      },
+    });
+    await renderReviewPage();
+    expect(screen.getByText("via github")).toBeInTheDocument();
+  });
+
+  it("pre-populated drafts render as pending annotations", async () => {
+    // Pre-populate localStorage with a draft before render
+    localStore.set(
+      `freehold:review-drafts:${SHA}`,
+      JSON.stringify([{ path: "src/lib.rs", span: "L5", body: "my draft comment" }])
+    );
+    setupDefaults();
+    await renderReviewPage();
+    const annotation = screen.getByTestId("annotation");
+    expect(annotation).toHaveAttribute("data-path", "src/lib.rs");
+    expect(annotation).toHaveAttribute("data-span", "L5");
+    expect(annotation).toHaveAttribute("data-status", "pending");
+    expect(annotation).toHaveTextContent("my draft comment");
+  });
+
+  it("decision panel shows N comments pending when drafts exist", async () => {
+    localStore.set(
+      `freehold:review-drafts:${SHA}`,
+      JSON.stringify([
+        { path: "src/lib.rs", span: "L5", body: "first comment" },
+        { path: "src/lib.rs", span: "L10", body: "second comment" },
+      ])
+    );
+    setupDefaults();
+    await renderReviewPage();
+    expect(screen.getByTestId("pending-count")).toHaveTextContent("2 comments pending");
+  });
+
+  it("submit with drafts calls postGitReview then decide then clears drafts", async () => {
+    localStore.set(
+      `freehold:review-drafts:${SHA}`,
+      JSON.stringify([{ path: "src/lib.rs", span: "L5", body: "test comment" }])
+    );
+    const mutate = vi.fn();
+    setupDefaults({
+      decide: {
+        decideMut: { mutate, isPending: false, variables: undefined } as never,
+      },
+    });
+    await renderReviewPage();
+
+    // Import apiClient from the mock
+    const { apiClient } = await import("~/lib/api");
+
+    // Click Approve trigger
+    const approveBtn = screen.getByRole("button", { name: /^approve$/i });
+    await act(async () => {
+      approveBtn.click();
+    });
+    // Click confirm in dialog
+    const confirmBtn = screen
+      .getAllByRole("button", { name: /^approve$/i })
+      .find((b) => b.closest("[role=dialog]"));
+    await act(async () => {
+      confirmBtn?.click();
+    });
+
+    await waitFor(() => {
+      expect(apiClient.postGitReview).toHaveBeenCalledWith(
+        SHA,
+        expect.objectContaining({
+          verdict: "approve-with-comments",
+          by: "alice",
+          comments: [
+            expect.objectContaining({
+              body: "test comment",
+              anchor: expect.stringContaining("src/lib.rs"),
+              span: "L5",
+            }),
+          ],
+        })
+      );
+    });
+    expect(mutate).toHaveBeenCalledWith("approve");
+    // Drafts should be cleared from localStorage
+    expect(localStore.get(`freehold:review-drafts:${SHA}`)).toBeUndefined();
+  });
+
+  it("reject maps to request-changes in postGitReview", async () => {
+    localStore.set(
+      `freehold:review-drafts:${SHA}`,
+      JSON.stringify([{ path: "src/lib.rs", span: "L5", body: "needs work" }])
+    );
+    const mutate = vi.fn();
+    setupDefaults({
+      decide: {
+        decideMut: { mutate, isPending: false, variables: undefined } as never,
+      },
+    });
+    await renderReviewPage();
+
+    const { apiClient } = await import("~/lib/api");
+
+    const rejectBtn = screen.getByRole("button", { name: /^reject$/i });
+    await act(async () => {
+      rejectBtn.click();
+    });
+
+    await waitFor(() => {
+      expect(apiClient.postGitReview).toHaveBeenCalledWith(
+        SHA,
+        expect.objectContaining({ verdict: "request-changes" })
+      );
+    });
+    expect(mutate).toHaveBeenCalledWith("reject");
+  });
+
+  it("zero drafts: approve calls only decide, not postGitReview", async () => {
+    // No drafts in localStorage
+    const mutate = vi.fn();
+    setupDefaults({
+      decide: {
+        decideMut: { mutate, isPending: false, variables: undefined } as never,
+      },
+    });
+    await renderReviewPage();
+
+    const { apiClient } = await import("~/lib/api");
+
+    const approveBtn = screen.getByRole("button", { name: /^approve$/i });
+    await act(async () => {
+      approveBtn.click();
+    });
+    const confirmBtn = screen
+      .getAllByRole("button", { name: /^approve$/i })
+      .find((b) => b.closest("[role=dialog]"));
+    await act(async () => {
+      confirmBtn?.click();
+    });
+
+    await waitFor(() => {
+      expect(mutate).toHaveBeenCalledWith("approve");
+    });
+    expect(apiClient.postGitReview).not.toHaveBeenCalled();
+  });
+
+  it("postGitReview failure surfaces error and does not call decide", async () => {
+    localStore.set(
+      `freehold:review-drafts:${SHA}`,
+      JSON.stringify([{ path: "src/lib.rs", span: "L5", body: "failing draft" }])
+    );
+    const mutate = vi.fn();
+    setupDefaults({
+      decide: {
+        decideMut: { mutate, isPending: false, variables: undefined } as never,
+      },
+    });
+
+    const { apiClient } = await import("~/lib/api");
+    vi.mocked(apiClient.postGitReview).mockRejectedValueOnce(new Error("server error"));
+
+    await renderReviewPage();
+
+    const approveBtn = screen.getByRole("button", { name: /^approve$/i });
+    await act(async () => {
+      approveBtn.click();
+    });
+    const confirmBtn = screen
+      .getAllByRole("button", { name: /^approve$/i })
+      .find((b) => b.closest("[role=dialog]"));
+    await act(async () => {
+      confirmBtn?.click();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("review-error")).toBeInTheDocument();
+    });
+    expect(screen.getByTestId("review-error")).toHaveTextContent("server error");
+    expect(mutate).not.toHaveBeenCalled();
   });
 });
