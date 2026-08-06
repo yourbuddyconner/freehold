@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Code Review — Freehold</title>
+  <meta name="description" content="How Freehold turns git repositories into governed review surfaces: branch commits become proposals, decisions are signed into refs/notes/allod-decisions, and approvals travel with the repo.">
+  <link rel="stylesheet" href="../assets/site.css">
+</head>
+<body>
+
+<nav class="site-nav">
+  <div class="nav-inner">
+    <a href="../index.html" class="nav-wordmark">Freehold</a>
+    <button class="nav-mobile-toggle" id="nav-toggle" aria-label="Toggle navigation">MENU</button>
+    <ul class="nav-links" id="nav-links">
+      <li><a href="quickstart.html">Quickstart</a></li>
+      <li><a href="tools.html">Tools</a></li>
+      <li><a href="governance.html">Governance</a></li>
+      <li><a href="code-review.html" class="active">Code Review</a></li>
+      <li><a href="architecture.html">Architecture</a></li>
+      <li><a href="https://github.com/yourbuddyconner/freehold" class="nav-github">GitHub ↗</a></li>
+    </ul>
+  </div>
+</nav>
+
+<div class="docs-layout">
+
+  <aside class="docs-sidebar">
+    <div class="docs-sidebar-section">
+      <div class="docs-sidebar-label">On this page</div>
+      <ul class="docs-sidebar-links">
+        <li><a href="#overview">Overview</a></li>
+        <li><a href="#setup">Setting up a repository</a></li>
+        <li><a href="#lifecycle">Review lifecycle</a></li>
+        <li><a href="#reviewing">Reviewing a change</a></li>
+        <li><a href="#suggestions">Suggestions as commits</a></li>
+        <li><a href="#policy">Policy</a></li>
+        <li><a href="#rebases">Rebases and force-pushes</a></li>
+        <li><a href="#github">GitHub</a></li>
+        <li><a href="#multiple-reviewers">Multiple reviewers</a></li>
+        <li><a href="#reference">Reference</a></li>
+      </ul>
+    </div>
+    <div class="docs-sidebar-section">
+      <div class="docs-sidebar-label">Docs</div>
+      <ul class="docs-sidebar-links">
+        <li><a href="quickstart.html">Quickstart</a></li>
+        <li><a href="tools.html">MCP Tools</a></li>
+        <li><a href="governance.html">Governance</a></li>
+        <li><a href="architecture.html">Architecture</a></li>
+      </ul>
+    </div>
+  </aside>
+
+  <article class="docs-content">
+
+    <div class="eyebrow reveal reveal-1">Documentation</div>
+    <h1 class="reveal reveal-2">Code Review</h1>
+    <p class="lead reveal reveal-3">
+      Your git repository doubles as a governed allod graph. Branch commits become review proposals, reviewer decisions are signed records stored in <code>refs/notes/allod-decisions</code>, and approvals travel with the repository and are verifiable without running Freehold.
+    </p>
+
+    <h2 id="overview">Overview</h2>
+
+    <p>When you register a git repository with Freehold, the daemon opens a second graph alongside your memory graph — a repo graph backed by the repository's own object database. The review-ontology package installs into that graph, providing the <code>Review</code>, <code>ReviewComment</code>, and <code>ChangeRequest</code> node types used through the review flow.</p>
+
+    <p>Branch heads are enumerated on each evaluation pass. For each commit, the daemon evaluates the changed paths against the graph's policy rules (via <code>git_checklist</code> and <code>git_satisfaction</code> in the wasm engine) and produces a proposal in the inbox. Reviewer decisions are signed with the reviewer's key using the same two-phase signing path used throughout Freehold — the daemon never holds a private key in memory past the signing call. Signed decision records are appended to <code>refs/notes/allod-decisions</code> and optionally pushed to origin immediately after the decision is written.</p>
+
+    <h2 id="setup">Setting up a repository</h2>
+
+    <p>Register a repository from the CLI:</p>
+
+    <pre><code>freehold repo add &lt;path&gt; [--name &lt;n&gt;] [--id &lt;id&gt;] [--principal &lt;p&gt;] [--no-index] [--branch &lt;b&gt;]</code></pre>
+
+    <p>The command runs these steps in order, printing each as it runs:</p>
+
+    <ol>
+      <li>If <code>&lt;path&gt;/.allod/graph.yaml</code> is absent, the daemon shells to the <code>allod</code> binary (located via <code>allodBin</code> in <code>~/.freehold/config.json</code>, defaulting to <code>allod</code> on PATH) to initialize the graph. If the binary is missing, the command stops with a plain error naming the config key.</li>
+      <li>Freehold generates the principal's Ed25519 signing key if one does not already exist. Keys are written to <code>$ALLOD_KEYS_DIR</code>, or <code>$XDG_DATA_HOME/allod/keys</code>, or <code>~/.local/share/allod/keys</code> — whichever is set first — under <code>&lt;graph-dir-component&gt;/&lt;principal&gt;.yaml</code>, mode 0600 in a 0700 directory. An existing key file is never overwritten.</li>
+      <li>The repository is registered with the daemon (<code>POST /graphs</code>), which installs the review ontology, records the origin remote for GitHub linkage, and runs the first index pass.</li>
+      <li>Unless <code>--no-index</code> is passed, the daemon runs <code>allod git index &lt;path&gt; &lt;branch&gt; --as &lt;principal&gt;</code> to index the default branch (default: <code>main</code>).</li>
+      <li>The command prints a summary: graph id, principal name, key file path, and a pointer to connector setup.</li>
+    </ol>
+
+    <p>The Settings → Repositories form in the console performs the same steps server-side. The daemon has filesystem access; the UI calls a <code>POST /repos/onboard</code> endpoint and displays each step as it completes. The graph dropdown picks up the new graph on the next page load.</p>
+
+    <p>The <code>allodBin</code> config key in <code>~/.freehold/config.json</code> controls which binary is used for all shell-outs. Set it to an absolute path if <code>allod</code> is not on your PATH.</p>
+
+    <h2 id="lifecycle">Review lifecycle</h2>
+
+    <div class="arch-diagram">
+      <svg viewBox="0 0 880 580" role="img" aria-label="Diagram: branch push arrives, proposal appears in inbox after checklist evaluation, reviewer reads split diffs and writes line comments, submits verdict, decision is signed and appended to notes, notes are pushed to origin, optional GitHub commit status is posted.">
+        <defs>
+          <marker id="cr-arr" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0 0 L8 4 L0 8 z" fill="#0E0E0C"/>
+          </marker>
+          <marker id="cr-arr-m" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0 0 L8 4 L0 8 z" fill="#6B6F66"/>
+          </marker>
+        </defs>
+        <style>
+          .cr-box    { fill: #FFFFFF; stroke: #0E0E0C; }
+          .cr-soft   { fill: #FFFFFF; stroke: #9B9F94; }
+          .cr-green  { fill: #f0fdf4; stroke: #0BA05F; }
+          .cr-amber  { fill: #fffbeb; stroke: #E8A200; stroke-dasharray: 4 3; }
+          .cr-title  { font: 600 12px "IBM Plex Mono", monospace; letter-spacing: 0.08em; fill: #0E0E0C; }
+          .cr-sub    { font: 12px "Archivo", sans-serif; fill: #6B6F66; }
+          .cr-label  { font: 11px "IBM Plex Mono", monospace; fill: #6B6F66; }
+          .cr-line   { stroke: #0E0E0C; fill: none; }
+          .cr-dash   { stroke: #6B6F66; fill: none; stroke-dasharray: 4 3; }
+          .cr-chip-g { fill: #f0fdf4; stroke: #0BA05F; }
+          .cr-chip-a { fill: #fffbeb; stroke: #E8A200; stroke-dasharray: 4 3; }
+          .cr-chip-tg { font: 600 10px "IBM Plex Mono", monospace; letter-spacing: 0.06em; fill: #0BA05F; }
+          .cr-chip-ta { font: 600 10px "IBM Plex Mono", monospace; letter-spacing: 0.06em; fill: #E8A200; }
+          .cr-step   { fill: #FAFAF8; stroke: #C9C9C2; }
+          .cr-num    { font: 600 11px "IBM Plex Mono", monospace; fill: #9B9F94; }
+          .cr-art    { font: 10px "IBM Plex Mono", monospace; fill: #9B9F94; }
+        </style>
+
+        <!-- Step 1: Push -->
+        <rect class="cr-step" x="20" y="30" width="160" height="90"/>
+        <text class="cr-num" x="36" y="52">01</text>
+        <text class="cr-title" x="100" y="52" text-anchor="middle">PUSH</text>
+        <text class="cr-sub" x="100" y="72" text-anchor="middle">branch commit</text>
+        <text class="cr-sub" x="100" y="90" text-anchor="middle">arrives</text>
+        <text class="cr-art" x="100" y="110" text-anchor="middle">refs/heads/&lt;branch&gt;</text>
+
+        <!-- Arrow 1→2 -->
+        <path class="cr-line" d="M180 75 H 220" marker-end="url(#cr-arr)"/>
+
+        <!-- Step 2: Evaluate -->
+        <rect class="cr-step" x="220" y="30" width="180" height="90"/>
+        <text class="cr-num" x="236" y="52">02</text>
+        <text class="cr-title" x="310" y="52" text-anchor="middle">EVALUATE</text>
+        <text class="cr-sub" x="310" y="72" text-anchor="middle">checklist vs. policy</text>
+        <text class="cr-sub" x="310" y="90" text-anchor="middle">roles · quorum · paths</text>
+        <text class="cr-art" x="310" y="110" text-anchor="middle">git_checklist / git_satisfaction</text>
+
+        <!-- Arrow 2→3 -->
+        <path class="cr-line" d="M400 75 H 440" marker-end="url(#cr-arr)"/>
+
+        <!-- Step 3: Inbox -->
+        <rect class="cr-amber" x="440" y="30" width="160" height="90"/>
+        <text class="cr-num" x="456" y="52">03</text>
+        <text class="cr-title" x="520" y="52" text-anchor="middle">INBOX</text>
+        <text class="cr-sub" x="520" y="72" text-anchor="middle">proposal card</text>
+        <text class="cr-sub" x="520" y="90" text-anchor="middle">with checklist</text>
+        <text class="cr-art" x="520" y="110" text-anchor="middle">status: pending</text>
+
+        <!-- Arrow 3→4 (down) -->
+        <path class="cr-line" d="M520 120 V 180" marker-end="url(#cr-arr)"/>
+
+        <!-- Step 4: Review -->
+        <rect class="cr-step" x="380" y="180" width="280" height="110"/>
+        <text class="cr-num" x="396" y="202">04</text>
+        <text class="cr-title" x="520" y="202" text-anchor="middle">REVIEW</text>
+        <text class="cr-sub" x="520" y="224" text-anchor="middle">split diffs · line selection</text>
+        <text class="cr-sub" x="520" y="244" text-anchor="middle">draft comments + suggested edits</text>
+        <text class="cr-sub" x="520" y="264" text-anchor="middle">verdict: approve / request-changes</text>
+        <text class="cr-art" x="520" y="282" text-anchor="middle">Review · ReviewComment nodes</text>
+
+        <!-- Arrow 4→5 (down) -->
+        <path class="cr-line" d="M520 290 V 350" marker-end="url(#cr-arr)"/>
+
+        <!-- Step 5: Decision signed -->
+        <rect class="cr-green" x="380" y="350" width="280" height="90"/>
+        <text class="cr-num" x="396" y="372">05</text>
+        <text class="cr-title" x="520" y="372" text-anchor="middle">DECISION SIGNED</text>
+        <text class="cr-sub" x="520" y="394" text-anchor="middle">two-phase: payload → sign → attach</text>
+        <text class="cr-sub" x="520" y="414" text-anchor="middle">appended to refs/notes/allod-decisions</text>
+        <text class="cr-art" x="520" y="432" text-anchor="middle">status: approved / rejected</text>
+
+        <!-- Arrow 5→6 (right) -->
+        <path class="cr-line" d="M660 395 H 700" marker-end="url(#cr-arr)"/>
+
+        <!-- Step 6: Push notes -->
+        <rect class="cr-step" x="700" y="350" width="160" height="90"/>
+        <text class="cr-num" x="716" y="372">06</text>
+        <text class="cr-title" x="780" y="372" text-anchor="middle">PUSH NOTES</text>
+        <text class="cr-sub" x="780" y="394" text-anchor="middle">to origin</text>
+        <text class="cr-sub" x="780" y="414" text-anchor="middle">(auto or on retry)</text>
+
+        <!-- Arrow 6→7 (up, dashed) -->
+        <path class="cr-dash" d="M780 350 V 120" marker-end="url(#cr-arr-m)"/>
+
+        <!-- Step 7: GH status (top right) -->
+        <rect class="cr-soft" x="700" y="30" width="160" height="90"/>
+        <text class="cr-num" x="716" y="52">07</text>
+        <text class="cr-title" x="780" y="52" text-anchor="middle">GH STATUS</text>
+        <text class="cr-sub" x="780" y="72" text-anchor="middle">freehold/review</text>
+        <text class="cr-sub" x="780" y="90" text-anchor="middle">success / failure</text>
+        <text class="cr-art" x="780" y="110" text-anchor="middle">optional · fire-and-forget</text>
+
+        <!-- Legend -->
+        <rect class="cr-chip-a" x="20" y="490" width="90" height="24"/>
+        <text class="cr-chip-ta" x="65" y="506" text-anchor="middle">PENDING</text>
+        <text class="cr-sub" x="120" y="506">awaiting decision</text>
+
+        <rect class="cr-chip-g" x="20" y="524" width="90" height="24"/>
+        <text class="cr-chip-tg" x="65" y="540" text-anchor="middle">APPROVED</text>
+        <text class="cr-sub" x="120" y="540">decision signed</text>
+      </svg>
+    </div>
+
+    <p>The evaluation pass runs when new branch heads appear. Each commit's changed paths are handed to the wasm engine alongside the graph's current policy state. The engine returns matched rule names, reviewer role requirements, and which requirements are unmet given the decision notes already written for that commit.</p>
+
+    <p>The inbox card shows the commit metadata, a changed-files list with per-file region tags, the matched rules, and the current checklist state. An unmet checklist means the proposal is incomplete; a satisfied checklist allows a verdict to be submitted.</p>
+
+    <h2 id="reviewing">Reviewing a change</h2>
+
+    <p>Opening a proposal takes you to the review page. The left pane is a file tree of changed paths with status badges (added, modified, deleted, renamed). The right pane is a multi-file diff rendered in split view by default; a toggle switches to unified. Split/unified preference is saved at <code>localStorage["freehold-diff-view"]</code> and persists across reviews.</p>
+
+    <p>Clicking a row in the file tree scrolls to that file's diff. Clicking a line or range opens a comment composer below the selection. You write the comment body and post it; the comment becomes a draft annotation on the diff, marked pending. Drafts persist at <code>localStorage["freehold-review-drafts:&lt;sha&gt;"]</code> so a page refresh keeps them. A counter above the verdict buttons shows how many draft comments are waiting.</p>
+
+    <p>A comment body that starts with a suggestion fence (<code>```suggestion</code>) is stored as a suggested edit. Suggestion cards appear below the diff line with a Copy button and an Apply as commit button.</p>
+
+    <p>The verdict panel at the top of the page presents three choices:</p>
+
+    <ul>
+      <li><strong>Approve</strong> — approves the proposal and decides it in the same action.</li>
+      <li><strong>Approve with comments</strong> — approves and attaches the drafted comments.</li>
+      <li><strong>Request changes</strong> — rejects the proposal with comments.</li>
+    </ul>
+
+    <p>Submitting the verdict writes the <code>Review</code> entity and each <code>ReviewComment</code> with a <code>part_of</code> edge, then signs and records the git decision in the same call. All writes go through the two-phase signed flow. Draft comments are cleared on submit; if the decision step fails after the comment artifacts are written, the page surfaces the error and allows a retry from the same page.</p>
+
+    <h2 id="suggestions">Suggestions as commits</h2>
+
+    <p>Applying a suggestion creates a new commit directly in the object database without touching the working tree. The daemon reads the blob at the branch tip, splices the suggestion text into the affected lines, and assembles the tree and commit objects using pure git plumbing. The commit author is recorded as <code>&lt;reviewer&gt; via freehold</code>. The ref update uses an old-value guard: if the branch has moved since the suggestion was generated, the apply returns a 409 and no commit is written.</p>
+
+    <p>The new tip appears in the inbox as a fresh proposal. If the suggestion's content matches an earlier decided commit, the carry-forward chip shows the prior verdict — but the human decides.</p>
+
+    <p>Only text file suggestions on the additions side of a diff are accepted. Binary files and deletion-side spans return a 422.</p>
+
+    <h2 id="policy">Policy</h2>
+
+    <p>Review policy rules live in the graph. Each rule selects a set of file paths (by glob or directory prefix) and declares which reviewer roles must sign off and how many are required (quorum).</p>
+
+    <p>An example rule in the policy editor:</p>
+
+    <pre><code>- id: require-senior-for-infra
+  paths:
+    - "infra/**"
+    - "terraform/**"
+  roles:
+    - senior-engineer
+  quorum: 1</code></pre>
+
+    <p>The wasm engine evaluates rules conjunctively: when multiple rules match a commit, all of their requirements must be satisfied. A commit that touches both <code>infra/</code> and <code>src/</code> must satisfy the requirements of both the infra rule and any other rule matching <code>src/</code>.</p>
+
+    <p>The Policy section of the console lists the active rules and shows which recent commits each rule matched. Editing a rule opens a YAML editor; submitting the change creates a proposal in the inbox. Policy changes are themselves proposals — the new rules take effect only after you approve the change through the same flow.</p>
+
+    <h2 id="rebases">Rebases and force-pushes</h2>
+
+    <p>When a branch is force-pushed, the daemon computes the tree hash of each new commit. If any previously decided commit has the same tree hash — meaning the file contents are identical despite a different commit SHA — the proposal card shows a chip: "same content approved as &lt;short-sha&gt;" with the prior verdict. The Approve button relabels "Approve again".</p>
+
+    <p>No automatic decisions are made. The carry-forward chip informs; the human decides. Tree hashes of prior decided commits are resolved lazily and cached with the proposal cache. If a prior commit is unreachable after the force-push, resolution fails silently and the chip is absent.</p>
+
+    <h2 id="github">GitHub</h2>
+
+    <div class="arch-diagram">
+      <svg viewBox="0 0 760 300" role="img" aria-label="Diagram: GitHub sends PR comments inbound via webhook or poll, the daemon ingests them as ReviewComment nodes with external provenance, outbound commit status is posted to GitHub when a decision is recorded.">
+        <defs>
+          <marker id="gh-arr" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0 0 L8 4 L0 8 z" fill="#0E0E0C"/>
+          </marker>
+          <marker id="gh-arr-m" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0 0 L8 4 L0 8 z" fill="#6B6F66"/>
+          </marker>
+        </defs>
+        <style>
+          .gh-box   { fill: #FFFFFF; stroke: #0E0E0C; }
+          .gh-soft  { fill: #FFFFFF; stroke: #9B9F94; }
+          .gh-green { fill: #f0fdf4; stroke: #0BA05F; }
+          .gh-title { font: 600 12px "IBM Plex Mono", monospace; letter-spacing: 0.08em; fill: #0E0E0C; }
+          .gh-sub   { font: 12px "Archivo", sans-serif; fill: #6B6F66; }
+          .gh-label { font: 11px "IBM Plex Mono", monospace; fill: #6B6F66; }
+          .gh-art   { font: 10px "IBM Plex Mono", monospace; fill: #9B9F94; }
+          .gh-line  { stroke: #0E0E0C; fill: none; }
+          .gh-dash  { stroke: #6B6F66; fill: none; stroke-dasharray: 4 3; }
+        </style>
+
+        <!-- GitHub -->
+        <rect class="gh-soft" x="20" y="100" width="180" height="100"/>
+        <text class="gh-title" x="110" y="132" text-anchor="middle">GITHUB</text>
+        <text class="gh-sub" x="110" y="154" text-anchor="middle">PR comments</text>
+        <text class="gh-sub" x="110" y="174" text-anchor="middle">commit statuses</text>
+
+        <!-- Inbound arrow -->
+        <path class="gh-line" d="M200 130 H 280" marker-end="url(#gh-arr)"/>
+        <text class="gh-label" x="240" y="122" text-anchor="middle">webhook</text>
+        <text class="gh-label" x="240" y="136" text-anchor="middle">or poll</text>
+
+        <!-- Daemon box -->
+        <rect class="gh-box" x="280" y="60" width="200" height="180"/>
+        <text class="gh-title" x="380" y="92" text-anchor="middle">FREEHOLD</text>
+        <text class="gh-sub" x="380" y="114" text-anchor="middle">ingest PR comments as</text>
+        <text class="gh-sub" x="380" y="134" text-anchor="middle">ReviewComment nodes</text>
+        <text class="gh-art" x="380" y="156" text-anchor="middle">provenance: via github</text>
+        <text class="gh-sub" x="380" y="182" text-anchor="middle">post status on decide</text>
+        <text class="gh-art" x="380" y="202" text-anchor="middle">context: freehold/review</text>
+
+        <!-- Outbound arrow -->
+        <path class="gh-dash" d="M200 170 H 276" marker-end="url(#gh-arr-m)"/>
+        <text class="gh-label" x="240" y="188" text-anchor="middle">status post</text>
+
+        <!-- Notes box -->
+        <rect class="gh-green" x="520" y="80" width="220" height="140"/>
+        <text class="gh-title" x="630" y="112" text-anchor="middle">DECISION NOTES</text>
+        <text class="gh-sub" x="630" y="134" text-anchor="middle">refs/notes/allod-decisions</text>
+        <text class="gh-sub" x="630" y="156" text-anchor="middle">signed · lives in git</text>
+        <text class="gh-sub" x="630" y="178" text-anchor="middle">verifiable offline</text>
+        <text class="gh-art" x="630" y="200" text-anchor="middle">pushed to origin on decide</text>
+
+        <!-- Daemon → Notes -->
+        <path class="gh-line" d="M480 150 H 516" marker-end="url(#gh-arr)"/>
+      </svg>
+    </div>
+
+    <p>GitHub integration connects to a repository via a Personal Access Token or a GitHub App installation. Once configured, inbound PR comments are ingested as <code>ReviewComment</code> nodes tagged with <code>provenance: via github</code>. These appear in the review page alongside comments written in Freehold, with their source noted in the annotation.</p>
+
+    <p>Outbound status posts happen after every decide. When the repo graph has a configured GitHub connector, the daemon posts a commit status to the origin repository: context <code>freehold/review</code>, state <code>success</code> for an approval or <code>failure</code> for a rejection, description naming the deciding principal. The post is fire-and-forget; if it fails, the decision is still saved locally and the decide response includes <code>statusPosted: false</code> with the error. A subdued notice appears in the UI on failure.</p>
+
+    <p>Decision records live in <code>refs/notes/allod-decisions</code> regardless of whether a GitHub connector is configured. The notes ref is pushed to origin on each decide (subject to the per-graph <code>autoPushNotes</code> setting, which defaults to on when the checkout has a remote). Push failure renders as "decision saved locally" with a retry option.</p>
+
+    <h2 id="multiple-reviewers">Multiple reviewers</h2>
+
+    <p>Add a second principal with:</p>
+
+    <pre><code>freehold principal add &lt;name&gt; [--graph &lt;id&gt;] [--kind user|agent|service]</code></pre>
+
+    <p>This generates an Ed25519 key for the new principal and registers it in the graph. The command prints the key file path and a one-line instruction for copying it to the reviewer's machine. Remote key distribution is out of scope — the copy must happen out of band.</p>
+
+    <p>Role grants require a policy amendment. The policy editor in the console shows the current role assignments; adding a role for the new principal creates a policy-change proposal, which must be approved before the role takes effect. Once the role is in place, the quorum count in each matching rule is evaluated against decisions signed by principals holding that role.</p>
+
+    <p>The quorum evaluation is wasm-side via <code>git_satisfaction</code>. When the required roles and quorum are met by the decisions already recorded in the notes, the checklist shows satisfied and the proposal can be finalized.</p>
+
+    <h2 id="reference">Reference</h2>
+
+    <h3>CLI commands</h3>
+
+    <table class="arch-table">
+      <thead>
+        <tr>
+          <th>Command</th>
+          <th>What it does</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>freehold repo add &lt;path&gt;</code></td>
+          <td>Register a repository: graph init, key generation, review-ontology install, first index.</td>
+        </tr>
+        <tr>
+          <td><code>freehold principal add &lt;name&gt;</code></td>
+          <td>Generate a key and register a new principal in the active graph.</td>
+        </tr>
+        <tr>
+          <td><code>freehold approve &lt;hash&gt;</code></td>
+          <td>Approve a pending proposal (works for git proposals and memory proposals).</td>
+        </tr>
+        <tr>
+          <td><code>freehold reject &lt;hash&gt;</code></td>
+          <td>Reject a pending proposal.</td>
+        </tr>
+        <tr>
+          <td><code>freehold pending</code></td>
+          <td>List pending proposals for the active graph.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>API endpoints</h3>
+
+    <table class="arch-table">
+      <thead>
+        <tr>
+          <th>Endpoint</th>
+          <th>What it does</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>GET /git/proposals</code></td>
+          <td>List proposals for the active repo graph: sha, ref, author, checklist, decided status.</td>
+        </tr>
+        <tr>
+          <td><code>GET /git/proposals/:sha</code></td>
+          <td>Single proposal detail including checklist, paths, prior-decision carry-forward.</td>
+        </tr>
+        <tr>
+          <td><code>GET /git/proposals/:sha/diff</code></td>
+          <td>Changed files with full old and new content for client-side diff rendering.</td>
+        </tr>
+        <tr>
+          <td><code>GET /git/proposals/:sha/reviews</code></td>
+          <td>Saved <code>Review</code> and <code>ReviewComment</code> nodes for the commit, including ingested GitHub comments.</td>
+        </tr>
+        <tr>
+          <td><code>POST /git/proposals/:sha/reviews</code></td>
+          <td>Write a verdict with optional comments. Decides the proposal in the same call when <code>decide: true</code> (default).</td>
+        </tr>
+        <tr>
+          <td><code>POST /git/proposals/:sha/suggestions/apply</code></td>
+          <td>Apply a suggestion as a new git commit on the named branch.</td>
+        </tr>
+        <tr>
+          <td><code>POST /repos/onboard</code></td>
+          <td>Server-side equivalent of <code>freehold repo add</code>; used by the Settings UI.</td>
+        </tr>
+      </tbody>
+    </table>
+
+  </article>
+</div>
+
+<footer class="site-footer">
+  <div class="footer-inner">
+    <div class="footer-left">MIT OR Apache-2.0 — built on <a href="https://github.com/yourbuddyconner/allod">Allod</a></div>
+    <div class="footer-right">
+      <a href="https://github.com/yourbuddyconner/freehold">GitHub</a>
+      <a href="quickstart.html">Quickstart</a>
+      <a href="tools.html">Tools</a>
+      <a href="governance.html">Governance</a>
+      <a href="code-review.html">Code Review</a>
+      <a href="architecture.html">Architecture</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+  const toggle = document.getElementById('nav-toggle');
+  const links  = document.getElementById('nav-links');
+  if (toggle && links) {
+    toggle.addEventListener('click', () => {
+      const open = links.classList.toggle('open');
+      toggle.textContent = open ? 'CLOSE' : 'MENU';
+    });
+  }
+</script>
+</body>
+</html>
