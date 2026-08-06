@@ -44,7 +44,14 @@ function renderTray(initialEntries?: { kind: string; label: string; payload: unk
 }
 
 // Helper to stage entries via the context before rendering the tray.
-function renderTrayWithEntries(entries: Array<{ kind: string; label: string; payload: unknown; preview?: { name: string; before: string; after: string } }>) {
+function renderTrayWithEntries(
+  entries: Array<{
+    kind: string;
+    label: string;
+    payload: unknown;
+    preview?: { name: string; before: string; after: string };
+  }>
+) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
   // Use a wrapper component that exposes stage via a test button
@@ -199,7 +206,11 @@ describe("ChangesetTray", () => {
         kind: "policy",
         label: "policy: edit rule foo",
         payload: { rules: [] },
-        preview: { name: "policy.json", before: '{"rules":[]}', after: '{"rules":[{"name":"foo"}]}' },
+        preview: {
+          name: "policy.json",
+          before: '{"rules":[]}',
+          after: '{"rules":[{"name":"foo"}]}',
+        },
       },
     ]);
     expect(screen.getByTestId("toggle-preview-0")).toHaveTextContent("View diff");

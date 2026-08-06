@@ -110,7 +110,11 @@ describe("changeset store", () => {
 
   it("persists preview to localStorage when under size cap", () => {
     const { result } = renderHook(() => useChangeset(), { wrapper });
-    const preview = { name: "policy.json", before: '{"rules":[]}', after: '{"rules":[{"name":"new"}]}' };
+    const preview = {
+      name: "policy.json",
+      before: '{"rules":[]}',
+      after: '{"rules":[{"name":"new"}]}',
+    };
     act(() => {
       result.current.stage({
         kind: "policy",

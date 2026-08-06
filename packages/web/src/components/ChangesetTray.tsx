@@ -98,7 +98,9 @@ export function ChangesetTray(): React.JSX.Element | null {
                 <span className="flex-1 text-xs text-(--fg) truncate leading-relaxed">
                   {entry.label}
                   {entry.detail && (
-                    <span className="block text-[10px] text-(--fg-muted) truncate">{entry.detail}</span>
+                    <span className="block text-[10px] text-(--fg-muted) truncate">
+                      {entry.detail}
+                    </span>
                   )}
                 </span>
                 <button

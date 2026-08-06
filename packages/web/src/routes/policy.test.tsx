@@ -550,12 +550,18 @@ describe("Policy structured editor + staging", () => {
 
     // before is the current definition
     const parsedBefore = JSON.parse(call.preview.before);
-    expect(parsedBefore.rules.some((r: { name: string }) => r.name === "scratch-is-free")).toBe(true);
+    expect(parsedBefore.rules.some((r: { name: string }) => r.name === "scratch-is-free")).toBe(
+      true
+    );
 
     // after is the next definition with the updated rule
     const parsedAfter = JSON.parse(call.preview.after);
-    expect(parsedAfter.rules.some((r: { name: string }) => r.name === "scratch-is-free-v2")).toBe(true);
-    expect(parsedAfter.rules.some((r: { name: string }) => r.name === "scratch-is-free")).toBe(false);
+    expect(parsedAfter.rules.some((r: { name: string }) => r.name === "scratch-is-free-v2")).toBe(
+      true
+    );
+    expect(parsedAfter.rules.some((r: { name: string }) => r.name === "scratch-is-free")).toBe(
+      false
+    );
   });
 
   it("staging a delete attaches preview with the rule removed in after", async () => {
@@ -581,10 +587,14 @@ describe("Policy structured editor + staging", () => {
     expect(call.preview.name).toBe("policy.json");
 
     const parsedBefore = JSON.parse(call.preview.before);
-    expect(parsedBefore.rules.some((r: { name: string }) => r.name === "scratch-is-free")).toBe(true);
+    expect(parsedBefore.rules.some((r: { name: string }) => r.name === "scratch-is-free")).toBe(
+      true
+    );
 
     const parsedAfter = JSON.parse(call.preview.after);
-    expect(parsedAfter.rules.find((r: { name: string }) => r.name === "scratch-is-free")).toBeUndefined();
+    expect(
+      parsedAfter.rules.find((r: { name: string }) => r.name === "scratch-is-free")
+    ).toBeUndefined();
   });
 
   it("staging an add attaches preview with the new rule in after", async () => {
@@ -614,10 +624,14 @@ describe("Policy structured editor + staging", () => {
     expect(call.preview.name).toBe("policy.json");
 
     const parsedBefore = JSON.parse(call.preview.before);
-    expect(parsedBefore.rules.find((r: { name: string }) => r.name === "preview-test-rule")).toBeUndefined();
+    expect(
+      parsedBefore.rules.find((r: { name: string }) => r.name === "preview-test-rule")
+    ).toBeUndefined();
 
     const parsedAfter = JSON.parse(call.preview.after);
-    expect(parsedAfter.rules.some((r: { name: string }) => r.name === "preview-test-rule")).toBe(true);
+    expect(parsedAfter.rules.some((r: { name: string }) => r.name === "preview-test-rule")).toBe(
+      true
+    );
   });
 
   it("preview.after of a stage call matches what preview.before would be for a subsequent edit of the same definition", async () => {
@@ -650,7 +664,9 @@ describe("Policy structured editor + staging", () => {
     // and that firstCall.preview.before matches the fixture definition.
     const firstBefore = JSON.parse(firstCall.preview.before);
     expect(firstBefore).toEqual(definition);
-    expect(firstAfter.rules.some((r: { name: string }) => r.name === "scratch-is-free-v2")).toBe(true);
+    expect(firstAfter.rules.some((r: { name: string }) => r.name === "scratch-is-free-v2")).toBe(
+      true
+    );
 
     // The after of the first stage equals what a consumer would use as the next state,
     // confirming preview.after is a valid complete definition.
