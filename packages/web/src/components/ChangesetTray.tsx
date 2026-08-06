@@ -12,11 +12,32 @@ function lastPolicyPayload(entries: ChangesetEntry[]): unknown | null {
 }
 
 export function ChangesetTray(): React.JSX.Element | null {
-  const { entries, intent, clear, unstage } = useChangeset();
+  const { entries, clear, unstage } = useChangeset();
   const qc = useQueryClient();
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  if (success) {
+    return (
+      <div
+        data-testid="changeset-success"
+        className="fixed bottom-4 right-4 z-50 w-80 border border-(--border) bg-(--bg) shadow-lg px-4 py-3"
+      >
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-xs text-(--fg)">Proposal submitted.</span>
+          <button
+            type="button"
+            onClick={() => setSuccess(false)}
+            aria-label="Dismiss"
+            className="shrink-0 text-(--fg-muted) hover:text-(--fg)"
+          >
+            <X className="h-3 w-3" aria-hidden />
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (entries.length === 0) return null;
 
@@ -48,27 +69,6 @@ export function ChangesetTray(): React.JSX.Element | null {
     clear();
     setSuccess(false);
     setError(null);
-  }
-
-  if (success) {
-    return (
-      <div
-        data-testid="changeset-success"
-        className="fixed bottom-4 right-4 z-50 w-80 border border-(--border) bg-(--bg) shadow-lg px-4 py-3"
-      >
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-xs text-(--fg)">Proposal submitted.</span>
-          <button
-            type="button"
-            onClick={() => setSuccess(false)}
-            aria-label="Dismiss"
-            className="shrink-0 text-(--fg-muted) hover:text-(--fg)"
-          >
-            <X className="h-3 w-3" aria-hidden />
-          </button>
-        </div>
-      </div>
-    );
   }
 
   return (

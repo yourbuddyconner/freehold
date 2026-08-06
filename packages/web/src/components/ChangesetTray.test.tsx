@@ -165,4 +165,24 @@ describe("ChangesetTray", () => {
     });
     expect(apiClient.proposePolicy).not.toHaveBeenCalled();
   });
+
+  it("shows success banner after successful commit", async () => {
+    renderTrayWithEntries([
+      { kind: "policy", label: "policy: edit rule foo", payload: { rules: [] } },
+    ]);
+
+    const commitBtn = screen.getByTestId("commit-btn");
+    await act(async () => {
+      fireEvent.click(commitBtn);
+    });
+
+    // Success banner should appear
+    await waitFor(() => {
+      expect(screen.getByTestId("changeset-success")).toBeInTheDocument();
+      expect(screen.getByText("Proposal submitted.")).toBeInTheDocument();
+    });
+
+    // Original tray should not be visible (entries cleared)
+    expect(screen.queryByTestId("changeset-tray")).not.toBeInTheDocument();
+  });
 });
